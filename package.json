@@ -14,8 +14,8 @@
   "contributes": {
     "commands": [
       {
-        "command": "gomboc-vscode-extension.helloWorld",
-        "title": "Hello World"
+        "command": "gomboc-vscode-extension.testApiKey",
+        "title": "Test API Key"
       }
     ]
   },
