@@ -15,9 +15,31 @@
     "commands": [
       {
         "command": "gomboc-vscode-extension.testApiKey",
-        "title": "Test API Key"
+        "title": "Gomboc: Test API Key"
+      },
+      {
+        "command": "gomboc-vscode-extension.scanFile",
+        "title": "Gomboc: Scan current file or scenario"
+      },
+      {
+        "command": "gomboc-vscode-extension.scanAllFiles",
+        "title": "Gomboc: Scan all files or scenarios in repository"
+      },
+      {
+        "command": "gomboc-vscode-extension.showFrameworks",
+        "title": "Gomboc: Show organization frameworks"
       }
-    ]
+    ],
+    "configuration": [{
+      "type": "object",
+      "properties": {
+      "gomboc-vscode-extension.apiKey": {
+        "type": "string",
+        "default": "",
+        "description": "API Key for accessing the server."
+      }
+    }
+    }]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

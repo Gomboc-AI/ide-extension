@@ -1,26 +1,45 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import { testApiKeyCommand } from './commands/testApiKey';
+import { scanFileCommand } from './commands/scanFile';
+import { scanAllFilesCommand } from './commands/scanAllFiles';
+import { showFrameworksCommand } from './commands/showFrameworks';
+import { initializeApiClient } from './api/client';
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
+// Extension entry point
 export function activate(context: vscode.ExtensionContext) {
+	 
+	// pass down the api client
+	const apiClient = initializeApiClient(context);
 
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "gomboc-vscode-extension" is now active!');
+  // Register commands with dependency injection
+  const commands = [
+    {
+      name: 'yourExtension.testApiKey',
+      handler: () => testApiKeyCommand(context, apiClient)
+    },
+    {
+      name: 'yourExtension.scanFile',
+      handler: () => scanFileCommand(context, apiClient)
+    },
+    {
+      name: 'yourExtension.scanAllFiles',
+      handler: () => scanAllFilesCommand(context, apiClient)
+    },
+    {
+      name: 'yourExtension.showFrameworks',
+      handler: () => showFrameworksCommand(context, apiClient)
+    }
+  ];
 
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	const disposable = vscode.commands.registerCommand('gomboc-vscode-extension.helloWorld', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World from gomboc-vscode-extension!');
-	});
+  // Register all commands
+  const disposables = commands.map(({ name, handler }) => 
+    vscode.commands.registerCommand(name, handler)
+  );
 
-	context.subscriptions.push(disposable);
+  // Add to extension context subscriptions
+  context.subscriptions.push(...disposables);
 }
 
-// This method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() {
+  // Cleanup if needed
+}
