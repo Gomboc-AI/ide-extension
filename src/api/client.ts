@@ -8,7 +8,6 @@ export class CustomerApiClient {
   private client;
 
   constructor() {
-
     const _settings = settings();
 
     if (_settings instanceof Error) {
