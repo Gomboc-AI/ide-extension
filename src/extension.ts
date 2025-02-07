@@ -6,30 +6,29 @@ import { showFrameworksCommand } from './commands/showFrameworks';
 import { initializeApiClient } from './api/client';
 
 export function activate(context: vscode.ExtensionContext) {
-	 
-	const apiClient = initializeApiClient(context);
+  const apiClient = initializeApiClient(context);
 
   const commands = [
     {
       name: 'gomboc-vscode-extension.testApiKey',
-      handler: () => testApiKeyCommand(context, apiClient)
+      handler: () => testApiKeyCommand(context, apiClient),
     },
     {
       name: 'gomboc-vscode-extension.scanFile',
-      handler: () => scanFileCommand(context, apiClient)
+      handler: () => scanFileCommand(context, apiClient),
     },
     {
       name: 'gomboc-vscode-extension.scanAllFiles',
-      handler: () => scanAllFilesCommand(context, apiClient)
+      handler: () => scanAllFilesCommand(context, apiClient),
     },
     {
       name: 'gomboc-vscode-extension.showFrameworks',
-      handler: () => showFrameworksCommand(context, apiClient)
-    }
+      handler: () => showFrameworksCommand(context, apiClient),
+    },
   ];
 
-  const disposables = commands.map(({ name, handler }) => 
-    vscode.commands.registerCommand(name, handler)
+  const disposables = commands.map(({ name, handler }) =>
+    vscode.commands.registerCommand(name, handler),
   );
 
   context.subscriptions.push(...disposables);
