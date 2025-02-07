@@ -1,6 +1,6 @@
 {
   "name": "gomboc-vscode-extension",
-  "displayName": "gomboc-vscode-extension",
+  "displayName": "Gomboc",
   "description": "",
   "version": "0.0.1",
   "engines": {
@@ -30,34 +30,51 @@
         "title": "Gomboc: Show organization frameworks"
       }
     ],
-    "configuration": [{
-      "type": "object",
-      "properties": {
-      "gomboc-vscode-extension.apiKey": {
-        "type": "string",
-        "default": "",
-        "description": "API Key for accessing the server."
+    "configuration": [
+      {
+        "type": "object",
+        "properties": {
+          "gomboc-vscode-extension.apiKey": {
+            "type": "string",
+            "default": "",
+            "description": "API Key for accessing the server."
+          },
+          "gomboc-vscode-extension.scanOnFileSave": {
+            "type": "boolean",
+            "default": false,
+            "description": "Scan file every time file saves if true"
+          }
+        }
       }
-    }
-    }]
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
-    "lint": "eslint src",
+    "lint": "eslint src && npm run typecheck",
+    "typecheck": "tsc --noEmit",
+    "format:check": "prettier --check .",
+    "format:write": "prettier --write .",
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/vscode": "^1.97.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
+    "@types/vscode": "^1.97.0",
     "@typescript-eslint/eslint-plugin": "^8.22.0",
     "@typescript-eslint/parser": "^8.22.0",
-    "eslint": "^9.19.0",
-    "typescript": "^5.7.3",
     "@vscode/test-cli": "^0.0.10",
-    "@vscode/test-electron": "^2.4.1"
+    "@vscode/test-electron": "^2.4.1",
+    "eslint": "^9.19.0",
+    "eslint-config-prettier": "^9.1.0",
+    "husky": "^9.1.6",
+    "prettier": "^3.2.5",
+    "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "neverthrow": "^8.1.1",
+    "zod": "^3.24.1"
   }
 }

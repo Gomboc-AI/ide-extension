@@ -1,1 +1,1 @@
-//// Webview panel setup/communication
+// Webview panel setup/communication
