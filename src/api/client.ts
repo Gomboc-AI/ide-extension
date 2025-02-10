@@ -2,19 +2,19 @@
 import * as vscode from 'vscode';
 import logger from '../utils/logger';
 import settings from '../settings';
+// @ts-expect-error
 import { ApolloClient, createHttpLink, InMemoryCache } from '@apollo/client';
 
 export class CustomerApiClient {
   private client;
 
-  constructor() {
+  constructor () {
     const _settings = settings();
 
     if (_settings instanceof Error) {
       logger.error('Invalid settings', _settings);
       throw new Error(_settings.message);
     }
-
     this.client = new ApolloClient({
       ssrMode: true,
       link: createHttpLink({
@@ -26,5 +26,6 @@ export class CustomerApiClient {
       }),
       cache: new InMemoryCache(),
     });
+    logger.info('Created a new apollo client .... ');
   }
 }
