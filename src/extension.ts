@@ -3,10 +3,12 @@ import { testApiKeyCommand } from './commands/testApiKey';
 import { scanFileCommand } from './commands/scanFile';
 import { scanAllFilesCommand } from './commands/scanAllFiles';
 import { showFrameworksCommand } from './commands/showFrameworks';
-import { initializeApiClient } from './api/client';
+import { CustomerApiClient } from './api/client';
+import logger from './utils/logger';
 
 export function activate(context: vscode.ExtensionContext) {
-  const apiClient = initializeApiClient(context);
+  logger.info('VSCode extension activated .... ');
+  const apiClient = new CustomerApiClient();
 
   const commands = [
     {
