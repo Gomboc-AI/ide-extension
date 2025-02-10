@@ -4,7 +4,6 @@ import { gql } from '@apollo/client';
 
 // test query
 // renamed query to avoid conflict
-
 export const HEALTH_CHECK = gql`
   query testOrganization {
     organization {
@@ -43,3 +42,4 @@ export const SECURITY_FRAMEWORKS = gql`
     }
   }
 `;
+
