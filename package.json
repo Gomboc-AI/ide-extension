@@ -65,7 +65,8 @@
     "typecheck": "tsc --noEmit",
     "format:check": "prettier --check .",
     "format:write": "prettier --write .",
-    "graphql:generate": "graphql-codegen --config src/api/codegen.ts"
+    "graphql:generate": "graphql-codegen --config src/api/codegen.ts",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@graphql-codegen/cli": "^5.0.4",
