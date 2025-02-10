@@ -17,7 +17,7 @@
 			],
 			"preLaunchTask": "${defaultBuildTask}",
 			"env": {
-				"CUSTOMER_API_URL": "http://0.0.0.0:5001/graphql"
+				"CUSTOMER_API_URL": "http://0.0.0.0:5001/graphql",
 			}
 		}
 	]

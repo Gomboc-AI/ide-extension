@@ -4,3 +4,7 @@ node_modules
 .vscode-test/
 *.vsix
 .env
+
+
+# graphql schema
+src/api/__generated__/

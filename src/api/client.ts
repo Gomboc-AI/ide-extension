@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 import logger from '../utils/logger';
 import settings from '../settings';
+// has to be ignored because we are compiling to commonjs and typescript complains
 // @ts-expect-error
 import { ApolloClient, createHttpLink, InMemoryCache } from '@apollo/client';
 
