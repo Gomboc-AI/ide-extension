@@ -20,8 +20,7 @@ export function getHTMLForStatments(organization: Organization) {
 
     return `
       <li>
-
-      
+        <p>All resources must enable</p> 
         <strong>Framework:</strong> ${statement.framework}<br>
         <Strong>Title:</strong> ${capability.title} <br>
       </li>

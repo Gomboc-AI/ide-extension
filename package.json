@@ -37,7 +37,8 @@
           "gomboc-vscode-extension.apiKey": {
             "type": "string",
             "default": "",
-            "description": "API Key for accessing the server."
+            "description": "API Key for accessing the server.",
+            "sensitive": true
           },
           "gomboc-vscode-extension.scanOnFileSave": {
             "type": "boolean",
