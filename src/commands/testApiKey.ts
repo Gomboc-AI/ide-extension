@@ -14,7 +14,8 @@ export async function testApiKeyCommand(
     await apiClient.healthCheck();
     vscode.window.showInformationMessage('API Key test success!');
   } catch (error) {
-    vscode.window.showErrorMessage('API Test Failed - Check API Key in extension settings');
+    vscode.window.showErrorMessage(
+      'API Test Failed - Check API Key in extension settings',
+    );
   }
-
 }

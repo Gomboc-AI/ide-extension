@@ -22,7 +22,6 @@ export async function showFrameworksCommand(
     );
     const htmlContent = getHTMLForStatments(organization);
     panel.webview.html = htmlContent;
-
   } catch (error) {
     vscode.window.showErrorMessage(
       `Error displaying frameworks for organization: ${error}`,

@@ -11,7 +11,7 @@ import { Organization } from './__generated__/graphql';
 export class CustomerApiClient {
   private client;
 
-  constructor () {
+  constructor() {
     const _settings = settings();
 
     if (_settings instanceof Error) {
@@ -58,6 +58,4 @@ export class CustomerApiClient {
       throw error;
     }
   }
-
-
 }

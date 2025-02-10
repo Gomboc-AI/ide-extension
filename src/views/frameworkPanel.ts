@@ -6,26 +6,27 @@ import { Organization } from '../api/__generated__/graphql';
  * Takes in a set of policy statements and turns them into html to display
  */
 export function getHTMLForStatments(organization: Organization) {
-
   const policy = organization.policy;
   const statements = organization.policy.statements;
 
   // Create simple list of plicy statements
 
-  const statementsList = statements.map((statement: any) => {
-    const capability = statement.payload?.capability;
-    // const capabilityInfo = capability
-    //   ? `<br>Capability ID: ${capability.id} | Title: ${capability.title}`
-    //   : '';
+  const statementsList = statements
+    .map((statement: any) => {
+      const capability = statement.payload?.capability;
+      // const capabilityInfo = capability
+      //   ? `<br>Capability ID: ${capability.id} | Title: ${capability.title}`
+      //   : '';
 
-    return `
+      return `
       <li>
         <p>All resources must enable</p> 
         <strong>Framework:</strong> ${statement.framework}<br>
         <Strong>Title:</strong> ${capability.title} <br>
       </li>
     `;
-  }).join(''); 
+    })
+    .join('');
 
   return `
     <html>
@@ -49,4 +50,3 @@ export function getHTMLForStatments(organization: Organization) {
     </html>
   `;
 }
-
