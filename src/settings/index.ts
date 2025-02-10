@@ -10,6 +10,7 @@ class InvalidEnvironment extends Error {
 
 const envSchema = z.object({
   CUSTOMER_API_URL: z.string(),
+  FRONTEGG_PAT: z.string(),
 });
 
 // dotenv.config(); // loads .env file into process.env

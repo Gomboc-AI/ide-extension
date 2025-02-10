@@ -2,10 +2,9 @@
 // @ts-expect-error
 import { gql } from '@apollo/client';
 
-
 // test query
 // renamed query to avoid conflict
-export const frameworksQuery = gql`
+export const ALL_SECURITY_FRAMEWORKS = gql`
   query Frameworks {
     securityFrameworks {
       id
@@ -28,6 +27,16 @@ export const frameworksQuery = gql`
             }
           }
         }
+      }
+    }
+  }
+`;
+
+export const HEALTH_CHECK = gql`
+  query Organization {
+    organization {
+      ... on Organization {
+        id
       }
     }
   }
