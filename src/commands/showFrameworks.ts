@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 import { CustomerApiClient } from '../api/client';
 import { getHTMLForStatments } from '../views/frameworkPanel';
 
-
 /**
  * Opens up a webview displaying all the organizations current security policy
  */

@@ -18,5 +18,4 @@ export async function testApiKeyCommand(
       'API Test Failed - Check API Key in extension settings',
     );
   }
-
 }

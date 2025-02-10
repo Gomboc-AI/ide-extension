@@ -34,8 +34,7 @@ const localSchema = {
 const schema = process.env.STAGE === 'local' ? localSchema : hiveSchema;
 
 const config = {
-
-  schema: schema, 
+  schema: schema,
   documents: ['./scrc/api/**/*.ts'],
   generates: {
     './src/api/__generated__/': {
