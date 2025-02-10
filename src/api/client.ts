@@ -5,7 +5,7 @@ import settings from '../settings';
 // has to be ignored because we are compiling to commonjs and typescript complains
 // @ts-expect-error
 import { ApolloClient, createHttpLink, InMemoryCache } from '@apollo/client';
-import { ALL_SECURITY_FRAMEWORKS, HEALTH_CHECK } from './queries';
+import { HEALTH_CHECK, SECURITY_FRAMEWORKS } from './queries';
 
 export class CustomerApiClient {
   private client;
@@ -34,14 +34,14 @@ export class CustomerApiClient {
     logger.info('Created a new apollo client .... ');
   }
 
-  public async allSecurityFrameworks() {
+  public async securityFrameworks() {
     try {
       const { data } = await this.client.query({
-        query: ALL_SECURITY_FRAMEWORKS,
+        query: SECURITY_FRAMEWORKS,
       });
-      return data.securityFrameworks;
+      return data.organization;
     } catch (error) {
-      logger.error('Unable to get all the security frameworks', { error });
+      logger.error('Grabbing security frameworks failed', { error });
       throw error;
     }
   }

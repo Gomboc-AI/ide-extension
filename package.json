@@ -64,7 +64,7 @@
     "typecheck": "tsc --noEmit",
     "format:check": "prettier --check .",
     "format:write": "prettier --write .",
-    "graphql:generate": "./scripts/pull-schema-local.sh"
+    "graphql:generate": "graphql-codegen --config src/api/codegen.ts"
   },
   "devDependencies": {
     "@graphql-codegen/cli": "^5.0.4",

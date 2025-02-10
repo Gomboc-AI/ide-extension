@@ -21,7 +21,7 @@ This project is organzied under the central src directory, all of the commands a
 
 4. Generate a frontegg PAT from portal, and use it within the env variables
 
-5. Run the pull schema script the same way you would in portal
+5. Pull the graphql schema from customer API.
 ```bash
   npm run graphql:generate
 ```
