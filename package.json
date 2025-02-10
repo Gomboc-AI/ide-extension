@@ -37,7 +37,8 @@
           "gomboc-vscode-extension.apiKey": {
             "type": "string",
             "default": "",
-            "description": "API Key for accessing the server."
+            "description": "API Key for accessing the server.",
+            "sensitive": true
           },
           "gomboc-vscode-extension.scanOnFileSave": {
             "type": "boolean",
@@ -64,7 +65,8 @@
     "typecheck": "tsc --noEmit",
     "format:check": "prettier --check .",
     "format:write": "prettier --write .",
-    "graphql:generate": "./scripts/pull-schema-local.sh"
+    "graphql:generate": "graphql-codegen --config src/api/codegen.ts",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@graphql-codegen/cli": "^5.0.4",

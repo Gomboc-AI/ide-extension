@@ -21,7 +21,7 @@ This project is organzied under the central src directory, all of the commands a
 
 4. Generate a frontegg PAT from portal, and use it within the env variables
 
-5. Run the pull schema script the same way you would in portal
+5. Pull the graphql schema from customer API.
 ```bash
   npm run graphql:generate
 ```
@@ -31,6 +31,8 @@ This project is organzied under the central src directory, all of the commands a
 
 ### Development
 When developing, you must run this using the debugger, in order to do that just use `F5`, which will open a new instance of vscode running the plugin. This will re-compile the code using esbuild. Sometimes you need to run the command manually, in which case just run `npm run compile` which will also eslint / typecheck it.
+
+Make sure to prepend your command names with `Gomboc` so that it is easy to search for the command when looking within vscode. 
 
 ##### New Command
 If you want to create a new comand you have to add it to the `package.json` as well as activate it within the `activate` function in `extension.ts`

@@ -7,14 +7,15 @@ import { CustomerApiClient } from '../api/client';
  * And if it fails, something is configured incorrectly
  */
 export async function testApiKeyCommand(
-  context: vscode.ExtensionContext,
+  _: vscode.ExtensionContext,
   apiClient: CustomerApiClient,
 ) {
   try {
-    const client = await apiClient.healthCheck();
+    await apiClient.healthCheck();
     vscode.window.showInformationMessage('API Key test success!');
   } catch (error) {
-    vscode.window.showErrorMessage('API Test Failed - Check API Key in extension settings');
+    vscode.window.showErrorMessage(
+      'API Test Failed - Check API Key in extension settings',
+    );
   }
-
 }

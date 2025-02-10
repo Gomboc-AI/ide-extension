@@ -4,39 +4,40 @@ import { gql } from '@apollo/client';
 
 // test query
 // renamed query to avoid conflict
-export const ALL_SECURITY_FRAMEWORKS = gql`
-  query Frameworks {
-    securityFrameworks {
-      id
-      name
-      tag
-      controls {
+export const HEALTH_CHECK = gql`
+  query testOrganization {
+    organization {
+      ... on Organization {
         id
-        identifier
-        description
-        statements {
-          framework
-          identifier
-          description
-          payload {
-            ... on PolicyStatementPayloadMustImplement {
-              capability {
-                id
-                title
-              }
-            }
-          }
-        }
       }
     }
   }
 `;
 
-export const HEALTH_CHECK = gql`
+export const SECURITY_FRAMEWORKS = gql`
   query Organization {
     organization {
       ... on Organization {
         id
+        name
+        policy {
+          statements {
+            id
+            payload {
+              ... on PolicyStatementPayloadMustImplementType {
+                capability {
+                  id
+                  title
+                }
+              }
+            }
+            framework
+            identifier
+            description
+            createdBy
+            createdAt
+          }
+        }
       }
     }
   }

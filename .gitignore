@@ -8,3 +8,4 @@ node_modules
 
 # graphql schema
 src/api/__generated__/
+graphql-schema.json
