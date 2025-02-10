@@ -1,6 +1,7 @@
 // opens up the webview
 import * as vscode from 'vscode';
 import { CustomerApiClient } from '../api/client';
+import { getHTMLForStatments } from '../views/frameworkPanel';
 
 export async function showFrameworksCommand(
   context: vscode.ExtensionContext,
@@ -8,7 +9,7 @@ export async function showFrameworksCommand(
 ) {
 
   try {
-    const frameworks = await apiClient.securityFrameworks();
+    const organization = await apiClient.securityFrameworks();
 
     // if success, display a webview of the data
     const panel = vscode.window.createWebviewPanel(
@@ -17,19 +18,7 @@ export async function showFrameworksCommand(
       vscode.ViewColumn.One,
       {},
     );
-    const htmlContent = `
-    <html>
-      <main>
-        <h2>
-          test
-        </h2>
-        <p>
-          Here's a paragraph
-        </p>
-      </main>
-    </html>
-    `;
-
+    const htmlContent = getHTMLForStatments(organization);
     panel.webview.html = htmlContent;
 
   } catch (error) {

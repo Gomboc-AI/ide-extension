@@ -6,6 +6,7 @@ import settings from '../settings';
 // @ts-expect-error
 import { ApolloClient, createHttpLink, InMemoryCache } from '@apollo/client';
 import { HEALTH_CHECK, SECURITY_FRAMEWORKS } from './queries';
+import { Organization } from './__generated__/graphql';
 
 export class CustomerApiClient {
   private client;
@@ -34,7 +35,7 @@ export class CustomerApiClient {
     logger.info('Created a new apollo client .... ');
   }
 
-  public async securityFrameworks() {
+  public async securityFrameworks(): Promise<Organization> {
     try {
       const { data } = await this.client.query({
         query: SECURITY_FRAMEWORKS,
