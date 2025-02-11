@@ -127,7 +127,6 @@ export const generateOSMetadata = async (): Promise<OSMetaData> => {
       }
       for (const net of netInterface) {
         if (net.family === 'IPv4' && !net.internal) {
-          console.log(`Local IP on ${interfaceName}:`, net.address);
           privateIp = net.address;
         }
       }
