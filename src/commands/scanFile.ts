@@ -68,7 +68,7 @@ export async function scanFileCommand(
     metaData,
   };
 
-  const scanResponse = await apiClient.sendSingleScan({inputObject});
+  const scanResponse = await apiClient.sendSingleScan({ inputObject });
 
   // TODO
   // ----- add a progress bar that possible measures the length of time? ------ //
