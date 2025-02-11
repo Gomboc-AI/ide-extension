@@ -42,3 +42,7 @@ export const SECURITY_FRAMEWORKS = gql`
     }
   }
 `;
+
+// export const SEND_SINGLE_SCAN = gql`
+
+// `

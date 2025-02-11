@@ -7,6 +7,7 @@ import settings from '../settings';
 import { ApolloClient, createHttpLink, InMemoryCache } from '@apollo/client';
 import { HEALTH_CHECK, SECURITY_FRAMEWORKS } from './queries';
 import { Organization } from './__generated__/graphql';
+import { SingleScanInput } from '../types';
 
 export class CustomerApiClient {
   private client;
@@ -40,6 +41,7 @@ export class CustomerApiClient {
       const { data } = await this.client.query({
         query: SECURITY_FRAMEWORKS,
       });
+      logger.info('Fetched security frameworks');
       return data.organization;
     } catch (error) {
       logger.error('Grabbing security frameworks failed', { error });
@@ -52,9 +54,24 @@ export class CustomerApiClient {
       const { data } = await this.client.query({
         query: HEALTH_CHECK,
       });
+      logger.info('Service Healthy ....');
       return data.organization;
     } catch (error) {
       logger.error('Health check failed', { error });
+      throw error;
+    }
+  }
+
+  public async sendSingleScan(args: { inputObject: SingleScanInput }) {
+    try {
+      // const { data } = await this.client.query({
+      //   query: SEND_SINGLE_SCAN,
+      // });
+      const data = 3;
+      // TODO update
+      return data;
+    } catch (error) {
+      logger.error('Sending a single file or scenario failed', { error });
       throw error;
     }
   }
