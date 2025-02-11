@@ -11,8 +11,7 @@
       "request": "launch",
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}",
-        // "${env:DEV_FOLDER_PATH}"
-        "/Users/jacksondahl/Desktop/Repo/gomboc/ops/k8s"
+        "${env:DEV_FOLDER_PATH}"
       ],
       "outFiles": ["${workspaceFolder}/dist/**/*.js"],
       "preLaunchTask": "${defaultBuildTask}",
