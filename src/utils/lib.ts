@@ -66,7 +66,7 @@ export const generateRequestMetadata = async () => {
  * stackoverflow
  * http://stackoverflow.com/questions/46511595/how-to-access-the-api-for-git-in-visual-studio-code
  * @returns GitMetaData
- * 
+ *
  * Could probably grab mroe information from here in the future if we want to report it
  */
 const generateGitMetaData = async (): Promise<GitMetaData> => {
