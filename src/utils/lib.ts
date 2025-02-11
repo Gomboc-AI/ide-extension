@@ -68,6 +68,7 @@ export const generateRequestMetadata = async () => {
  * @returns GitMetaData
  *
  * Could probably grab mroe information from here in the future if we want to report it
+
  */
 const generateGitMetaData = async (): Promise<GitMetaData> => {
   try {
