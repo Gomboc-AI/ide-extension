@@ -66,6 +66,8 @@ export const generateRequestMetadata = async () => {
  * stackoverflow
  * http://stackoverflow.com/questions/46511595/how-to-access-the-api-for-git-in-visual-studio-code
  * @returns GitMetaData
+ * 
+ * Could probably grab mroe information from here in the future if we want to report it
  */
 const generateGitMetaData = async (): Promise<GitMetaData> => {
   try {
@@ -86,19 +88,15 @@ const generateGitMetaData = async (): Promise<GitMetaData> => {
     const branch = head?.name ? head.name : 'ERROR';
 
     const mainBranch = 'main';
-    const branchDetails = await repo.getBranch(mainBranch);
+    // const branchDetails = await repo.getBranch(mainBranch);
     const lastMergeCommit = await repo.getMergeBase(branch, mainBranch);
     const status = await repo.status();
 
     return {
-      repo,
       headName: branch,
-      headBranch: head,
       mainName: mainBranch,
-      mainBranch: branchDetails,
       lastMergeCommit,
       remoteUrl: remoteUrl ?? '', // could be null?
-      status,
     };
   } catch (error) {
     vscode.window.showErrorMessage('Error grabbing git data');

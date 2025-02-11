@@ -1,3 +1,4 @@
+import { GombocError } from './__generated__/graphql';
 // graphql querieos
 // @ts-expect-error
 import { gql } from '@apollo/client';
@@ -43,6 +44,16 @@ export const SECURITY_FRAMEWORKS = gql`
   }
 `;
 
-// export const SEND_SINGLE_SCAN = gql`
-
-// `
+export const SEND_SINGLE_SCAN = gql`
+  mutation ScanFileOrScenarioVscode {
+    ScanFileOrScenarioVscode(input: $input) {
+      ... on ScanFileOrScenarioVscode {
+        test
+      }
+      ... on GombocError {
+        message
+        code
+      }
+    }
+  }
+`;

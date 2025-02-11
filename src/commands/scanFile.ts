@@ -64,9 +64,9 @@ export async function scanFileCommand(
   const inputObject: SingleScanInput = {
     fileContents,
     tool,
-    policyStatements,
     metaData,
   };
+  console.log('..:: INPUT - ', inputObject)
 
   const scanResponse = await apiClient.sendSingleScan({ inputObject });
 

@@ -21,13 +21,9 @@ export type SecurityPolicy = {
 };
 
 export type GitMetaData = {
-  repo: Repository;
   headName: string;
-  headBranch: Branch | undefined;
   mainName: string;
-  mainBranch: Branch;
   lastMergeCommit: string;
-  status: void; // idk about this one
   remoteUrl: string;
 };
 
@@ -46,7 +42,7 @@ export type MetaData = {
 export type SingleScanInput = {
   fileContents: IACScanContent | IACScanContent[];
   tool: InfrastructureTool;
-  policyStatements: SecurityPolicy[];
+  // policyStatements: SecurityPolicy[]; // shouldn't need this
   metaData: MetaData;
 };
 

@@ -5,7 +5,7 @@ import settings from '../settings';
 // has to be ignored because we are compiling to commonjs and typescript complains
 // @ts-expect-error
 import { ApolloClient, createHttpLink, InMemoryCache } from '@apollo/client';
-import { HEALTH_CHECK, SECURITY_FRAMEWORKS } from './queries';
+import { HEALTH_CHECK, SECURITY_FRAMEWORKS, SEND_SINGLE_SCAN } from './queries';
 import { Organization } from './__generated__/graphql';
 import { SingleScanInput } from '../types';
 
@@ -67,9 +67,9 @@ export class CustomerApiClient {
       // const { data } = await this.client.query({
       //   query: SEND_SINGLE_SCAN,
       // });
-      const data = 3;
+      // const data = data.test;
       // TODO update
-      return data;
+      return 3;
     } catch (error) {
       logger.error('Sending a single file or scenario failed', { error });
       throw error;
