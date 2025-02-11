@@ -71,7 +71,7 @@ export class CustomerApiClient {
       // TODO update
       return data;
     } catch (error) {
-      logger.error('Sending a single file or scenario failed');
+      logger.error('Sending a single file or scenario failed', { error });
       throw error;
     }
   }
