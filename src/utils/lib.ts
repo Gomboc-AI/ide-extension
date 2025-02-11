@@ -79,6 +79,8 @@ const generateGitMetaData = async (): Promise<GitMetaData> => {
     const api = gitImport.getAPI(1);
 
     const repo = api.repositories[0];
+    const remote = repo.state.remotes[0];
+    const remoteUrl= remote.fetchUrl;
     const head = repo.state.HEAD; // points to the branch
 
     const branch = head?.name ? head.name : 'ERROR';
@@ -95,6 +97,7 @@ const generateGitMetaData = async (): Promise<GitMetaData> => {
       mainName: mainBranch,
       mainBranch: branchDetails,
       lastMergeCommit,
+      remoteUrl: remoteUrl ?? '', // could be null? 
       status,
     };
   } catch (error) {
@@ -103,14 +106,13 @@ const generateGitMetaData = async (): Promise<GitMetaData> => {
   }
 };
 
+/**
+ * This grabs various metadata information from the host machine. namely user and hostmachine names
+ * and the public and private ip addresses of the machine 
+ * @returns OSMetaData
+ */
 export const generateOSMetadata = async (): Promise<OSMetaData> => {
   try {
-    /**
-     * user
-     * machine name
-     * ip address
-     * remote repository
-     */
     const userInfo = os.userInfo();
     const userName = userInfo.username;
     const machineName = os.hostname();

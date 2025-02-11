@@ -28,6 +28,7 @@ export type GitMetaData = {
   mainBranch: Branch;
   lastMergeCommit: string;
   status: void; // idk about this one
+  remoteUrl: string;
 };
 
 export type OSMetaData = {
