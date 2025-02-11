@@ -89,6 +89,7 @@
   "dependencies": {
     "@apollo/client": "^3.12.11",
     "dotenv": "^16.4.7",
+    "file-type": "^20.1.0",
     "graphql-tag": "^2.12.6",
     "neverthrow": "^8.1.1",
     "react": "^19.0.0",

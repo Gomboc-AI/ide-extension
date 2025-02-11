@@ -34,6 +34,8 @@ When developing, you must run this using the debugger, in order to do that just 
 
 Make sure to prepend your command names with `Gomboc` so that it is easy to search for the command when looking within vscode. 
 
+To do development with different local repositories, add the absolute path you want to open when you press `F5` to the `DEV_FOLDER_PATH` environment variable. 
+
 ##### New Command
 If you want to create a new comand you have to add it to the `package.json` as well as activate it within the `activate` function in `extension.ts`
 
