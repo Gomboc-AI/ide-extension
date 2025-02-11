@@ -1,12 +1,13 @@
 // scans current working file or scenarioimport * as vscode from 'vscode';
 import * as vscode from 'vscode';
 import { CustomerApiClient } from '../api/client';
-// @ts-expect-error
-import { fileTypeFromFile } from 'file-type';
-import { GitExtension } from '../types/git';
-import { getFileType } from '../utils/lib';
+import {
+  generateRequestMetadata,
+  generateSecurityPolicies,
+  getFileType,
+} from '../utils/lib';
 import { InfrastructureTool } from '../api/__generated__/graphql';
-import { IACScanContent } from '../types';
+import { IACScanContent, SingleScanInput } from '../types';
 
 /**
  * Scans a single file and sens to customerapi
@@ -31,6 +32,7 @@ export async function scanFileCommand(
   context: vscode.ExtensionContext,
   apiClient: CustomerApiClient,
 ) {
+  // ----- Gather input ------- //
   const editor = vscode.window.activeTextEditor;
   if (!editor) {
     vscode.window.showErrorMessage('No active editor');
@@ -45,15 +47,32 @@ export async function scanFileCommand(
   if (filetype === 'tf') {
     tool = InfrastructureTool.Terraform;
     fileContents = await getTFScenarioFiles(document);
-  }
-  if (filetype === 'yml' || filetype === 'yaml') {
+  } else if (filetype === 'yml' || filetype === 'yaml') {
     tool = InfrastructureTool.Cloudformation;
     fileContents = getCFNFile(document);
+  } else {
+    vscode.window.showErrorMessage(
+      'Current file is not a cloudformation or terraform file',
+    );
+    throw new Error('Current file is not a cloudformation or terraform file');
   }
 
-  // generate security policies
+  const policyStatements = await generateSecurityPolicies(apiClient);
+  const metaData = await generateRequestMetadata();
 
-  // generate git meta data
+  // ----- Send data to customerapi ------ //
+  const inputObject: SingleScanInput = {
+    fileContents,
+    tool,
+    policyStatements,
+    metaData,
+  };
+
+  // TODO
+  // ----- add a progress bar that possible measures the length of time? ------ //
+
+  // TODO
+  // -------  Process diagnostic collection ------- //
 }
 
 async function getTFScenarioFiles(
@@ -90,5 +109,3 @@ function getCFNFile(document: vscode.TextDocument): IACScanContent {
     fileContents: btoa(document.getText()),
   };
 }
-
-function generateSecurityPolicies() {}
