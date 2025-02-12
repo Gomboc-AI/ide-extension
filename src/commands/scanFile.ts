@@ -6,8 +6,13 @@ import {
   generateSecurityPolicies,
   getFileType,
 } from '../utils/lib';
-import { InfrastructureTool } from '../api/__generated__/graphql';
+import {
+  IacScanContentInput,
+  InfrastructureTool,
+  ScanFileOrScenarioVscodeInput,
+} from '../api/__generated__/graphql';
 import { IACScanContent, SingleScanInput } from '../types';
+import { ScanResultsProvider } from '../providers/scanResultsProvider';
 
 /**
  * Scans a single file and sens to customerapi
@@ -31,6 +36,7 @@ import { IACScanContent, SingleScanInput } from '../types';
 export async function scanFileCommand(
   context: vscode.ExtensionContext,
   apiClient: CustomerApiClient,
+  scanResultsProvider: ScanResultsProvider,
 ) {
   // ----- Gather input ------- //
   const editor = vscode.window.activeTextEditor;
@@ -42,7 +48,7 @@ export async function scanFileCommand(
   const filePath = document.uri.fsPath;
   const filetype = getFileType(filePath);
 
-  let fileContents: IACScanContent | IACScanContent[];
+  let fileContents: IacScanContentInput[];
   let tool: InfrastructureTool;
   if (filetype === 'tf') {
     tool = InfrastructureTool.Terraform;
@@ -57,18 +63,23 @@ export async function scanFileCommand(
     throw new Error('Current file is not a cloudformation or terraform file');
   }
 
-  const policyStatements = await generateSecurityPolicies(apiClient);
   const metaData = await generateRequestMetadata();
 
   // ----- Send data to customerapi ------ //
-  const inputObject: SingleScanInput = {
+  const inputObject: ScanFileOrScenarioVscodeInput = {
     fileContents,
-    tool,
+    iacTool: tool,
     metaData,
   };
-  console.log('..:: INPUT - ', inputObject);
 
   const scanResponse = await apiClient.sendSingleScan({ inputObject });
+  console.log('..:: SCAN ', scanResponse);
+
+  if (scanResponse.__typename !== 'ScanFileOrScenarioVscode') {
+    throw new Error('gomboc error');
+  }
+  scanResultsProvider.generateComments(scanResponse.comments);
+  scanResultsProvider.createDiagnostic();
 
   // TODO
   // ----- add a progress bar that possible measures the length of time? ------ //
@@ -79,7 +90,7 @@ export async function scanFileCommand(
 
 async function getTFScenarioFiles(
   document: vscode.TextDocument,
-): Promise<IACScanContent[]> {
+): Promise<IacScanContentInput[]> {
   const currentFileUri = document.uri;
   const directoryUri = currentFileUri.with({
     path: currentFileUri.path.replace(/\/[^/]*$/, '/'),
@@ -105,9 +116,11 @@ async function getTFScenarioFiles(
 /**
  * Only care about the current file, just return base64 of it
  */
-function getCFNFile(document: vscode.TextDocument): IACScanContent {
-  return {
-    filePath: document.uri.fsPath,
-    fileContents: btoa(document.getText()),
-  };
+function getCFNFile(document: vscode.TextDocument): IacScanContentInput[] {
+  return [
+    {
+      filePath: document.uri.fsPath,
+      fileContents: btoa(document.getText()),
+    },
+  ];
 }

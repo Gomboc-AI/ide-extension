@@ -7,6 +7,11 @@ import { GitExtension } from '../types/git';
 import * as os from 'os';
 import logger from './logger';
 import { initClient } from './RestClient';
+import {
+  GitMetaDataInput,
+  MetaDataInput,
+  OsMetaDataInput,
+} from '../api/__generated__/graphql';
 
 // stolen from stackoverflow
 // https://stackoverflow.com/questions/190852/how-can-i-get-file-extensions-with-javascript
@@ -48,7 +53,7 @@ export const generateSecurityPolicies = async (
   }));
 };
 
-export const generateRequestMetadata = async () => {
+export const generateRequestMetadata = async (): Promise<MetaDataInput> => {
   const gitMetaData = await generateGitMetaData();
   const osMetaData = await generateOSMetadata();
   return {
@@ -68,15 +73,20 @@ export const generateRequestMetadata = async () => {
  * @returns GitMetaData
  *
  * Could probably grab mroe information from here in the future if we want to report it
-
+ * Also need to return with 'None' if there is no git information (change later, this is POC)
  */
-const generateGitMetaData = async (): Promise<GitMetaData> => {
+const generateGitMetaData = async (): Promise<GitMetaDataInput> => {
   try {
     const gitExtension =
       vscode.extensions.getExtension<GitExtension>('vscode.git');
     if (!gitExtension) {
       vscode.window.showErrorMessage('Failed to load git extension');
-      throw new Error('Failed to load git extension');
+      return {
+        headName: '',
+        mainName: '',
+        lastMergeCommit: '',
+        remote: '',
+      };
     }
     const gitImport = gitExtension.exports;
     const api = gitImport.getAPI(1);
@@ -91,17 +101,21 @@ const generateGitMetaData = async (): Promise<GitMetaData> => {
     const mainBranch = 'main';
     // const branchDetails = await repo.getBranch(mainBranch);
     const lastMergeCommit = await repo.getMergeBase(branch, mainBranch);
-    const status = await repo.status();
 
     return {
       headName: branch,
       mainName: mainBranch,
       lastMergeCommit,
-      remoteUrl: remoteUrl ?? '', // could be null?
+      remote: remoteUrl ?? '', // could be null?
     };
   } catch (error) {
     vscode.window.showErrorMessage('Error grabbing git data');
-    throw new Error('Error grabbing git data');
+    return {
+      headName: 'None',
+      mainName: 'None',
+      lastMergeCommit: 'None',
+      remote: 'None',
+    };
   }
 };
 
@@ -110,7 +124,7 @@ const generateGitMetaData = async (): Promise<GitMetaData> => {
  * and the public and private ip addresses of the machine
  * @returns OSMetaData
  */
-export const generateOSMetadata = async (): Promise<OSMetaData> => {
+export const generateOSMetadata = async (): Promise<OsMetaDataInput> => {
   try {
     const userInfo = os.userInfo();
     const userName = userInfo.username;

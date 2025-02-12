@@ -12,7 +12,8 @@
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}",
         // "${env:DEV_FOLDER_PATH}"
-        "/Users/jacksondahl/Desktop/Repo/gomboc/tool/admin-workbench"
+        "/Users/jacksondahl/Desktop/Repo/tf_test"
+        // "/Users/jacksondahl/Desktop/Repo/gomboc/service/remediations"
       ],
       "outFiles": ["${workspaceFolder}/dist/**/*.js"],
       "preLaunchTask": "${defaultBuildTask}",

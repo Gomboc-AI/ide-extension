@@ -44,11 +44,18 @@ export const SECURITY_FRAMEWORKS = gql`
   }
 `;
 
-export const SEND_SINGLE_SCAN = gql`
-  mutation ScanFileOrScenarioVscode {
-    ScanFileOrScenarioVscode(input: $input) {
+export const SINGLE_SCAN = gql`
+  mutation ScanFileOrScenarioVscode($input: ScanFileOrScenarioVscodeInput!) {
+    scanFileOrScenarioVscode(input: $input) {
       ... on ScanFileOrScenarioVscode {
-        test
+        comments {
+          filePath
+          diff
+          commentData {
+            text
+            lineNumber
+          }
+        }
       }
       ... on GombocError {
         message
