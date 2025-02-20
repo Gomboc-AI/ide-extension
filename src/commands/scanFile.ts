@@ -69,7 +69,6 @@ export async function scanFileCommand(
   };
 
   const scanResponse = await apiClient.singleScanMutation({ inputObject });
-  console.log('..:: SCAN ', scanResponse);
 
   if (scanResponse.__typename !== 'ScanFileOrScenarioVscode') {
     throw new Error('gomboc error');
