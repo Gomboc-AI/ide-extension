@@ -1,0 +1,4 @@
+* @Gomboc-AI/reviewers
+* @Gomboc-AI/RnD
+/schema/* @Gomboc-AI/Critical-Reviewers
+*.graphql @Gomboc-AI/Critical-Reviewers
