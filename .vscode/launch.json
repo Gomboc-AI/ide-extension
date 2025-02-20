@@ -12,7 +12,6 @@
       "args": [
         "--extensionDevelopmentPath=${workspaceFolder}",
         "${env:DEV_FOLDER_PATH}"
-
       ],
       "outFiles": ["${workspaceFolder}/dist/**/*.js"],
       "preLaunchTask": "${defaultBuildTask}",
