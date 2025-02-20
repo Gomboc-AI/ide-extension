@@ -33,7 +33,7 @@ When developing, you must run this using the debugger, in order to do that just 
 
 Make sure to prepend your command names with `Gomboc` so that it is easy to search for the command when looking within vscode. 
 
-To do development with different local repositories, add the absolute path you want to open when you press `F5` to the `DEV_FOLDER_PATH` environment variable. 
+The `launch.json` file within the `.vscode` directory is what controls the launch configuration for the debugger. I have set it up so that it points at a folder called `test_development/tf_test` that's not commited. If you want this folder to do your own test, just ask Jackson, otherwise feel free to create your own folders/directories to do your own development.
 
 ##### New Command
 If you want to create a new comand you have to add it to the `package.json` as well as activate it within the `activate` function in `extension.ts`
@@ -47,6 +47,7 @@ Since vscode extensions have to be a commonjs module, and some of the packages w
 `// @ts-expect-error` 
 above it.
 
+---
 #### Some information about developing this ide extension
 In order to add a `quick fix` to a particular diagnostic, you need to register a command. This works a little differently then the commands that are registered in the package.json, as these are hidden from the user and they can't invoke them. The commands object is just a giant object that you feed callback functions.
 

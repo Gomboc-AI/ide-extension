@@ -10,8 +10,8 @@
       "type": "extensionHost",
       "request": "launch",
       "args": [
+        "${workspaceFolder}/test_development/tf_test",
         "--extensionDevelopmentPath=${workspaceFolder}",
-        "${env:DEV_FOLDER_PATH}"
       ],
       "outFiles": ["${workspaceFolder}/dist/**/*.js"],
       "preLaunchTask": "${defaultBuildTask}",
