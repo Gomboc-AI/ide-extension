@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { GombocDiagnostic } from './gombocDiagnostic';
+import { ScanFileOrScenarioVscodeComments } from '../api/__generated__/graphql';
 export class CodeActionProvider implements vscode.CodeActionProvider {
   private results;
   private readonly file: { file: string; editor: vscode.TextEditor };
@@ -10,7 +11,7 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
   private readonly fixableResults = [];
 
   constructor(
-    results,
+    results: ScanFileOrScenarioVscodeComments[],
     file: { file: string; editor: vscode.TextEditor },
     diagnosticCollection: vscode.DiagnosticCollection,
   ) {
@@ -18,6 +19,7 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
     (this.file = file), (this.diagnosticCollection = diagnosticCollection);
   }
 
+  // required function fo the codeActionProvider. This is what does the action
   provideCodeActions(
     document: vscode.TextDocument,
     range: vscode.Range | vscode.Selection,
@@ -30,7 +32,6 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
       .map((diagnostic: GombocDiagnostic) =>
         this.createCommandCodeAction(diagnostic),
       );
-
     // when ready for the apply all, add it here
   }
 
@@ -38,13 +39,11 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
   private createCommandCodeAction(
     diagnostic: GombocDiagnostic,
   ): vscode.CodeAction {
-    if (diagnostic.code === undefined) throw new Error('idk');
-    const valueOf: string | number | object = diagnostic.code.valueOf();
-    const queryName = Object(valueOf).value;
+    const message = diagnostic.message;
 
     const gombocDiagnostic: GombocDiagnostic = diagnostic;
     const action = new vscode.CodeAction(
-      'Apply fix to ' + queryName,
+      'Apply fix to ' + message,
       vscode.CodeActionKind.QuickFix,
     );
     action.command = {
@@ -52,11 +51,10 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
       title: 'Gomboc fix',
       tooltip: 'This will apply Gomboc fix for the vulnerability',
       arguments: [
-        [gombocDiagnostic.gombocResult],
-        this.results,
+        gombocDiagnostic.gombocResult,
         this.file,
         this.diagnosticCollection,
-        true,
+        false,
         false,
       ],
     };
@@ -66,33 +64,33 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
   }
 
   // create a quick fix for the entire file
-  private createFixFileCodeAction(
-    diagnostic: vscode.Diagnostic,
-    fixableResults,
-  ): vscode.CodeAction[] {
-    const action = new vscode.CodeAction(
-      'File : Apply all available fixes',
-      vscode.CodeActionKind.QuickFix,
-    );
+  // private createFixFileCodeAction(
+  //   diagnostic: vscode.Diagnostic,
+  //   fixableResults,
+  // ): vscode.CodeAction[] {
+  //   const action = new vscode.CodeAction(
+  //     'File : Apply all available fixes',
+  //     vscode.CodeActionKind.QuickFix,
+  //   );
 
-    action.command = {
-      command: 'gomboc-results.applyRemediation',
-      title: 'Gomboc fix',
-      tooltip: 'This will apply Gomboc fix for the vulnerability',
-      arguments: [
-        fixableResults,
-        this.results,
-        this.file,
-        this.diagnosticCollection,
-        true,
-        false,
-      ],
-    };
+  //   action.command = {
+  //     command: 'gomboc-results.applyRemediation',
+  //     title: 'Gomboc fix',
+  //     tooltip: 'This will apply Gomboc fix for the vulnerability',
+  //     arguments: [
+  //       fixableResults,
+  //       this.results,
+  //       this.file,
+  //       this.diagnosticCollection,
+  //       true,
+  //       false,
+  //     ],
+  //   };
 
-    action.diagnostics = [diagnostic];
-    action.isPreferred = true;
-    return [action];
-  }
+  //   action.diagnostics = [diagnostic];
+  //   action.isPreferred = true;
+  //   return [action];
+  // }
 }
 
 function isGombocDiagnostic(

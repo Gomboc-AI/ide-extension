@@ -19,6 +19,7 @@ export function activate(context: vscode.ExtensionContext) {
     diagnosticCollection,
     [],
   );
+  scanResults.registerApplyRemediation();
 
   const commands = [
     {

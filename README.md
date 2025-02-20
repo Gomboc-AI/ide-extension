@@ -46,3 +46,23 @@ To add another config setting add it under `"configuration"` in `package.json`
 Since vscode extensions have to be a commonjs module, and some of the packages we use are ECMAScript modules, we have to do some tricky things with typescript. Esbuild is used to compile to commonjs, but if you try to import something that only resolves ECMA, then you have to use 
 `// @ts-expect-error` 
 above it.
+
+#### Some information about developing this ide extension
+In order to add a `quick fix` to a particular diagnostic, you need to register a command. This works a little differently then the commands that are registered in the package.json, as these are hidden from the user and they can't invoke them. The commands object is just a giant object that you feed callback functions.
+
+So when certain actions are taken, it invokes these callback functions:
+For Example:
+
+```typescript
+  // registers the command so that it can be called
+  public registerApplyRemediation() {
+    this.context.subscriptions.push(
+      vscode.commands.registerCommand(
+        'gomboc-results.applyRemediation',
+        (fixedResults, file) => {
+          this.applyRemediation(fixedResults, file);
+        },
+      ),
+    );
+  }
+```
