@@ -18,8 +18,8 @@ export class ScanResultsProvider {
     this.context.subscriptions.push(
       vscode.commands.registerCommand(
         'gomboc-results.applyRemediation',
-        (fixedResults, file) => {
-          this.applyRemediation(fixedResults, file);
+        fixedResults => {
+          this.applyRemediation(fixedResults);
         },
       ),
     );
@@ -60,37 +60,42 @@ export class ScanResultsProvider {
   }
 
   // Registers the code action providers so that they show up under each diagnostic
-  addQuickFixes() {
+  async addQuickFixes() {
     if (this.codeActionDisposable) {
       this.codeActionDisposable.dispose;
     }
-    const file = this.getCurrentFile();
+    const file = await this.getCurrentFile();
     this.codeActionDisposable = vscode.languages.registerCodeActionsProvider(
       {
         language: file.editor.document.languageId,
         scheme: file.editor.document.uri.scheme,
       },
-      new CodeActionProvider(this.results, file, this.diagnosticCollection),
+      new CodeActionProvider(this.results, this.diagnosticCollection),
     );
   }
 
   // Uses the scan result + diagnostic in order to apply a fix
-  applyRemediation(
-    fixedResults: ScanFileOrScenarioVscodeComments,
-    file: { file: string; editor: vscode.TextEditor },
-    // diagnosticCollection: vscode.DiagnosticCollection,
-    // fixAll: boolean,
-    // fixLine: boolean,
-  ) {
-    file.editor.edit(editbuilder => {
-      for (const fix of fixedResults.fixes) {
-        const lineRange = file.editor.document.lineAt(fix.lineNumber).range;
-        editbuilder.replace(lineRange, fix.newValue);
+  async applyRemediation(fixedResults: ScanFileOrScenarioVscodeComments[]) {
+    const edit = new vscode.WorkspaceEdit();
+    for (const result of fixedResults) {
+      // the filepath might point to a different file
+      const file = vscode.Uri.file(result.fileName);
+      const document = await vscode.workspace.openTextDocument(file);
+      for (const fix of result.fixes) {
+        const lineRange = document.lineAt(fix.lineNumber).range;
+        edit.replace(file, lineRange, fix.newValue);
       }
-    });
+    }
+    await vscode.workspace.applyEdit(edit);
+
+    // once we apply a remediation we have to dispose and clear everything and re-run
+    this.diagnosticCollection.clear();
+    if (this.codeActionDisposable) {
+      this.codeActionDisposable.dispose();
+    }
   }
 
-  getCurrentFile(): { file: string; editor: vscode.TextEditor } {
+  async getCurrentFile(): Promise<{ file: string; editor: vscode.TextEditor }> {
     const opened = vscode.window.activeTextEditor;
     if (opened) {
       const file = opened.document.fileName;
@@ -98,4 +103,11 @@ export class ScanResultsProvider {
     }
     throw new Error('function lacks active editor');
   }
+
+  // async getFileFromPath(filePath: string): Promise<{ file: string; editor: vscode.TextEditor }> {
+  //   const uri = vscode.Uri.file(filePath);
+  //   const document = await vscode.workspace.openTextDocument(uri);
+  //   const editor = await vscode.window.showTextDocument(document);
+  //   return { file: document.fileName, editor };
+  // }
 }
