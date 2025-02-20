@@ -48,12 +48,17 @@ export const SINGLE_SCAN = gql`
   mutation ScanFileOrScenarioVscode($input: ScanFileOrScenarioVscodeInput!) {
     scanFileOrScenarioVscode(input: $input) {
       ... on ScanFileOrScenarioVscode {
-        comments {
-          filePath
-          diff
-          commentData {
-            text
+        results {
+          category
+          description
+          documentationLink
+          iacTool
+          fileName
+          fixes {
+            currentValue
+            newValue
             lineNumber
+            issueType
           }
         }
       }

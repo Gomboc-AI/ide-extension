@@ -66,9 +66,10 @@ export class CustomerApiClient {
     }
   }
 
-  public async sendSingleScan(args: {
+  public async singleScanMutation(args: {
     inputObject: ScanFileOrScenarioVscodeInput;
   }): Promise<ScanFileOrScenarioVscodeOutput> {
+    logger.info('Sending a single file or scenario scan request');
     try {
       const { data } = await this.client.mutate({
         mutation: SINGLE_SCAN,
@@ -76,7 +77,6 @@ export class CustomerApiClient {
           input: args.inputObject,
         },
       });
-      console.log('data - ', data);
       return data.scanFileOrScenarioVscode;
     } catch (error) {
       logger.error('Sending a single file or scenario failed', { error });

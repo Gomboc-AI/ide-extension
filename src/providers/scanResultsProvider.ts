@@ -6,30 +6,36 @@ export class ScanResultsProvider {
   constructor(
     private context: vscode.ExtensionContext,
     private diagnosticCollection: vscode.DiagnosticCollection,
-    private comments: ScanFileOrScenarioVscodeComments[],
+    private results: ScanFileOrScenarioVscodeComments[],
   ) {
-    this.comments = [];
+    this.results = [];
   }
 
   // used to link up the comments to the diff? possibly? tbd
-  async generateComments(comments: ScanFileOrScenarioVscodeComments[]) {
+  async generateComments(results: ScanFileOrScenarioVscodeComments[]) {
     // if we need to do some rearranging of some sort we should do that here
-    this.comments = comments;
+    this.results = results;
   }
+
+  // public registerSettings() {
+  //   this.context.subscriptions.push(
+  //     vscode.commands.registerCommand(commands)
+  //   )
+  // }
 
   // uses the scan response to generate a diagnostic for the diagnostic collection
   async createDiagnostic() {
     this.diagnosticCollection.clear();
-    for (const result of this.comments) {
-      const uri = vscode.Uri.parse(result.filePath);
+    for (const result of this.results) {
+      // each result is one remediation
       const diagnostic: GombocDiagnostic[] = [];
-      for (const comment of result.commentData) {
-        const startPosition = new vscode.Position(comment.lineNumber, 0);
-        const endPosition = new vscode.Position(comment.lineNumber, 999);
+      const uri = vscode.Uri.parse(result.fileName);
+      for (const fix of result.fixes) {
+        const startPosition = new vscode.Position(fix.lineNumber, 0);
+        const endPosition = new vscode.Position(fix.lineNumber, 999);
 
-        // in future we can add more information here, and link to code changes
         diagnostic.push({
-          message: comment.text,
+          message: result.description,
           gombocResult: result,
           range: new vscode.Range(startPosition, endPosition),
           severity: vscode.DiagnosticSeverity.Error,
@@ -39,4 +45,7 @@ export class ScanResultsProvider {
       this.diagnosticCollection.set(uri, diagnostic);
     }
   }
+
+  // Uses the scan result + diagnostic in order to apply a fix
+  async applyRemediation() {}
 }

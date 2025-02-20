@@ -1,11 +1,7 @@
 // scans current working file or scenarioimport * as vscode from 'vscode';
 import * as vscode from 'vscode';
 import { CustomerApiClient } from '../api/client';
-import {
-  generateRequestMetadata,
-  generateSecurityPolicies,
-  getFileType,
-} from '../utils/lib';
+import { generateRequestMetadata, getFileType } from '../utils/lib';
 import {
   IacScanContentInput,
   InfrastructureTool,
@@ -72,13 +68,13 @@ export async function scanFileCommand(
     metaData,
   };
 
-  const scanResponse = await apiClient.sendSingleScan({ inputObject });
+  const scanResponse = await apiClient.singleScanMutation({ inputObject });
   console.log('..:: SCAN ', scanResponse);
 
   if (scanResponse.__typename !== 'ScanFileOrScenarioVscode') {
     throw new Error('gomboc error');
   }
-  scanResultsProvider.generateComments(scanResponse.comments);
+  scanResultsProvider.generateComments(scanResponse.results);
   scanResultsProvider.createDiagnostic();
 
   // TODO

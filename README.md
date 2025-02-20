@@ -25,7 +25,6 @@ This project is organzied under the central src directory, all of the commands a
 ```bash
   npm run graphql:generate
 ```
-> Note, you might have to `chmod +x` the scripts file in order to run this command.
 
 🎉🎉Congrats🎉🎉 you are now ready for development :-)
 

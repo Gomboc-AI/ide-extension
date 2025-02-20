@@ -109,7 +109,9 @@ const generateGitMetaData = async (): Promise<GitMetaDataInput> => {
       remote: remoteUrl ?? '', // could be null?
     };
   } catch (error) {
-    vscode.window.showErrorMessage('Error grabbing git data');
+    vscode.window.showErrorMessage(
+      'Error grabbing git data - Or untracked workspace',
+    );
     return {
       headName: 'None',
       mainName: 'None',
