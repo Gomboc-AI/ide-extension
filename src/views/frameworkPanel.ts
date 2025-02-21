@@ -1,22 +1,21 @@
 // Webview panel setup/communication
 
-import { Organization } from '../api/__generated__/graphql';
+import { Policy, SetPolicyStatement } from '../api/__generated__/graphql';
 
 /**
  * Takes in a set of policy statements and turns them into html to display
  */
-export function getHTMLForStatments(organization: Organization) {
-  const policy = organization.policy;
-  const statements = organization.policy.statements;
-
+export function getHTMLForStatments(
+  policy: Policy,
+  statements: SetPolicyStatement[],
+  id: string,
+  name: string,
+) {
   // Create simple list of plicy statements
 
   const statementsList = statements
     .map((statement: any) => {
       const capability = statement.payload?.capability;
-      // const capabilityInfo = capability
-      //   ? `<br>Capability ID: ${capability.id} | Title: ${capability.title}`
-      //   : '';
 
       return `
       <li>
@@ -39,8 +38,8 @@ export function getHTMLForStatments(organization: Organization) {
       </head>
       <body>
         <h1>Organization Data</h1>
-        <p><strong>ID:</strong> ${organization.id}</p>
-        <p><strong>Name:</strong> ${organization.name}</p>
+        <p><strong>ID:</strong> ${id}</p>
+        <p><strong>Name:</strong> ${name}</p>
 
         <h2>Policy Statements</h2>
         <ul>

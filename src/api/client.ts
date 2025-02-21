@@ -5,9 +5,15 @@ import settings from '../settings';
 // has to be ignored because we are compiling to commonjs and typescript complains
 // @ts-expect-error
 import { ApolloClient, createHttpLink, InMemoryCache } from '@apollo/client';
-import { HEALTH_CHECK, SECURITY_FRAMEWORKS } from './queries';
-import { Organization } from './__generated__/graphql';
-import { SingleScanInput } from '../types';
+import { HEALTH_CHECK, SECURITY_FRAMEWORKS, SINGLE_SCAN } from './queries';
+import {
+  GetSecurityFrameworksQuery,
+  ScanLocalScenarioInput,
+  ScanLocalScenarioMutation,
+  ScanLocalScenarioMutationVariables,
+  TestOrganizationQuery,
+  TestOrganizationQueryVariables,
+} from './__generated__/graphql';
 
 export class CustomerApiClient {
   private client;
@@ -36,13 +42,19 @@ export class CustomerApiClient {
     logger.info('Created a new apollo client .... ');
   }
 
-  public async securityFrameworks(): Promise<Organization> {
+  public async securityFrameworks() {
     try {
-      const { data } = await this.client.query({
+      const { data } = await this.client.query<GetSecurityFrameworksQuery>({
         query: SECURITY_FRAMEWORKS,
       });
       logger.info('Fetched security frameworks');
-      return data.organization;
+      if (
+        data.organization.__typename === 'Organization' &&
+        Array.isArray(data.organization.policy.statements)
+      ) {
+        return data.organization;
+      }
+      throw new Error('GombocError');
     } catch (error) {
       logger.error('Grabbing security frameworks failed', { error });
       throw error;
@@ -51,7 +63,10 @@ export class CustomerApiClient {
 
   public async healthCheck() {
     try {
-      const { data } = await this.client.query({
+      const { data } = await this.client.query<
+        TestOrganizationQuery,
+        TestOrganizationQueryVariables
+      >({
         query: HEALTH_CHECK,
       });
       logger.info('Service Healthy ....');
@@ -62,14 +77,28 @@ export class CustomerApiClient {
     }
   }
 
-  public async sendSingleScan(args: { inputObject: SingleScanInput }) {
+  public async singleScanMutation(args: {
+    inputObject: ScanLocalScenarioInput;
+  }) {
+    logger.info('Sending a single file or scenario scan request');
     try {
-      // const { data } = await this.client.query({
-      //   query: SEND_SINGLE_SCAN,
-      // });
-      const data = 3;
-      // TODO update
-      return data;
+      const { data } = await this.client.mutate<
+        ScanLocalScenarioMutation,
+        ScanLocalScenarioMutationVariables
+      >({
+        mutation: SINGLE_SCAN,
+        variables: {
+          input: args.inputObject,
+        },
+      });
+      if (
+        data === null ||
+        data === undefined ||
+        data.scanLocalScenario.__typename === 'GombocError'
+      ) {
+        throw new Error('GombocError');
+      }
+      return data.scanLocalScenario;
     } catch (error) {
       logger.error('Sending a single file or scenario failed', { error });
       throw error;

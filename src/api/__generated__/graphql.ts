@@ -283,12 +283,28 @@ export type ConfigOption = {
   resourceKey: Scalars['String']['output'];
 };
 
+export type CreateAzdoIntegrationInput = {
+  organization: Scalars['String']['input'];
+  personalAccessToken: Scalars['String']['input'];
+};
+
+export type CreateAzdoIntegrationOutput = GombocError | ScmIntegration;
+
 export type CreateAzdoProviderInput = {
   organization: Scalars['String']['input'];
   personalAccessToken: Scalars['String']['input'];
 };
 
 export type CreateAzdoProviderOutput = GitProvider | GombocError;
+
+export type CreateBitBucketIntegrationInput = {
+  accessToken: Scalars['String']['input'];
+  apiVersion: BitBucketApiVersion;
+  gombocAccessToken: Scalars['String']['input'];
+  workspaceSlug: Scalars['String']['input'];
+};
+
+export type CreateBitBucketIntegrationOutput = GombocError | ScmIntegration;
 
 export type CreateBitBucketProviderInput = {
   accessToken: Scalars['String']['input'];
@@ -299,12 +315,27 @@ export type CreateBitBucketProviderInput = {
 
 export type CreateBitBucketProviderOutput = GitProvider | GombocError;
 
+export type CreateGitHubIntegrationInput = {
+  code: Scalars['String']['input'];
+  installationId: Scalars['ID']['input'];
+};
+
+export type CreateGitHubIntegrationResponse = GombocError | ScmIntegration;
+
 export type CreateGitHubProviderInput = {
   code: Scalars['String']['input'];
   installationId: Scalars['ID']['input'];
 };
 
 export type CreateGitHubProviderResponse = GitProvider | GombocError;
+
+export type CreateGitLabIntegrationInput = {
+  apiUrl: Scalars['String']['input'];
+  apiVersion: GitLabApiVersion;
+  groupAccessToken: Scalars['String']['input'];
+};
+
+export type CreateGitLabIntegrationOutput = GombocError | ScmIntegration;
 
 export type CreateGitLabProviderInput = {
   apiUrl: Scalars['String']['input'];
@@ -338,9 +369,13 @@ export type CreatePolicyStatementResponse = GombocError | SetPolicyStatement;
 
 export type CreateProjectResponse = GombocError | Project;
 
+/**
+ * You must pass one of actionResultId or scanResultId.
+ * scanResultId will be given priority if both are passed.
+ */
 export type CreateTicketInput = {
-  actionResultId: Scalars['ID']['input'];
   externalUrl: Scalars['String']['input'];
+  scanResultId?: InputMaybe<Scalars['ID']['input']>;
 };
 
 export type CreateTicketOutput = GombocError | Ticket;
@@ -355,6 +390,10 @@ export type DeleteOrcaIntegrationInput = {
 
 export type DeletePolicyStatementsInput = {
   policyStatementIds: Array<Scalars['ID']['input']>;
+};
+
+export type DeleteScmIntegrationInput = {
+  integrationId: Scalars['ID']['input'];
 };
 
 export type DeleteTicketInput = {
@@ -395,10 +434,10 @@ export enum GitLabApiVersion {
 }
 
 export type GitMetaDataInput = {
-  headName: Scalars['String']['input'];
-  lastMergeCommit: Scalars['String']['input'];
-  mainName: Scalars['String']['input'];
-  remote: Scalars['String']['input'];
+  defaultName?: InputMaybe<Scalars['String']['input']>;
+  headName?: InputMaybe<Scalars['String']['input']>;
+  lastMergeCommit?: InputMaybe<Scalars['String']['input']>;
+  remote?: InputMaybe<Scalars['String']['input']>;
 };
 
 /**
@@ -418,9 +457,17 @@ export type GitProvider = {
   id: Scalars['ID']['output'];
   /** The name of the integration to be displayed */
   name?: Maybe<Scalars['String']['output']>;
+  parentScope?: Maybe<Scalars['String']['output']>;
   providerName: ProviderName;
-  /** All the repositories this integration has access to */
+  /**
+   * All the repositories this integration has access to
+   * @deprecated Use repositories page instead
+   */
   repositories: Array<Repository>;
+  repositoriesPage: RepositoriesPage;
+  scope?: Maybe<Scalars['String']['output']>;
+  /** In the context of SCM providers like GL, groups can have subGroups */
+  subGitProviders: SubGitProviderPage;
 };
 
 /**
@@ -432,6 +479,32 @@ export type GitProvider = {
  */
 export type GitProviderRepositoriesArgs = {
   selection?: InputMaybe<RepositorySelection>;
+};
+
+/**
+ * Represents an integration to an SCM provider **owner** entity, such as:
+ * - A GitHub **organization**
+ * - A GitLab **group**
+ * - A Bitbucket **workspace**
+ * - An Azure DevOps **organization**
+ */
+export type GitProviderRepositoriesPageArgs = {
+  page?: InputMaybe<Scalars['Int']['input']>;
+  scope?: InputMaybe<Scalars['String']['input']>;
+  size?: InputMaybe<Scalars['Int']['input']>;
+};
+
+/**
+ * Represents an integration to an SCM provider **owner** entity, such as:
+ * - A GitHub **organization**
+ * - A GitLab **group**
+ * - A Bitbucket **workspace**
+ * - An Azure DevOps **organization**
+ */
+export type GitProviderSubGitProvidersArgs = {
+  page?: InputMaybe<Scalars['Int']['input']>;
+  scope?: InputMaybe<Scalars['String']['input']>;
+  size?: InputMaybe<Scalars['Int']['input']>;
 };
 
 export type GitProviderResponse = GitProvider | GombocError;
@@ -449,11 +522,6 @@ export enum GombocErrorCode {
   NotImplemented = 'NOT_IMPLEMENTED',
   Unauthorized = 'UNAUTHORIZED',
 }
-
-export type IacScanContentInput = {
-  fileContents: Scalars['String']['input'];
-  filePath: Scalars['String']['input'];
-};
 
 export enum InfrastructureTool {
   Cloudformation = 'CLOUDFORMATION',
@@ -487,14 +555,32 @@ export type InputStatementMetadata = {
   source: StatementSource;
 };
 
+export enum IntegrationName {
+  Azdo = 'AZDO',
+  Bitbucket = 'BITBUCKET',
+  Github = 'GITHUB',
+  Gitlab = 'GITLAB',
+}
+
 export enum IntegrationParty {
   Orca = 'ORCA',
   Wiz = 'WIZ',
 }
 
+export type LineFix = {
+  __typename?: 'LineFix';
+  issueType: Scalars['String']['output'];
+  lineNumber: Scalars['Int']['output'];
+  newValue: Scalars['String']['output'];
+  oldValue: Scalars['String']['output'];
+};
+
 export type Link = {
   __typename?: 'Link';
-  /** Returns a page of Scan Results related to this linked repository */
+  /**
+   * Returns a page of Scan Results related to this linked repository
+   * @deprecated use scanResults
+   */
   actionResults: ActionResultPage;
   createdAt: Scalars['String']['output'];
   /** Returns the email of the user who linked the repository */
@@ -508,11 +594,18 @@ export type Link = {
   providerName: ProviderName;
   /** Returns the repository itself */
   repository: LinkedRepository;
+  /** Returns a page of Scan Results related to this linked repository */
+  scanResults: ScanResultPage;
   /** Returns a URL-friendly slug for the linked repository */
   slug: Scalars['ID']['output'];
 };
 
 export type LinkActionResultsArgs = {
+  page?: InputMaybe<Scalars['Int']['input']>;
+  size?: InputMaybe<Scalars['Int']['input']>;
+};
+
+export type LinkScanResultsArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
   size?: InputMaybe<Scalars['Int']['input']>;
 };
@@ -569,8 +662,8 @@ export type LogicalResource = {
 };
 
 export type MetaDataInput = {
-  git: GitMetaDataInput;
-  os: OsMetaDataInput;
+  git?: InputMaybe<GitMetaDataInput>;
+  os?: InputMaybe<OsMetaDataInput>;
 };
 
 export type Mutation = {
@@ -581,9 +674,17 @@ export type Mutation = {
   bulkAllLinkScanRemote: ScanRequestResponseType;
   /** Call scans on a number of linked repository with default settings */
   bulkLinkScanRemote: ScanRequestResponseType;
+  createAzdoIntegration: CreateAzdoIntegrationOutput;
+  /** @deprecated use createAzdoIntegration */
   createAzdoProvider: CreateAzdoProviderOutput;
+  createBitBucketIntegration: CreateBitBucketIntegrationOutput;
+  /** @deprecated use createBitBucketIntegration */
   createBitBucketProvider: CreateBitBucketProviderOutput;
+  createGitHubIntegration: CreateGitHubIntegrationResponse;
+  /** @deprecated use createGitHubIntegration */
   createGitHubProvider: CreateGitHubProviderResponse;
+  createGitLabIntegration: CreateGitLabIntegrationOutput;
+  /** @deprecated use createGitLabIntegration */
   createGitLabProvider: CreateGitLabProviderOutput;
   /** Create a custom policy statement */
   createMustImplementOrganizationPolicyStatement: CreatePolicyStatementResponse;
@@ -592,7 +693,10 @@ export type Mutation = {
   createProject: CreateProjectResponse;
   /** Link a Ticket to a Scan Result */
   createTicket: CreateTicketOutput;
-  /** Remove an SCM provider integration */
+  /**
+   * Remove an SCM provider integration
+   * @deprecated use deleteScmIntegration
+   */
   deleteGitProvider?: Maybe<GombocError>;
   /** Unlink a repository from a project */
   deleteLink?: Maybe<GombocError>;
@@ -602,6 +706,8 @@ export type Mutation = {
   deletePolicyStatements?: Maybe<GombocError>;
   /** Delete a Gomboc project */
   deleteProject?: Maybe<GombocError>;
+  /** Remove an SCM integration */
+  deleteScmIntegration?: Maybe<GombocError>;
   /** Unlink a Ticket from a Scan Result */
   deleteTicket?: Maybe<GombocError>;
   /** Link repositories to a project */
@@ -612,10 +718,10 @@ export type Mutation = {
   putSetupCompleted?: Maybe<GombocError>;
   /** @deprecated No longer supported */
   resetOrganizationPolicy?: Maybe<GombocError>;
-  /** Scan single file or scenario, sent from vscode */
-  scanFileOrScenarioVscode: ScanFileOrScenarioVscodeOutput;
   /** Call a scan from Orca */
   scanFromOrca: ScanRequestResponseType;
+  /** Scan single file or scenario, sent from vscode */
+  scanLocalScenario: ScanLocalScenarioOutput;
   scanOnPullRequest: ScanRequestResponseType;
   scanOnSchedule: ScanRequestResponseType;
   /**
@@ -643,16 +749,32 @@ export type MutationBulkLinkScanRemoteArgs = {
   input: BulkLinkScanRemoteInput;
 };
 
+export type MutationCreateAzdoIntegrationArgs = {
+  input: CreateAzdoIntegrationInput;
+};
+
 export type MutationCreateAzdoProviderArgs = {
   input: CreateAzdoProviderInput;
+};
+
+export type MutationCreateBitBucketIntegrationArgs = {
+  input: CreateBitBucketIntegrationInput;
 };
 
 export type MutationCreateBitBucketProviderArgs = {
   input: CreateBitBucketProviderInput;
 };
 
+export type MutationCreateGitHubIntegrationArgs = {
+  input: CreateGitHubIntegrationInput;
+};
+
 export type MutationCreateGitHubProviderArgs = {
   input: CreateGitHubProviderInput;
+};
+
+export type MutationCreateGitLabIntegrationArgs = {
+  input: CreateGitLabIntegrationInput;
 };
 
 export type MutationCreateGitLabProviderArgs = {
@@ -695,6 +817,10 @@ export type MutationDeleteProjectArgs = {
   projectId: Scalars['ID']['input'];
 };
 
+export type MutationDeleteScmIntegrationArgs = {
+  input: DeleteScmIntegrationInput;
+};
+
 export type MutationDeleteTicketArgs = {
   input: DeleteTicketInput;
 };
@@ -711,12 +837,12 @@ export type MutationPutSetupCompletedArgs = {
   input: PutSetupCompletedInput;
 };
 
-export type MutationScanFileOrScenarioVscodeArgs = {
-  input: ScanFileOrScenarioVscodeInput;
-};
-
 export type MutationScanFromOrcaArgs = {
   input: ScanFromOrcaInput;
+};
+
+export type MutationScanLocalScenarioArgs = {
+  input: ScanLocalScenarioInput;
 };
 
 export type MutationScanOnPullRequestArgs = {
@@ -753,10 +879,10 @@ export type Node = {
 };
 
 export type OsMetaDataInput = {
-  machineName: Scalars['String']['input'];
-  privateIp: Scalars['String']['input'];
-  publicIp: Scalars['String']['input'];
-  userName: Scalars['String']['input'];
+  machineName?: InputMaybe<Scalars['String']['input']>;
+  privateIp?: InputMaybe<Scalars['String']['input']>;
+  publicIp?: InputMaybe<Scalars['String']['input']>;
+  userName?: InputMaybe<Scalars['String']['input']>;
 };
 
 export type OntologicalSubgraph = {
@@ -767,6 +893,7 @@ export type OntologicalSubgraph = {
 
 export type OrcaAlert = {
   __typename?: 'OrcaAlert';
+  /** @deprecated use scanResults */
   actionResults: ActionResultPage;
   assetName: Scalars['String']['output'];
   assetType?: Maybe<Scalars['String']['output']>;
@@ -776,12 +903,18 @@ export type OrcaAlert = {
   id: Scalars['ID']['output'];
   lastScanRequest?: Maybe<ScanRequest>;
   orcaScore: Scalars['Float']['output'];
+  scanResults: ScanResultPage;
   scanTarget?: Maybe<ScanTarget>;
   status: Scalars['String']['output'];
   title: Scalars['String']['output'];
 };
 
 export type OrcaAlertActionResultsArgs = {
+  page?: InputMaybe<Scalars['Int']['input']>;
+  size?: InputMaybe<Scalars['Int']['input']>;
+};
+
+export type OrcaAlertScanResultsArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
   size?: InputMaybe<Scalars['Int']['input']>;
 };
@@ -831,11 +964,20 @@ export enum OrcaRegion {
 /** A customer organization as represented in the system */
 export type Organization = {
   __typename?: 'Organization';
-  /** Returns one SCM integration by its ID, or an error if not found */
+  /**
+   * Returns one SCM integration by its ID, or an error if not found
+   * @deprecated use scmIntegrations
+   */
   gitProvider: GitProviderResponse;
-  /** Returns SCM integrations for this organization */
+  /**
+   * Returns SCM integrations for this organization
+   * @deprecated use scmIntegrations
+   */
   gitProviders: Array<GitProvider>;
-  /** Returns true if the organization has at least one SCM Integration */
+  /**
+   * Returns true if the organization has at least one SCM Integration
+   * @deprecated use hasScmIntegrations
+   */
   hasGitProviders: Scalars['Boolean']['output'];
   /** Returns true if the organization has at least one Linked Repository */
   hasLinks: Scalars['Boolean']['output'];
@@ -843,6 +985,8 @@ export type Organization = {
   hasPolicy: Scalars['Boolean']['output'];
   /** Returns true if the organization has received at least one Scan Request */
   hasScanRequests: Scalars['Boolean']['output'];
+  /** Returns true if the organization has at least one SPM Integration */
+  hasScmIntegrations: Scalars['Boolean']['output'];
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
   /** Returns CSPM integrations for this organization */
@@ -855,6 +999,10 @@ export type Organization = {
   projects: Array<Project>;
   /** Returns recent scan requests for this organization */
   scans: Array<ScanRequestResponse>;
+  /** Returns one SCM integration by its ID, or an error if not found */
+  scmIntegration: ScmIntegrationResponse;
+  /** Returns SCM integrations for this organization */
+  scmIntegrations: Array<ScmIntegration>;
 };
 
 /** A customer organization as represented in the system */
@@ -872,6 +1020,11 @@ export type OrganizationScansArgs = {
   before?: InputMaybe<Scalars['String']['input']>;
 };
 
+/** A customer organization as represented in the system */
+export type OrganizationScmIntegrationArgs = {
+  id: Scalars['ID']['input'];
+};
+
 export type OrganizationResponse = GombocError | Organization;
 
 export type Policy = {
@@ -881,7 +1034,10 @@ export type Policy = {
 
 export type PolicyObservation = {
   __typename?: 'PolicyObservation';
-  /** The parent scan result */
+  /**
+   * The parent scan result
+   * @deprecated use scanResult
+   */
   actionResult: ActionResult;
   /** The policy statement capability ID involved */
   capabilityId: Scalars['ID']['output'];
@@ -914,6 +1070,8 @@ export type PolicyObservation = {
    * @deprecated No longer supported
    */
   resourceType: Scalars['String']['output'];
+  /** The parent scan result */
+  scanResult: ScanResult;
   /** @deprecated No longer in use */
   source: Scalars['String']['output'];
 };
@@ -1028,10 +1186,14 @@ export type PutSetupCompletedInput = {
 
 export type Query = {
   __typename?: 'Query';
-  /** Returns a single Scan Result by its ID, or an error if not found */
+  /**
+   * Returns a single Scan Result by its ID, or an error if not found
+   * @deprecated Use scanResult(id: ID!)
+   */
   actionResult: ActionResultResponse;
   /** @deprecated No longer supported */
   capabilities: Array<Capability>;
+  codeResource?: Maybe<CodeResource>;
   /** Returns a single linked repository by its ID, or an error if not found */
   link: LinkResponse;
   orcaAlert: OrcaAlertResponse;
@@ -1047,6 +1209,8 @@ export type Query = {
   scanDirectory: ScanDirectoryResponse;
   /** Returns a single Scan Request by its ID, or an error if not found */
   scanRequest: ScanRequestResponse;
+  /** Returns a single Scan Result by its ID, or an error if not found */
+  scanResult: ScanResultResponse;
   /** Returns a few posible scan targets for a cloud resource */
   searchScanTargets: Array<ScanTarget>;
   /** @deprecated No longer supported */
@@ -1059,6 +1223,10 @@ export type Query = {
 };
 
 export type QueryActionResultArgs = {
+  id: Scalars['ID']['input'];
+};
+
+export type QueryCodeResourceArgs = {
   id: Scalars['ID']['input'];
 };
 
@@ -1090,6 +1258,10 @@ export type QueryScanRequestArgs = {
   id: Scalars['ID']['input'];
 };
 
+export type QueryScanResultArgs = {
+  id: Scalars['ID']['input'];
+};
+
 export type QuerySearchScanTargetsArgs = {
   cloudResourceId: Scalars['ID']['input'];
 };
@@ -1106,6 +1278,25 @@ export type QueryVerifyRemediationArgs = {
   alertId: Scalars['ID']['input'];
 };
 
+export type RemediationComment = {
+  __typename?: 'RemediationComment';
+  /** We should include a category and description of each fix. */
+  category?: Maybe<Scalars['String']['output']>;
+  description: Scalars['String']['output'];
+  /** We might want to add this later so I'm including it */
+  documentationLink?: Maybe<Scalars['String']['output']>;
+  fileName: Scalars['String']['output'];
+  fixes: Array<LineFix>;
+  iacTool: InfrastructureTool;
+};
+
+export type RepositoriesPage = {
+  __typename?: 'RepositoriesPage';
+  page: Scalars['Int']['output'];
+  results: Array<Repository>;
+  size: Scalars['Int']['output'];
+};
+
 export type Repository = {
   __typename?: 'Repository';
   /** The list of branches in the repository */
@@ -1115,6 +1306,7 @@ export type Repository = {
   /** A URL to the SCM provider repository page */
   externalUrl: Scalars['String']['output'];
   id: Scalars['ID']['output'];
+  link?: Maybe<Link>;
   name: Scalars['String']['output'];
   /** The name of the SCM provider owner */
   ownerName: Scalars['String']['output'];
@@ -1156,6 +1348,7 @@ export type ResultingPolicy = {
 
 export type Scan = {
   __typename?: 'Scan';
+  /** @deprecated use scanResult */
   actionResult?: Maybe<ActionResult>;
   children: ScanPage;
   createdAt: Scalars['String']['output'];
@@ -1164,6 +1357,7 @@ export type Scan = {
   metadata: Scalars['String']['output'];
   parent?: Maybe<Scan>;
   scanRequestId: Scalars['ID']['output'];
+  scanResult?: Maybe<ScanResult>;
   scanScope: Scalars['String']['output'];
 };
 
@@ -1186,6 +1380,11 @@ export type ScanBranch = {
 
 export type ScanBranchResponse = FailedScan | GombocError | ScanBranch;
 
+export type ScanContent = {
+  fileContents: Scalars['String']['input'];
+  filePath: Scalars['String']['input'];
+};
+
 export type ScanDirectory = {
   __typename?: 'ScanDirectory';
   children: Array<ScanScenarioResponse>;
@@ -1200,41 +1399,6 @@ export type ScanDirectory = {
 
 export type ScanDirectoryResponse = FailedScan | GombocError | ScanDirectory;
 
-export type ScanFileOrScenarioVscode = {
-  __typename?: 'ScanFileOrScenarioVscode';
-  results: Array<ScanFileOrScenarioVscodeComments>;
-};
-
-export type ScanFileOrScenarioVscodeComments = {
-  __typename?: 'ScanFileOrScenarioVscodeComments';
-  /** We should include a category and description of each fix. */
-  category?: Maybe<Scalars['String']['output']>;
-  description: Scalars['String']['output'];
-  /** We might want to add this later so I'm including it */
-  documentationLink?: Maybe<Scalars['String']['output']>;
-  fileName: Scalars['String']['output'];
-  fixes: Array<ScanFileOrScenarioVscodeFixes>;
-  iacTool: InfrastructureTool;
-};
-
-export type ScanFileOrScenarioVscodeFixes = {
-  __typename?: 'ScanFileOrScenarioVscodeFixes';
-  currentValue: Scalars['String']['output'];
-  issueType: Scalars['String']['output'];
-  lineNumber: Scalars['Int']['output'];
-  newValue: Scalars['String']['output'];
-};
-
-export type ScanFileOrScenarioVscodeInput = {
-  fileContents: Array<IacScanContentInput>;
-  iacTool: InfrastructureTool;
-  metaData: MetaDataInput;
-};
-
-export type ScanFileOrScenarioVscodeOutput =
-  | GombocError
-  | ScanFileOrScenarioVscode;
-
 export type ScanFromOrcaInput = {
   /** The effect -- defaults to 'SubmitForReview' */
   effect?: InputMaybe<Effect>;
@@ -1243,6 +1407,19 @@ export type ScanFromOrcaInput = {
   /** The target for the scan */
   scanTarget: ScanTargetInput;
 };
+
+export type ScanLocalScenario = {
+  __typename?: 'ScanLocalScenario';
+  results: Array<RemediationComment>;
+};
+
+export type ScanLocalScenarioInput = {
+  fileContents: Array<ScanContent>;
+  iacTool: InfrastructureTool;
+  metaData: MetaDataInput;
+};
+
+export type ScanLocalScenarioOutput = GombocError | ScanLocalScenario;
 
 export type ScanOnPullRequestInput = {
   effect: Effect;
@@ -1294,6 +1471,7 @@ export type ScanRepositoryResponse = FailedScan | GombocError | ScanRepository;
 
 export type ScanRequest = {
   __typename?: 'ScanRequest';
+  /** @deprecated use scanResults */
   actionResults: ActionResultPage;
   /** @deprecated No longer supported */
   children: Array<ScanRepositoryResponse>;
@@ -1311,10 +1489,16 @@ export type ScanRequest = {
   /** The Pull Request that triggered this scan, if there is one */
   pullRequest?: Maybe<PullRequest>;
   requestOrigin: RequestOrigin;
+  scanResults: ScanResultPage;
   scans: ScanPage;
 };
 
 export type ScanRequestActionResultsArgs = {
+  page?: InputMaybe<Scalars['Int']['input']>;
+  size?: InputMaybe<Scalars['Int']['input']>;
+};
+
+export type ScanRequestScanResultsArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
   size?: InputMaybe<Scalars['Int']['input']>;
 };
@@ -1334,13 +1518,116 @@ export type ScanRequestResponseType = {
 
 export type ScanResponse = FailedScan | GombocError | Scan;
 
+/** A Scan Result that originated from a Scan Request */
+export type ScanResult = {
+  __typename?: 'ScanResult';
+  /** The related repository branch name */
+  branch?: Maybe<Scalars['String']['output']>;
+  /** A general state of the scan result */
+  condition?: Maybe<ScanResultCondition>;
+  createdAt: Scalars['String']['output'];
+  /** The related repository directory */
+  directory: Scalars['String']['output'];
+  /** The mode in which the scan was requested */
+  effect: Effect;
+  id: Scalars['ID']['output'];
+  /** The related infrastructure tool */
+  infrastructureTool: InfrastructureTool;
+  /** The linked repository the scan result relates to, if still available */
+  link?: Maybe<Link>;
+  /**
+   * The list of observations in this scan result
+   * @deprecated use policyObservations -- paginated
+   */
+  observations: Array<PolicyObservation>;
+  /** Returns the total number of observations in this scan result */
+  observationsCount: Scalars['Int']['output'];
+  /** Returns a page of alerts from Orca */
+  orcaAlerts: OrcaAlertsPage;
+  /** The organization ID the scan result is related to */
+  organizationId: Scalars['ID']['output'];
+  /** The name of the SCM Provider owner of the related repository */
+  ownerName: Scalars['String']['output'];
+  /** Returns the number of observations that were already compliant */
+  passedCount: Scalars['Int']['output'];
+  /** A page of policy observations in this scan result */
+  policyObservations: PolicyObservationsPage;
+  /** The project the scan result relates to, if still available */
+  project?: Maybe<Project>;
+  /** Project name snapshot in case it was deleted */
+  projectName: Scalars['String']['output'];
+  /** The Pull Request, if one was created */
+  pullRequest?: Maybe<PullRequest>;
+  /** Returns the number of observations in violation that were remediated */
+  remediationsCount: Scalars['Int']['output'];
+  /** The ID of the related repository */
+  repositoryId: Scalars['ID']['output'];
+  /** The name of the related repository */
+  repositoryName: Scalars['String']['output'];
+  /** Indicates where the request came from */
+  requestOrigin: RequestOrigin;
+  /** @deprecated internal use only */
+  scanId: Scalars['ID']['output'];
+  /** The parent scan request ID */
+  scanRequestId: Scalars['ID']['output'];
+  /** A markdown formatted summary of the scan result */
+  summary: Scalars['String']['output'];
+  /** Returns any tickets linked to this scan result */
+  tickets: TicketPage;
+  /** Returns the number of observations in violation */
+  violationsCount: Scalars['Int']['output'];
+};
+
+/** A Scan Result that originated from a Scan Request */
+export type ScanResultObservationsArgs = {
+  exclude?: InputMaybe<Array<Disposition>>;
+  page?: InputMaybe<Scalars['Int']['input']>;
+  size?: InputMaybe<Scalars['Int']['input']>;
+};
+
+/** A Scan Result that originated from a Scan Request */
+export type ScanResultOrcaAlertsArgs = {
+  page?: InputMaybe<Scalars['Int']['input']>;
+  perPage?: InputMaybe<Scalars['Int']['input']>;
+};
+
+/** A Scan Result that originated from a Scan Request */
+export type ScanResultPolicyObservationsArgs = {
+  exclude?: InputMaybe<Array<Disposition>>;
+  page?: InputMaybe<Scalars['Int']['input']>;
+  size?: InputMaybe<Scalars['Int']['input']>;
+};
+
+/** A Scan Result that originated from a Scan Request */
+export type ScanResultTicketsArgs = {
+  page?: InputMaybe<Scalars['Int']['input']>;
+  size?: InputMaybe<Scalars['Int']['input']>;
+};
+
+export enum ScanResultCondition {
+  AllFixed = 'ALL_FIXED',
+  Compliant = 'COMPLIANT',
+  NoneFixed = 'NONE_FIXED',
+  SomeFixed = 'SOME_FIXED',
+}
+
+export type ScanResultPage = {
+  __typename?: 'ScanResultPage';
+  page: Scalars['Int']['output'];
+  results: Array<ScanResult>;
+  size: Scalars['Int']['output'];
+  totalCount: Scalars['Int']['output'];
+};
+
+export type ScanResultResponse = GombocError | ScanResult;
+
 export type ScanScenario = {
   __typename?: 'ScanScenario';
   createdAt: Scalars['String']['output'];
   createdBy: Scalars['String']['output'];
   id: Scalars['ID']['output'];
   parent: ScanBranch;
-  result?: Maybe<ActionResult>;
+  result?: Maybe<ScanResult>;
 };
 
 export type ScanScenarioResponse = FailedScan | GombocError | ScanScenario;
@@ -1363,6 +1650,95 @@ export type ScanTargetInput = {
   /** The scenario path: a directory or a filepath */
   path: Scalars['String']['input'];
 };
+
+/**
+ * Represents an integration to an SCM provider **owner** entity, such as:
+ * - A GitHub **organization**
+ * - A GitLab **group**
+ * - A Bitbucket **workspace**
+ * - An Azure DevOps **organization**
+ */
+export type ScmIntegration = {
+  __typename?: 'ScmIntegration';
+  createdAt: Scalars['String']['output'];
+  /** Returns the email of the user who integrated the SCM provider */
+  createdBy: Scalars['String']['output'];
+  /** A URL to the SCM provider integration page */
+  externalUrl?: Maybe<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
+  integrationName: IntegrationName;
+  /** The name of the integration to be displayed */
+  name?: Maybe<Scalars['String']['output']>;
+  parentScope?: Maybe<Scalars['String']['output']>;
+  /** @deprecated Use integrationName */
+  providerName: ProviderName;
+  /**
+   * All the repositories this integration has access to
+   * @deprecated Use repositories page instead
+   */
+  repositories: Array<Repository>;
+  repositoriesPage: RepositoriesPage;
+  scope?: Maybe<Scalars['String']['output']>;
+  /**
+   * In the context of SCM providers like GL, groups can have subGroups
+   * @deprecated Use subScmIntegrationProviders instead
+   */
+  subGitProviders: SubGitProviderPage;
+  /** In the context of SCM providers like GL, groups can have subGroups */
+  subScmIntegration: SubScmIntegrationPage;
+};
+
+/**
+ * Represents an integration to an SCM provider **owner** entity, such as:
+ * - A GitHub **organization**
+ * - A GitLab **group**
+ * - A Bitbucket **workspace**
+ * - An Azure DevOps **organization**
+ */
+export type ScmIntegrationRepositoriesArgs = {
+  selection?: InputMaybe<RepositorySelection>;
+};
+
+/**
+ * Represents an integration to an SCM provider **owner** entity, such as:
+ * - A GitHub **organization**
+ * - A GitLab **group**
+ * - A Bitbucket **workspace**
+ * - An Azure DevOps **organization**
+ */
+export type ScmIntegrationRepositoriesPageArgs = {
+  page?: InputMaybe<Scalars['Int']['input']>;
+  scope?: InputMaybe<Scalars['String']['input']>;
+  size?: InputMaybe<Scalars['Int']['input']>;
+};
+
+/**
+ * Represents an integration to an SCM provider **owner** entity, such as:
+ * - A GitHub **organization**
+ * - A GitLab **group**
+ * - A Bitbucket **workspace**
+ * - An Azure DevOps **organization**
+ */
+export type ScmIntegrationSubGitProvidersArgs = {
+  page?: InputMaybe<Scalars['Int']['input']>;
+  scope?: InputMaybe<Scalars['String']['input']>;
+  size?: InputMaybe<Scalars['Int']['input']>;
+};
+
+/**
+ * Represents an integration to an SCM provider **owner** entity, such as:
+ * - A GitHub **organization**
+ * - A GitLab **group**
+ * - A Bitbucket **workspace**
+ * - An Azure DevOps **organization**
+ */
+export type ScmIntegrationSubScmIntegrationArgs = {
+  page?: InputMaybe<Scalars['Int']['input']>;
+  scope?: InputMaybe<Scalars['String']['input']>;
+  size?: InputMaybe<Scalars['Int']['input']>;
+};
+
+export type ScmIntegrationResponse = GombocError | ScmIntegration;
 
 export type SecurityFramework = {
   __typename?: 'SecurityFramework';
@@ -1408,6 +1784,76 @@ export enum StatementSource {
   Organization = 'ORGANIZATION',
   Project = 'PROJECT',
 }
+
+export type SubGitProvider = {
+  __typename?: 'SubGitProvider';
+  id: Scalars['ID']['output'];
+  name?: Maybe<Scalars['String']['output']>;
+  parentScope?: Maybe<Scalars['String']['output']>;
+  providerName: ProviderName;
+  repositoriesPage: RepositoriesPage;
+  scope?: Maybe<Scalars['String']['output']>;
+  subGitProviders: SubGitProviderPage;
+};
+
+export type SubGitProviderRepositoriesPageArgs = {
+  page?: InputMaybe<Scalars['Int']['input']>;
+  scope?: InputMaybe<Scalars['String']['input']>;
+  size?: InputMaybe<Scalars['Int']['input']>;
+};
+
+export type SubGitProviderSubGitProvidersArgs = {
+  page?: InputMaybe<Scalars['Int']['input']>;
+  scope?: InputMaybe<Scalars['String']['input']>;
+  size?: InputMaybe<Scalars['Int']['input']>;
+};
+
+export type SubGitProviderPage = {
+  __typename?: 'SubGitProviderPage';
+  page: Scalars['Int']['output'];
+  results: Array<SubGitProvider>;
+  size: Scalars['Int']['output'];
+};
+
+export type SubScmIntegration = {
+  __typename?: 'SubScmIntegration';
+  id: Scalars['ID']['output'];
+  integrationName: IntegrationName;
+  name?: Maybe<Scalars['String']['output']>;
+  parentScope?: Maybe<Scalars['String']['output']>;
+  /** @deprecated use integrationName */
+  providerName: ProviderName;
+  repositoriesPage: RepositoriesPage;
+  scope?: Maybe<Scalars['String']['output']>;
+  /** @deprecated use subScmIntegrations */
+  subGitProviders: SubGitProviderPage;
+  subScmIntegrations: SubGitProviderPage;
+};
+
+export type SubScmIntegrationRepositoriesPageArgs = {
+  page?: InputMaybe<Scalars['Int']['input']>;
+  scope?: InputMaybe<Scalars['String']['input']>;
+  size?: InputMaybe<Scalars['Int']['input']>;
+};
+
+export type SubScmIntegrationSubGitProvidersArgs = {
+  page?: InputMaybe<Scalars['Int']['input']>;
+  scope?: InputMaybe<Scalars['String']['input']>;
+  size?: InputMaybe<Scalars['Int']['input']>;
+};
+
+export type SubScmIntegrationSubScmIntegrationsArgs = {
+  page?: InputMaybe<Scalars['Int']['input']>;
+  scope?: InputMaybe<Scalars['String']['input']>;
+  size?: InputMaybe<Scalars['Int']['input']>;
+};
+
+export type SubScmIntegrationPage = {
+  __typename?: 'SubScmIntegrationPage';
+  page: Scalars['Int']['output'];
+  results: Array<SubScmIntegration>;
+  size: Scalars['Int']['output'];
+};
 
 export type Success = {
   __typename?: 'Success';
@@ -1457,9 +1903,11 @@ export type TestOrganizationQuery = {
     | { __typename?: 'Organization'; id: string };
 };
 
-export type OrganizationQueryVariables = Exact<{ [key: string]: never }>;
+export type GetSecurityFrameworksQueryVariables = Exact<{
+  [key: string]: never;
+}>;
 
-export type OrganizationQuery = {
+export type GetSecurityFrameworksQuery = {
   __typename?: 'Query';
   organization:
     | { __typename?: 'GombocError' }
@@ -1487,6 +1935,38 @@ export type OrganizationQuery = {
             };
           }>;
         };
+      };
+};
+
+export type ScanLocalScenarioMutationVariables = Exact<{
+  input: ScanLocalScenarioInput;
+}>;
+
+export type ScanLocalScenarioMutation = {
+  __typename?: 'Mutation';
+  scanLocalScenario:
+    | {
+        __typename?: 'GombocError';
+        message: string;
+        code?: GombocErrorCode | null;
+      }
+    | {
+        __typename?: 'ScanLocalScenario';
+        results: Array<{
+          __typename?: 'RemediationComment';
+          category?: string | null;
+          description: string;
+          iacTool: InfrastructureTool;
+          documentationLink?: string | null;
+          fileName: string;
+          fixes: Array<{
+            __typename?: 'LineFix';
+            oldValue: string;
+            newValue: string;
+            lineNumber: number;
+            issueType: string;
+          }>;
+        }>;
       };
 };
 
@@ -1530,13 +2010,13 @@ export const TestOrganizationDocument = {
   TestOrganizationQuery,
   TestOrganizationQueryVariables
 >;
-export const OrganizationDocument = {
+export const GetSecurityFrameworksDocument = {
   kind: 'Document',
   definitions: [
     {
       kind: 'OperationDefinition',
       operation: 'query',
-      name: { kind: 'Name', value: 'Organization' },
+      name: { kind: 'Name', value: 'getSecurityFrameworks' },
       selectionSet: {
         kind: 'SelectionSet',
         selections: [
@@ -1663,4 +2143,146 @@ export const OrganizationDocument = {
       },
     },
   ],
-} as unknown as DocumentNode<OrganizationQuery, OrganizationQueryVariables>;
+} as unknown as DocumentNode<
+  GetSecurityFrameworksQuery,
+  GetSecurityFrameworksQueryVariables
+>;
+export const ScanLocalScenarioDocument = {
+  kind: 'Document',
+  definitions: [
+    {
+      kind: 'OperationDefinition',
+      operation: 'mutation',
+      name: { kind: 'Name', value: 'scanLocalScenario' },
+      variableDefinitions: [
+        {
+          kind: 'VariableDefinition',
+          variable: {
+            kind: 'Variable',
+            name: { kind: 'Name', value: 'input' },
+          },
+          type: {
+            kind: 'NonNullType',
+            type: {
+              kind: 'NamedType',
+              name: { kind: 'Name', value: 'ScanLocalScenarioInput' },
+            },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'scanLocalScenario' },
+            arguments: [
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'input' },
+                value: {
+                  kind: 'Variable',
+                  name: { kind: 'Name', value: 'input' },
+                },
+              },
+            ],
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                {
+                  kind: 'InlineFragment',
+                  typeCondition: {
+                    kind: 'NamedType',
+                    name: { kind: 'Name', value: 'GombocError' },
+                  },
+                  selectionSet: {
+                    kind: 'SelectionSet',
+                    selections: [
+                      {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'message' },
+                      },
+                      { kind: 'Field', name: { kind: 'Name', value: 'code' } },
+                    ],
+                  },
+                },
+                {
+                  kind: 'InlineFragment',
+                  typeCondition: {
+                    kind: 'NamedType',
+                    name: { kind: 'Name', value: 'ScanLocalScenario' },
+                  },
+                  selectionSet: {
+                    kind: 'SelectionSet',
+                    selections: [
+                      {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'results' },
+                        selectionSet: {
+                          kind: 'SelectionSet',
+                          selections: [
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'fixes' },
+                              selectionSet: {
+                                kind: 'SelectionSet',
+                                selections: [
+                                  {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'oldValue' },
+                                  },
+                                  {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'newValue' },
+                                  },
+                                  {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'lineNumber' },
+                                  },
+                                  {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'issueType' },
+                                  },
+                                ],
+                              },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'category' },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'description' },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'iacTool' },
+                            },
+                            {
+                              kind: 'Field',
+                              name: {
+                                kind: 'Name',
+                                value: 'documentationLink',
+                              },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'fileName' },
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  ScanLocalScenarioMutation,
+  ScanLocalScenarioMutationVariables
+>;

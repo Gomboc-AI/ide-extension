@@ -1,3 +1,4 @@
+import { GombocError } from './__generated__/graphql';
 // graphql querieos
 // @ts-expect-error
 import { gql } from '@apollo/client';
@@ -15,7 +16,7 @@ export const HEALTH_CHECK = gql`
 `;
 
 export const SECURITY_FRAMEWORKS = gql`
-  query Organization {
+  query getSecurityFrameworks {
     organization {
       ... on Organization {
         id
@@ -43,6 +44,28 @@ export const SECURITY_FRAMEWORKS = gql`
   }
 `;
 
-// export const SEND_SINGLE_SCAN = gql`
-
-// `
+export const SINGLE_SCAN = gql`
+  mutation scanLocalScenario($input: ScanLocalScenarioInput!) {
+    scanLocalScenario(input: $input) {
+      ... on GombocError {
+        message
+        code
+      }
+      ... on ScanLocalScenario {
+        results {
+          fixes {
+            oldValue
+            newValue
+            lineNumber
+            issueType
+          }
+          category
+          description
+          iacTool
+          documentationLink
+          fileName
+        }
+      }
+    }
+  }
+`;

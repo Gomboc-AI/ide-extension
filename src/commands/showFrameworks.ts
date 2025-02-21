@@ -20,7 +20,12 @@ export async function showFrameworksCommand(
       vscode.ViewColumn.One,
       {},
     );
-    const htmlContent = getHTMLForStatments(organization);
+    const htmlContent = getHTMLForStatments(
+      organization.policy,
+      organization.policy.statements,
+      organization.id,
+      organization.name,
+    );
     panel.webview.html = htmlContent;
   } catch (error) {
     vscode.window.showErrorMessage(

@@ -1,12 +1,17 @@
 // api key retrieval helper and other utils
 
 import { CustomerApiClient } from '../api/client';
-import { GitMetaData, IIpCurl, OSMetaData, SecurityPolicy } from '../types';
+import { SecurityPolicy } from '../types';
 import * as vscode from 'vscode';
 import { GitExtension } from '../types/git';
 import * as os from 'os';
 import logger from './logger';
 import { initClient } from './RestClient';
+import {
+  GitMetaDataInput,
+  MetaDataInput,
+  OsMetaDataInput,
+} from '../api/__generated__/graphql';
 
 // stolen from stackoverflow
 // https://stackoverflow.com/questions/190852/how-can-i-get-file-extensions-with-javascript
@@ -48,7 +53,7 @@ export const generateSecurityPolicies = async (
   }));
 };
 
-export const generateRequestMetadata = async () => {
+export const generateRequestMetadata = async (): Promise<MetaDataInput> => {
   const gitMetaData = await generateGitMetaData();
   const osMetaData = await generateOSMetadata();
   return {
@@ -66,14 +71,17 @@ export const generateRequestMetadata = async () => {
  * stackoverflow
  * http://stackoverflow.com/questions/46511595/how-to-access-the-api-for-git-in-visual-studio-code
  * @returns GitMetaData
+ *
+ * Could probably grab mroe information from here in the future if we want to report it
+ * Also need to return with 'None' if there is no git information (change later, this is POC)
  */
-const generateGitMetaData = async (): Promise<GitMetaData> => {
+const generateGitMetaData = async (): Promise<GitMetaDataInput> => {
   try {
     const gitExtension =
       vscode.extensions.getExtension<GitExtension>('vscode.git');
     if (!gitExtension) {
       vscode.window.showErrorMessage('Failed to load git extension');
-      throw new Error('Failed to load git extension');
+      return {};
     }
     const gitImport = gitExtension.exports;
     const api = gitImport.getAPI(1);
@@ -84,25 +92,22 @@ const generateGitMetaData = async (): Promise<GitMetaData> => {
     const head = repo.state.HEAD; // points to the branch
 
     const branch = head?.name ? head.name : 'ERROR';
-
-    const mainBranch = 'main';
-    const branchDetails = await repo.getBranch(mainBranch);
+    const config = vscode.workspace.getConfiguration('gomboc-vscode-extension');
+    const mainBranch = config.get('defaultBranchName', 'main');
+    // const branchDetails = await repo.getBranch(mainBranch);
     const lastMergeCommit = await repo.getMergeBase(branch, mainBranch);
-    const status = await repo.status();
 
     return {
-      repo,
       headName: branch,
-      headBranch: head,
-      mainName: mainBranch,
-      mainBranch: branchDetails,
+      defaultName: mainBranch,
       lastMergeCommit,
-      remoteUrl: remoteUrl ?? '', // could be null?
-      status,
+      remote: remoteUrl ?? '', // could be null?
     };
   } catch (error) {
-    vscode.window.showErrorMessage('Error grabbing git data');
-    throw new Error('Error grabbing git data');
+    vscode.window.showErrorMessage(
+      'Error grabbing git data - Or untracked workspace',
+    );
+    return {};
   }
 };
 
@@ -111,7 +116,7 @@ const generateGitMetaData = async (): Promise<GitMetaData> => {
  * and the public and private ip addresses of the machine
  * @returns OSMetaData
  */
-export const generateOSMetadata = async (): Promise<OSMetaData> => {
+export const generateOSMetadata = async (): Promise<OsMetaDataInput> => {
   try {
     const userInfo = os.userInfo();
     const userName = userInfo.username;

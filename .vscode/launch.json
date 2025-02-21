@@ -10,8 +10,9 @@
       "type": "extensionHost",
       "request": "launch",
       "args": [
+        // "${workspaceFolder}/test_development/tf_test",
         "--extensionDevelopmentPath=${workspaceFolder}",
-        "${env:DEV_FOLDER_PATH}"
+        "/Users/jacksondahl/Desktop/Repo/gomboc/service/remediations"
       ],
       "outFiles": ["${workspaceFolder}/dist/**/*.js"],
       "preLaunchTask": "${defaultBuildTask}",

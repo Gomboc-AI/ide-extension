@@ -1,13 +1,14 @@
+import {
+  ScanContent,
+  ScanLocalScenarioInput,
+} from './../api/__generated__/graphql';
 // scans current working file or scenarioimport * as vscode from 'vscode';
 import * as vscode from 'vscode';
 import { CustomerApiClient } from '../api/client';
-import {
-  generateRequestMetadata,
-  generateSecurityPolicies,
-  getFileType,
-} from '../utils/lib';
+import { generateRequestMetadata, getFileType } from '../utils/lib';
 import { InfrastructureTool } from '../api/__generated__/graphql';
 import { IACScanContent, SingleScanInput } from '../types';
+import { ScanResultsProvider } from '../providers/scanResultsProvider';
 
 /**
  * Scans a single file and sens to customerapi
@@ -31,6 +32,7 @@ import { IACScanContent, SingleScanInput } from '../types';
 export async function scanFileCommand(
   context: vscode.ExtensionContext,
   apiClient: CustomerApiClient,
+  scanResultsProvider: ScanResultsProvider,
 ) {
   // ----- Gather input ------- //
   const editor = vscode.window.activeTextEditor;
@@ -42,7 +44,7 @@ export async function scanFileCommand(
   const filePath = document.uri.fsPath;
   const filetype = getFileType(filePath);
 
-  let fileContents: IACScanContent | IACScanContent[];
+  let fileContents: IACScanContent[];
   let tool: InfrastructureTool;
   if (filetype === 'tf') {
     tool = InfrastructureTool.Terraform;
@@ -57,29 +59,30 @@ export async function scanFileCommand(
     throw new Error('Current file is not a cloudformation or terraform file');
   }
 
-  const policyStatements = await generateSecurityPolicies(apiClient);
   const metaData = await generateRequestMetadata();
 
   // ----- Send data to customerapi ------ //
-  const inputObject: SingleScanInput = {
+  const inputObject: ScanLocalScenarioInput = {
     fileContents,
-    tool,
-    policyStatements,
+    iacTool: tool,
     metaData,
   };
 
-  const scanResponse = await apiClient.sendSingleScan({ inputObject });
+  const scanResponse = await apiClient.singleScanMutation({ inputObject });
+
+  if (scanResponse.__typename !== 'ScanLocalScenario') {
+    throw new Error('gomboc error');
+  }
+  scanResultsProvider.generateComments(scanResponse.results);
+  scanResultsProvider.createDiagnostic();
 
   // TODO
   // ----- add a progress bar that possible measures the length of time? ------ //
-
-  // TODO
-  // -------  Process diagnostic collection ------- //
 }
 
 async function getTFScenarioFiles(
   document: vscode.TextDocument,
-): Promise<IACScanContent[]> {
+): Promise<ScanContent[]> {
   const currentFileUri = document.uri;
   const directoryUri = currentFileUri.with({
     path: currentFileUri.path.replace(/\/[^/]*$/, '/'),
@@ -87,7 +90,7 @@ async function getTFScenarioFiles(
 
   const entries = await vscode.workspace.fs.readDirectory(directoryUri);
 
-  const contents: IACScanContent[] = [];
+  const contents = [];
   for (const [name, fileType] of entries) {
     if (fileType === vscode.FileType.File) {
       const fileUri = vscode.Uri.joinPath(directoryUri, name);
@@ -105,9 +108,11 @@ async function getTFScenarioFiles(
 /**
  * Only care about the current file, just return base64 of it
  */
-function getCFNFile(document: vscode.TextDocument): IACScanContent {
-  return {
-    filePath: document.uri.fsPath,
-    fileContents: btoa(document.getText()),
-  };
+function getCFNFile(document: vscode.TextDocument): ScanContent[] {
+  return [
+    {
+      filePath: document.uri.fsPath,
+      fileContents: btoa(document.getText()),
+    },
+  ];
 }
