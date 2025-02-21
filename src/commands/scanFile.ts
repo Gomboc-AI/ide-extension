@@ -1,6 +1,5 @@
 import {
-  IacScanContent,
-  ScanLocalScenario,
+  ScanContent,
   ScanLocalScenarioInput,
 } from './../api/__generated__/graphql';
 // scans current working file or scenarioimport * as vscode from 'vscode';
@@ -83,7 +82,7 @@ export async function scanFileCommand(
 
 async function getTFScenarioFiles(
   document: vscode.TextDocument,
-): Promise<IacScanContent[]> {
+): Promise<ScanContent[]> {
   const currentFileUri = document.uri;
   const directoryUri = currentFileUri.with({
     path: currentFileUri.path.replace(/\/[^/]*$/, '/'),
@@ -109,7 +108,7 @@ async function getTFScenarioFiles(
 /**
  * Only care about the current file, just return base64 of it
  */
-function getCFNFile(document: vscode.TextDocument): IacScanContent[] {
+function getCFNFile(document: vscode.TextDocument): ScanContent[] {
   return [
     {
       filePath: document.uri.fsPath,
