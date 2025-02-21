@@ -16,7 +16,7 @@ export const HEALTH_CHECK = gql`
 `;
 
 export const SECURITY_FRAMEWORKS = gql`
-  query Organization {
+  query getSecurityFrameworks {
     organization {
       ... on Organization {
         id

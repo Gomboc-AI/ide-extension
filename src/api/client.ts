@@ -7,9 +7,16 @@ import settings from '../settings';
 import { ApolloClient, createHttpLink, InMemoryCache } from '@apollo/client';
 import { HEALTH_CHECK, SECURITY_FRAMEWORKS, SINGLE_SCAN } from './queries';
 import {
+  GetSecurityFrameworksQuery,
   Organization,
+  OrganizationQuery,
+  OrganizationQueryVariables,
   ScanFileOrScenarioVscodeInput,
+  ScanFileOrScenarioVscodeMutation,
+  ScanFileOrScenarioVscodeMutationVariables,
   ScanFileOrScenarioVscodeOutput,
+  TestOrganizationQuery,
+  TestOrganizationQueryVariables,
 } from './__generated__/graphql';
 import { SingleScanInput } from '../types';
 
@@ -40,12 +47,15 @@ export class CustomerApiClient {
     logger.info('Created a new apollo client .... ');
   }
 
-  public async securityFrameworks(): Promise<Organization> {
+  public async securityFrameworks() {
     try {
-      const { data } = await this.client.query({
+      const { data } = await this.client.query<GetSecurityFrameworksQuery>({
         query: SECURITY_FRAMEWORKS,
       });
       logger.info('Fetched security frameworks');
+      if (data.organization.__typename === 'GombocError' ) {
+        throw new Error('GombocError')
+      }
       return data.organization;
     } catch (error) {
       logger.error('Grabbing security frameworks failed', { error });
@@ -55,7 +65,7 @@ export class CustomerApiClient {
 
   public async healthCheck() {
     try {
-      const { data } = await this.client.query({
+      const { data } = await this.client.query<TestOrganizationQuery, TestOrganizationQueryVariables>({
         query: HEALTH_CHECK,
       });
       logger.info('Service Healthy ....');
@@ -68,15 +78,18 @@ export class CustomerApiClient {
 
   public async singleScanMutation(args: {
     inputObject: ScanFileOrScenarioVscodeInput;
-  }): Promise<ScanFileOrScenarioVscodeOutput> {
+  }) {
     logger.info('Sending a single file or scenario scan request');
     try {
-      const { data } = await this.client.mutate({
+      const { data } = await this.client.mutate<ScanFileOrScenarioVscodeMutation, ScanFileOrScenarioVscodeMutationVariables>({
         mutation: SINGLE_SCAN,
         variables: {
           input: args.inputObject,
         },
       });
+      if (data === null || data === undefined || data.scanFileOrScenarioVscode.__typename === 'GombocError') {
+        throw new Error('GombocError')
+      }
       return data.scanFileOrScenarioVscode;
     } catch (error) {
       logger.error('Sending a single file or scenario failed', { error });
