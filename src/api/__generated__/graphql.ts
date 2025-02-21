@@ -395,10 +395,10 @@ export enum GitLabApiVersion {
 }
 
 export type GitMetaDataInput = {
-  headName: Scalars['String']['input'];
-  lastMergeCommit: Scalars['String']['input'];
-  mainName: Scalars['String']['input'];
-  remote: Scalars['String']['input'];
+  headName?: InputMaybe<Scalars['String']['input']>;
+  lastMergeCommit?: InputMaybe<Scalars['String']['input']>;
+  mainName?: InputMaybe<Scalars['String']['input']>;
+  remote?: InputMaybe<Scalars['String']['input']>;
 };
 
 /**
@@ -450,7 +450,7 @@ export enum GombocErrorCode {
   Unauthorized = 'UNAUTHORIZED',
 }
 
-export type IacScanContentInput = {
+export type IacScanContent = {
   fileContents: Scalars['String']['input'];
   filePath: Scalars['String']['input'];
 };
@@ -569,8 +569,8 @@ export type LogicalResource = {
 };
 
 export type MetaDataInput = {
-  git: GitMetaDataInput;
-  os: OsMetaDataInput;
+  git?: InputMaybe<GitMetaDataInput>;
+  os?: InputMaybe<OsMetaDataInput>;
 };
 
 export type Mutation = {
@@ -612,10 +612,10 @@ export type Mutation = {
   putSetupCompleted?: Maybe<GombocError>;
   /** @deprecated No longer supported */
   resetOrganizationPolicy?: Maybe<GombocError>;
-  /** Scan single file or scenario, sent from vscode */
-  scanFileOrScenarioVscode: ScanFileOrScenarioVscodeOutput;
   /** Call a scan from Orca */
   scanFromOrca: ScanRequestResponseType;
+  /** Scan single file or scenario, sent from vscode */
+  scanLocalScenario: ScanLocalScenarioOutput;
   scanOnPullRequest: ScanRequestResponseType;
   scanOnSchedule: ScanRequestResponseType;
   /**
@@ -711,12 +711,12 @@ export type MutationPutSetupCompletedArgs = {
   input: PutSetupCompletedInput;
 };
 
-export type MutationScanFileOrScenarioVscodeArgs = {
-  input: ScanFileOrScenarioVscodeInput;
-};
-
 export type MutationScanFromOrcaArgs = {
   input: ScanFromOrcaInput;
+};
+
+export type MutationScanLocalScenarioArgs = {
+  input: ScanLocalScenarioInput;
 };
 
 export type MutationScanOnPullRequestArgs = {
@@ -753,10 +753,10 @@ export type Node = {
 };
 
 export type OsMetaDataInput = {
-  machineName: Scalars['String']['input'];
-  privateIp: Scalars['String']['input'];
-  publicIp: Scalars['String']['input'];
-  userName: Scalars['String']['input'];
+  machineName?: InputMaybe<Scalars['String']['input']>;
+  privateIp?: InputMaybe<Scalars['String']['input']>;
+  publicIp?: InputMaybe<Scalars['String']['input']>;
+  userName?: InputMaybe<Scalars['String']['input']>;
 };
 
 export type OntologicalSubgraph = {
@@ -1200,41 +1200,6 @@ export type ScanDirectory = {
 
 export type ScanDirectoryResponse = FailedScan | GombocError | ScanDirectory;
 
-export type ScanFileOrScenarioVscode = {
-  __typename?: 'ScanFileOrScenarioVscode';
-  results: Array<ScanFileOrScenarioVscodeComments>;
-};
-
-export type ScanFileOrScenarioVscodeComments = {
-  __typename?: 'ScanFileOrScenarioVscodeComments';
-  /** We should include a category and description of each fix. */
-  category?: Maybe<Scalars['String']['output']>;
-  description: Scalars['String']['output'];
-  /** We might want to add this later so I'm including it */
-  documentationLink?: Maybe<Scalars['String']['output']>;
-  fileName: Scalars['String']['output'];
-  fixes: Array<ScanFileOrScenarioVscodeFixes>;
-  iacTool: InfrastructureTool;
-};
-
-export type ScanFileOrScenarioVscodeFixes = {
-  __typename?: 'ScanFileOrScenarioVscodeFixes';
-  currentValue: Scalars['String']['output'];
-  issueType: Scalars['String']['output'];
-  lineNumber: Scalars['Int']['output'];
-  newValue: Scalars['String']['output'];
-};
-
-export type ScanFileOrScenarioVscodeInput = {
-  fileContents: Array<IacScanContentInput>;
-  iacTool: InfrastructureTool;
-  metaData: MetaDataInput;
-};
-
-export type ScanFileOrScenarioVscodeOutput =
-  | GombocError
-  | ScanFileOrScenarioVscode;
-
 export type ScanFromOrcaInput = {
   /** The effect -- defaults to 'SubmitForReview' */
   effect?: InputMaybe<Effect>;
@@ -1243,6 +1208,39 @@ export type ScanFromOrcaInput = {
   /** The target for the scan */
   scanTarget: ScanTargetInput;
 };
+
+export type ScanLocalScenario = {
+  __typename?: 'ScanLocalScenario';
+  results: Array<ScanLocalScenarioComments>;
+};
+
+export type ScanLocalScenarioComments = {
+  __typename?: 'ScanLocalScenarioComments';
+  /** We should include a category and description of each fix. */
+  category?: Maybe<Scalars['String']['output']>;
+  description: Scalars['String']['output'];
+  /** We might want to add this later so I'm including it */
+  documentationLink?: Maybe<Scalars['String']['output']>;
+  fileName: Scalars['String']['output'];
+  fixes: Array<ScanLocalScenarioFixes>;
+  iacTool: InfrastructureTool;
+};
+
+export type ScanLocalScenarioFixes = {
+  __typename?: 'ScanLocalScenarioFixes';
+  currentValue: Scalars['String']['output'];
+  issueType: Scalars['String']['output'];
+  lineNumber: Scalars['Int']['output'];
+  newValue: Scalars['String']['output'];
+};
+
+export type ScanLocalScenarioInput = {
+  fileContents: Array<IacScanContent>;
+  iacTool: InfrastructureTool;
+  metaData: MetaDataInput;
+};
+
+export type ScanLocalScenarioOutput = GombocError | ScanLocalScenario;
 
 export type ScanOnPullRequestInput = {
   effect: Effect;
@@ -1492,29 +1490,29 @@ export type GetSecurityFrameworksQuery = {
       };
 };
 
-export type ScanFileOrScenarioVscodeMutationVariables = Exact<{
-  input: ScanFileOrScenarioVscodeInput;
+export type ScanLocalScenarioMutationVariables = Exact<{
+  input: ScanLocalScenarioInput;
 }>;
 
-export type ScanFileOrScenarioVscodeMutation = {
+export type ScanLocalScenarioMutation = {
   __typename?: 'Mutation';
-  scanFileOrScenarioVscode:
+  scanLocalScenario:
     | {
         __typename?: 'GombocError';
         message: string;
         code?: GombocErrorCode | null;
       }
     | {
-        __typename?: 'ScanFileOrScenarioVscode';
+        __typename?: 'ScanLocalScenario';
         results: Array<{
-          __typename?: 'ScanFileOrScenarioVscodeComments';
+          __typename?: 'ScanLocalScenarioComments';
           category?: string | null;
           description: string;
-          documentationLink?: string | null;
           iacTool: InfrastructureTool;
+          documentationLink?: string | null;
           fileName: string;
           fixes: Array<{
-            __typename?: 'ScanFileOrScenarioVscodeFixes';
+            __typename?: 'ScanLocalScenarioFixes';
             currentValue: string;
             newValue: string;
             lineNumber: number;
@@ -1701,13 +1699,13 @@ export const GetSecurityFrameworksDocument = {
   GetSecurityFrameworksQuery,
   GetSecurityFrameworksQueryVariables
 >;
-export const ScanFileOrScenarioVscodeDocument = {
+export const ScanLocalScenarioDocument = {
   kind: 'Document',
   definitions: [
     {
       kind: 'OperationDefinition',
       operation: 'mutation',
-      name: { kind: 'Name', value: 'ScanFileOrScenarioVscode' },
+      name: { kind: 'Name', value: 'scanLocalScenario' },
       variableDefinitions: [
         {
           kind: 'VariableDefinition',
@@ -1719,7 +1717,7 @@ export const ScanFileOrScenarioVscodeDocument = {
             kind: 'NonNullType',
             type: {
               kind: 'NamedType',
-              name: { kind: 'Name', value: 'ScanFileOrScenarioVscodeInput' },
+              name: { kind: 'Name', value: 'ScanLocalScenarioInput' },
             },
           },
         },
@@ -1729,7 +1727,7 @@ export const ScanFileOrScenarioVscodeDocument = {
         selections: [
           {
             kind: 'Field',
-            name: { kind: 'Name', value: 'scanFileOrScenarioVscode' },
+            name: { kind: 'Name', value: 'scanLocalScenario' },
             arguments: [
               {
                 kind: 'Argument',
@@ -1747,7 +1745,24 @@ export const ScanFileOrScenarioVscodeDocument = {
                   kind: 'InlineFragment',
                   typeCondition: {
                     kind: 'NamedType',
-                    name: { kind: 'Name', value: 'ScanFileOrScenarioVscode' },
+                    name: { kind: 'Name', value: 'GombocError' },
+                  },
+                  selectionSet: {
+                    kind: 'SelectionSet',
+                    selections: [
+                      {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'message' },
+                      },
+                      { kind: 'Field', name: { kind: 'Name', value: 'code' } },
+                    ],
+                  },
+                },
+                {
+                  kind: 'InlineFragment',
+                  typeCondition: {
+                    kind: 'NamedType',
+                    name: { kind: 'Name', value: 'ScanLocalScenario' },
                   },
                   selectionSet: {
                     kind: 'SelectionSet',
@@ -1758,29 +1773,6 @@ export const ScanFileOrScenarioVscodeDocument = {
                         selectionSet: {
                           kind: 'SelectionSet',
                           selections: [
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'category' },
-                            },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'description' },
-                            },
-                            {
-                              kind: 'Field',
-                              name: {
-                                kind: 'Name',
-                                value: 'documentationLink',
-                              },
-                            },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'iacTool' },
-                            },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'fileName' },
-                            },
                             {
                               kind: 'Field',
                               name: { kind: 'Name', value: 'fixes' },
@@ -1809,26 +1801,32 @@ export const ScanFileOrScenarioVscodeDocument = {
                                 ],
                               },
                             },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'category' },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'description' },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'iacTool' },
+                            },
+                            {
+                              kind: 'Field',
+                              name: {
+                                kind: 'Name',
+                                value: 'documentationLink',
+                              },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'fileName' },
+                            },
                           ],
                         },
                       },
-                    ],
-                  },
-                },
-                {
-                  kind: 'InlineFragment',
-                  typeCondition: {
-                    kind: 'NamedType',
-                    name: { kind: 'Name', value: 'GombocError' },
-                  },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'message' },
-                      },
-                      { kind: 'Field', name: { kind: 'Name', value: 'code' } },
                     ],
                   },
                 },
@@ -1840,6 +1838,6 @@ export const ScanFileOrScenarioVscodeDocument = {
     },
   ],
 } as unknown as DocumentNode<
-  ScanFileOrScenarioVscodeMutation,
-  ScanFileOrScenarioVscodeMutationVariables
+  ScanLocalScenarioMutation,
+  ScanLocalScenarioMutationVariables
 >;

@@ -1,12 +1,13 @@
+import {
+  IacScanContent,
+  ScanLocalScenario,
+  ScanLocalScenarioInput,
+} from './../api/__generated__/graphql';
 // scans current working file or scenarioimport * as vscode from 'vscode';
 import * as vscode from 'vscode';
 import { CustomerApiClient } from '../api/client';
 import { generateRequestMetadata, getFileType } from '../utils/lib';
-import {
-  IacScanContentInput,
-  InfrastructureTool,
-  ScanFileOrScenarioVscodeInput,
-} from '../api/__generated__/graphql';
+import { InfrastructureTool } from '../api/__generated__/graphql';
 import { IACScanContent, SingleScanInput } from '../types';
 import { ScanResultsProvider } from '../providers/scanResultsProvider';
 
@@ -44,7 +45,7 @@ export async function scanFileCommand(
   const filePath = document.uri.fsPath;
   const filetype = getFileType(filePath);
 
-  let fileContents: IacScanContentInput[];
+  let fileContents: IACScanContent[];
   let tool: InfrastructureTool;
   if (filetype === 'tf') {
     tool = InfrastructureTool.Terraform;
@@ -62,7 +63,7 @@ export async function scanFileCommand(
   const metaData = await generateRequestMetadata();
 
   // ----- Send data to customerapi ------ //
-  const inputObject: ScanFileOrScenarioVscodeInput = {
+  const inputObject: ScanLocalScenarioInput = {
     fileContents,
     iacTool: tool,
     metaData,
@@ -70,7 +71,7 @@ export async function scanFileCommand(
 
   const scanResponse = await apiClient.singleScanMutation({ inputObject });
 
-  if (scanResponse.__typename !== 'ScanFileOrScenarioVscode') {
+  if (scanResponse.__typename !== 'ScanLocalScenario') {
     throw new Error('gomboc error');
   }
   scanResultsProvider.generateComments(scanResponse.results);
@@ -85,7 +86,7 @@ export async function scanFileCommand(
 
 async function getTFScenarioFiles(
   document: vscode.TextDocument,
-): Promise<IacScanContentInput[]> {
+): Promise<IacScanContent[]> {
   const currentFileUri = document.uri;
   const directoryUri = currentFileUri.with({
     path: currentFileUri.path.replace(/\/[^/]*$/, '/'),
@@ -111,7 +112,7 @@ async function getTFScenarioFiles(
 /**
  * Only care about the current file, just return base64 of it
  */
-function getCFNFile(document: vscode.TextDocument): IacScanContentInput[] {
+function getCFNFile(document: vscode.TextDocument): IacScanContent[] {
   return [
     {
       filePath: document.uri.fsPath,

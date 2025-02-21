@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { ScanFileOrScenarioVscodeComments } from '../api/__generated__/graphql';
+import { ScanLocalScenarioComments } from '../api/__generated__/graphql';
 import { GombocDiagnostic } from './gombocDiagnostic';
 import { CodeActionProvider } from './codeActionProvider';
 
@@ -8,7 +8,7 @@ export class ScanResultsProvider {
   constructor(
     private context: vscode.ExtensionContext,
     private diagnosticCollection: vscode.DiagnosticCollection,
-    private results: ScanFileOrScenarioVscodeComments[],
+    private results: ScanLocalScenarioComments[],
   ) {
     this.results = [];
   }
@@ -25,7 +25,7 @@ export class ScanResultsProvider {
     );
   }
 
-  public generateComments(comments: ScanFileOrScenarioVscodeComments[]) {
+  public generateComments(comments: ScanLocalScenarioComments[]) {
     this.results = comments;
   }
 
@@ -75,7 +75,7 @@ export class ScanResultsProvider {
   }
 
   // Uses the scan result + diagnostic in order to apply a fix
-  async applyRemediation(fixedResults: ScanFileOrScenarioVscodeComments[]) {
+  async applyRemediation(fixedResults: ScanLocalScenarioComments[]) {
     const edit = new vscode.WorkspaceEdit();
     for (const result of fixedResults) {
       // the filepath might point to a different file

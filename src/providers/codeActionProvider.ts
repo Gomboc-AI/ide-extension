@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { GombocDiagnostic } from './gombocDiagnostic';
-import { ScanFileOrScenarioVscodeComments } from '../api/__generated__/graphql';
+import { ScanLocalScenarioComments } from '../api/__generated__/graphql';
 export class CodeActionProvider implements vscode.CodeActionProvider {
   private results;
   private readonly diagnosticCollection: vscode.DiagnosticCollection;
@@ -10,7 +10,7 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
   private readonly fixableResults = [];
 
   constructor(
-    results: ScanFileOrScenarioVscodeComments[],
+    results: ScanLocalScenarioComments[],
     diagnosticCollection: vscode.DiagnosticCollection,
   ) {
     this.results = results;

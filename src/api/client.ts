@@ -8,9 +8,9 @@ import { ApolloClient, createHttpLink, InMemoryCache } from '@apollo/client';
 import { HEALTH_CHECK, SECURITY_FRAMEWORKS, SINGLE_SCAN } from './queries';
 import {
   GetSecurityFrameworksQuery,
-  ScanFileOrScenarioVscodeInput,
-  ScanFileOrScenarioVscodeMutation,
-  ScanFileOrScenarioVscodeMutationVariables,
+  ScanLocalScenarioInput,
+  ScanLocalScenarioMutation,
+  ScanLocalScenarioMutationVariables,
   TestOrganizationQuery,
   TestOrganizationQueryVariables,
 } from './__generated__/graphql';
@@ -78,13 +78,13 @@ export class CustomerApiClient {
   }
 
   public async singleScanMutation(args: {
-    inputObject: ScanFileOrScenarioVscodeInput;
+    inputObject: ScanLocalScenarioInput;
   }) {
     logger.info('Sending a single file or scenario scan request');
     try {
       const { data } = await this.client.mutate<
-        ScanFileOrScenarioVscodeMutation,
-        ScanFileOrScenarioVscodeMutationVariables
+        ScanLocalScenarioMutation,
+        ScanLocalScenarioMutationVariables
       >({
         mutation: SINGLE_SCAN,
         variables: {
@@ -94,11 +94,11 @@ export class CustomerApiClient {
       if (
         data === null ||
         data === undefined ||
-        data.scanFileOrScenarioVscode.__typename === 'GombocError'
+        data.scanLocalScenario.__typename === 'GombocError'
       ) {
         throw new Error('GombocError');
       }
-      return data.scanFileOrScenarioVscode;
+      return data.scanLocalScenario;
     } catch (error) {
       logger.error('Sending a single file or scenario failed', { error });
       throw error;

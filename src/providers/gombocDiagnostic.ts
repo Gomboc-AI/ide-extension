@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
-import { ScanFileOrScenarioVscodeComments } from '../api/__generated__/graphql';
+import { ScanLocalScenarioComments } from '../api/__generated__/graphql';
 export class GombocDiagnostic extends vscode.Diagnostic {
-  gombocResult: ScanFileOrScenarioVscodeComments;
+  gombocResult: ScanLocalScenarioComments;
   constructor(
     range: vscode.Range,
     message: string,
-    gombocResult: ScanFileOrScenarioVscodeComments,
+    gombocResult: ScanLocalScenarioComments,
     severity?: vscode.DiagnosticSeverity,
   ) {
     super(range, message, severity);
