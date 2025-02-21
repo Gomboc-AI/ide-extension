@@ -1,0 +1,41 @@
+name: Lint
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+jobs:
+  lint-and-typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          registry-url: https://npm.pkg.github.com/
+          scope: '@Gomboc-AI'
+      
+      - name: Save NPMRC File
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo 'engine-strict=true' > ~/.npmrc
+          echo '@Gomboc-AI:registry=https://npm.pkg.github.com/' >> ~/.npmrc
+          echo '//npm.pkg.github.com/:_authToken=${{env.NODE_AUTH_TOKEN}}' >> ~/.npmrc
+          # Copy the .npmrc file to the current directory
+          cp ~/.npmrc .npmrc
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+      
+      - name: Format
+        run: npm run format:check
