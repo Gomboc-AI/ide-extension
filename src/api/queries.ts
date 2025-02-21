@@ -54,7 +54,7 @@ export const SINGLE_SCAN = gql`
       ... on ScanLocalScenario {
         results {
           fixes {
-            currentValue
+            oldValue
             newValue
             lineNumber
             issueType

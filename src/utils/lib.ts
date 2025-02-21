@@ -81,12 +81,7 @@ const generateGitMetaData = async (): Promise<GitMetaDataInput> => {
       vscode.extensions.getExtension<GitExtension>('vscode.git');
     if (!gitExtension) {
       vscode.window.showErrorMessage('Failed to load git extension');
-      return {
-        headName: '',
-        mainName: '',
-        lastMergeCommit: '',
-        remote: '',
-      };
+      return {};
     }
     const gitImport = gitExtension.exports;
     const api = gitImport.getAPI(1);
@@ -104,7 +99,7 @@ const generateGitMetaData = async (): Promise<GitMetaDataInput> => {
 
     return {
       headName: branch,
-      mainName: mainBranch,
+      defaultName: mainBranch,
       lastMergeCommit,
       remote: remoteUrl ?? '', // could be null?
     };
@@ -112,12 +107,7 @@ const generateGitMetaData = async (): Promise<GitMetaDataInput> => {
     vscode.window.showErrorMessage(
       'Error grabbing git data - Or untracked workspace',
     );
-    return {
-      headName: 'None',
-      mainName: 'None',
-      lastMergeCommit: 'None',
-      remote: 'None',
-    };
+    return {};
   }
 };
 

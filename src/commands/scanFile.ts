@@ -79,9 +79,6 @@ export async function scanFileCommand(
 
   // TODO
   // ----- add a progress bar that possible measures the length of time? ------ //
-
-  // TODO
-  // -------  Process diagnostic collection ------- //
 }
 
 async function getTFScenarioFiles(
