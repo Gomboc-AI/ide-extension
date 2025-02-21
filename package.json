@@ -48,10 +48,10 @@
             "default": false,
             "description": "Scan file every time file saves if true"
           },
-            "gomboc-vscode-extension.defaultBranchName": {
-              "type": "string",
-              "default": "main",
-              "description": "Default main branch for reporting purposes"
+          "gomboc-vscode-extension.defaultBranchName": {
+            "type": "string",
+            "default": "main",
+            "description": "Default main branch for reporting purposes"
           }
         }
       }
