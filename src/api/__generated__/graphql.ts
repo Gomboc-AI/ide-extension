@@ -2,31 +2,18 @@
 import { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/core';
 export type Maybe<T> = T | null;
 export type InputMaybe<T> = Maybe<T>;
-export type Exact<T extends { [key: string]: unknown }> = {
-  [K in keyof T]: T[K];
-};
-export type MakeOptional<T, K extends keyof T> = Omit<T, K> & {
-  [SubKey in K]?: Maybe<T[SubKey]>;
-};
-export type MakeMaybe<T, K extends keyof T> = Omit<T, K> & {
-  [SubKey in K]: Maybe<T[SubKey]>;
-};
-export type MakeEmpty<
-  T extends { [key: string]: unknown },
-  K extends keyof T,
-> = { [_ in K]?: never };
-export type Incremental<T> =
-  | T
-  | {
-      [P in keyof T]?: P extends ' $fragmentName' | '__typename' ? T[P] : never;
-    };
+export type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
+export type MakeOptional<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]?: Maybe<T[SubKey]> };
+export type MakeMaybe<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]: Maybe<T[SubKey]> };
+export type MakeEmpty<T extends { [key: string]: unknown }, K extends keyof T> = { [_ in K]?: never };
+export type Incremental<T> = T | { [P in keyof T]?: P extends ' $fragmentName' | '__typename' ? T[P] : never };
 /** All built-in and custom scalars, mapped to their actual values */
 export type Scalars = {
-  ID: { input: string; output: string };
-  String: { input: string; output: string };
-  Boolean: { input: boolean; output: boolean };
-  Int: { input: number; output: number };
-  Float: { input: number; output: number };
+  ID: { input: string; output: string; }
+  String: { input: string; output: string; }
+  Boolean: { input: boolean; output: boolean; }
+  Int: { input: number; output: number; }
+  Float: { input: number; output: number; }
 };
 
 /** A Scan Result that originated from a Scan Request */
@@ -89,6 +76,7 @@ export type ActionResult = {
   violationsCount: Scalars['Int']['output'];
 };
 
+
 /** A Scan Result that originated from a Scan Request */
 export type ActionResultObservationsArgs = {
   exclude?: InputMaybe<Array<Disposition>>;
@@ -96,11 +84,13 @@ export type ActionResultObservationsArgs = {
   size?: InputMaybe<Scalars['Int']['input']>;
 };
 
+
 /** A Scan Result that originated from a Scan Request */
 export type ActionResultOrcaAlertsArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
   perPage?: InputMaybe<Scalars['Int']['input']>;
 };
+
 
 /** A Scan Result that originated from a Scan Request */
 export type ActionResultPolicyObservationsArgs = {
@@ -108,6 +98,7 @@ export type ActionResultPolicyObservationsArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
   size?: InputMaybe<Scalars['Int']['input']>;
 };
+
 
 /** A Scan Result that originated from a Scan Request */
 export type ActionResultTicketsArgs = {
@@ -119,7 +110,7 @@ export enum ActionResultCondition {
   AllFixed = 'ALL_FIXED',
   Compliant = 'COMPLIANT',
   NoneFixed = 'NONE_FIXED',
-  SomeFixed = 'SOME_FIXED',
+  SomeFixed = 'SOME_FIXED'
 }
 
 export type ActionResultPage = {
@@ -137,9 +128,7 @@ export type AdoptFrameworkControlsIntoOrganizationInput = {
   resetPolicy: Scalars['Boolean']['input'];
 };
 
-export type AdoptFrameworkControlsIntoOrganizationResponse =
-  | GombocError
-  | Policy;
+export type AdoptFrameworkControlsIntoOrganizationResponse = GombocError | Policy;
 
 export type AppliedMustImplementPolicyStatement = {
   __typename?: 'AppliedMustImplementPolicyStatement';
@@ -157,8 +146,7 @@ export type AppliedPolicyStatement = {
   source: StatementSource;
 };
 
-export type AppliedPolicyStatementPayloadType =
-  AppliedMustImplementPolicyStatement;
+export type AppliedPolicyStatementPayloadType = AppliedMustImplementPolicyStatement;
 
 export type AutoRemediateCfnFileComments = {
   __typename?: 'AutoRemediateCfnFileComments';
@@ -215,7 +203,7 @@ export type AutoRemediatedTfHclFile = {
 };
 
 export enum BitBucketApiVersion {
-  V2_0 = 'V2_0',
+  V2_0 = 'V2_0'
 }
 
 export type BulkAllLinkScanRemoteInput = {
@@ -255,7 +243,7 @@ export type CloudResourcePage = {
 export enum CloudResourceProvider {
   Aws = 'AWS',
   Azure = 'AZURE',
-  Gcp = 'GCP',
+  Gcp = 'GCP'
 }
 
 export type CodeResource = {
@@ -366,7 +354,7 @@ export enum Disposition {
   AutoRemediated = 'AUTO_REMEDIATED',
   CannotRemediate = 'CANNOT_REMEDIATE',
   InsufficientInfoToRemediate = 'INSUFFICIENT_INFO_TO_REMEDIATE',
-  NotApplicable = 'NOT_APPLICABLE',
+  NotApplicable = 'NOT_APPLICABLE'
 }
 
 export type Edge = {
@@ -379,7 +367,7 @@ export type Edge = {
 
 export enum Effect {
   Preview = 'Preview',
-  SubmitForReview = 'SubmitForReview',
+  SubmitForReview = 'SubmitForReview'
 }
 
 export type FailedScan = {
@@ -391,7 +379,7 @@ export type FailedScan = {
 };
 
 export enum GitLabApiVersion {
-  V4 = 'V4',
+  V4 = 'V4'
 }
 
 export type GitMetaDataInput = {
@@ -423,6 +411,7 @@ export type GitProvider = {
   repositories: Array<Repository>;
 };
 
+
 /**
  * Represents an integration to an SCM provider **owner** entity, such as:
  * - A GitHub **organization**
@@ -447,7 +436,7 @@ export enum GombocErrorCode {
   InvalidArgument = 'INVALID_ARGUMENT',
   NotFound = 'NOT_FOUND',
   NotImplemented = 'NOT_IMPLEMENTED',
-  Unauthorized = 'UNAUTHORIZED',
+  Unauthorized = 'UNAUTHORIZED'
 }
 
 export type IacScanContentInput = {
@@ -457,15 +446,12 @@ export type IacScanContentInput = {
 
 export enum InfrastructureTool {
   Cloudformation = 'CLOUDFORMATION',
-  Terraform = 'TERRAFORM',
+  Terraform = 'TERRAFORM'
 }
 
-export type InheritedAutoRemediateCfnFileResponse =
-  | AutoRemediateCfnFileSuccess
-  | AutoRemediateCfnInvalidFileError;
+export type InheritedAutoRemediateCfnFileResponse = AutoRemediateCfnFileSuccess | AutoRemediateCfnInvalidFileError;
 
-export type InheritedAutoRemediateTfHclFilesResponse =
-  AutoRemediateTfHclFilesSuccess;
+export type InheritedAutoRemediateTfHclFilesResponse = AutoRemediateTfHclFilesSuccess;
 
 export type InheritedPolicyStatementPayloadMustImplementType = {
   capabilityId: Scalars['String']['input'];
@@ -489,7 +475,7 @@ export type InputStatementMetadata = {
 
 export enum IntegrationParty {
   Orca = 'ORCA',
-  Wiz = 'WIZ',
+  Wiz = 'WIZ'
 }
 
 export type Link = {
@@ -511,6 +497,7 @@ export type Link = {
   /** Returns a URL-friendly slug for the linked repository */
   slug: Scalars['ID']['output'];
 };
+
 
 export type LinkActionResultsArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
@@ -631,113 +618,141 @@ export type Mutation = {
   updatePullRequestStatus?: Maybe<GombocError>;
 };
 
+
 export type MutationAdoptFrameworkControlsIntoOrganizationArgs = {
   input: AdoptFrameworkControlsIntoOrganizationInput;
 };
+
 
 export type MutationBulkAllLinkScanRemoteArgs = {
   input: BulkAllLinkScanRemoteInput;
 };
 
+
 export type MutationBulkLinkScanRemoteArgs = {
   input: BulkLinkScanRemoteInput;
 };
+
 
 export type MutationCreateAzdoProviderArgs = {
   input: CreateAzdoProviderInput;
 };
 
+
 export type MutationCreateBitBucketProviderArgs = {
   input: CreateBitBucketProviderInput;
 };
+
 
 export type MutationCreateGitHubProviderArgs = {
   input: CreateGitHubProviderInput;
 };
 
+
 export type MutationCreateGitLabProviderArgs = {
   input: CreateGitLabProviderInput;
 };
+
 
 export type MutationCreateMustImplementOrganizationPolicyStatementArgs = {
   input: CreateMustImplementPolicyStatementInput;
 };
 
+
 export type MutationCreateOrcaIntegrationArgs = {
   input: CreateOrcaIntegrationInput;
 };
+
 
 export type MutationCreateProjectArgs = {
   projectName: Scalars['String']['input'];
 };
 
+
 export type MutationCreateTicketArgs = {
   input: CreateTicketInput;
 };
+
 
 export type MutationDeleteGitProviderArgs = {
   input: DeleteGitProviderInput;
 };
 
+
 export type MutationDeleteLinkArgs = {
   linkId: Scalars['ID']['input'];
 };
+
 
 export type MutationDeleteOrcaIntegrationArgs = {
   input: DeleteOrcaIntegrationInput;
 };
 
+
 export type MutationDeletePolicyStatementsArgs = {
   input: DeletePolicyStatementsInput;
 };
+
 
 export type MutationDeleteProjectArgs = {
   projectId: Scalars['ID']['input'];
 };
 
+
 export type MutationDeleteTicketArgs = {
   input: DeleteTicketInput;
 };
+
 
 export type MutationLinkRepositoriesArgs = {
   input: LinkRepositoriesInput;
 };
 
+
 export type MutationLinkScanRemoteArgs = {
   input: LinkScanRemoteInput;
 };
+
 
 export type MutationPutSetupCompletedArgs = {
   input: PutSetupCompletedInput;
 };
 
+
 export type MutationScanFileOrScenarioVscodeArgs = {
   input: ScanFileOrScenarioVscodeInput;
 };
+
 
 export type MutationScanFromOrcaArgs = {
   input: ScanFromOrcaInput;
 };
 
+
 export type MutationScanOnPullRequestArgs = {
   input: ScanOnPullRequestInput;
 };
+
 
 export type MutationScanOnScheduleArgs = {
   input: ScanOnScheduleInput;
 };
 
+
 export type MutationScanRemoteArgs = {
   input: ScanRemoteInput;
 };
+
 
 export type MutationSendSupportRequestArgs = {
   input: SendSupportRequestInput;
 };
 
+
 export type MutationSetScanTargetArgs = {
   input: SetScanTargetInput;
 };
+
 
 export type MutationUpdatePullRequestStatusArgs = {
   providerName: ProviderName;
@@ -781,6 +796,7 @@ export type OrcaAlert = {
   title: Scalars['String']['output'];
 };
 
+
 export type OrcaAlertActionResultsArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
   size?: InputMaybe<Scalars['Int']['input']>;
@@ -811,6 +827,7 @@ export type OrcaIntegration = {
   name: Scalars['String']['output'];
 };
 
+
 /** Represents an integration to a CSPM provider */
 export type OrcaIntegrationAlertsPageArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
@@ -825,7 +842,7 @@ export enum OrcaRegion {
   Europe = 'Europe',
   India = 'India',
   Israel = 'Israel',
-  Us = 'US',
+  Us = 'US'
 }
 
 /** A customer organization as represented in the system */
@@ -857,15 +874,18 @@ export type Organization = {
   scans: Array<ScanRequestResponse>;
 };
 
+
 /** A customer organization as represented in the system */
 export type OrganizationGitProviderArgs = {
   id: Scalars['ID']['input'];
 };
 
+
 /** A customer organization as represented in the system */
 export type OrganizationProjectArgs = {
   slug: Scalars['String']['input'];
 };
+
 
 /** A customer organization as represented in the system */
 export type OrganizationScansArgs = {
@@ -917,6 +937,7 @@ export type PolicyObservation = {
   /** @deprecated No longer in use */
   source: Scalars['String']['output'];
 };
+
 
 export type PolicyObservationOrcaAlertsPageArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
@@ -985,13 +1006,16 @@ export type Project = {
   slug: Scalars['String']['output'];
 };
 
+
 export type ProjectLinkArgs = {
   linkId: Scalars['ID']['input'];
 };
 
+
 export type ProjectLinkBySlugArgs = {
   slug: Scalars['ID']['input'];
 };
+
 
 export type ProjectLinksPageArgs = {
   pageSize?: InputMaybe<Scalars['Int']['input']>;
@@ -1004,7 +1028,7 @@ export enum ProviderName {
   Azdo = 'AZDO',
   Bitbucket = 'BITBUCKET',
   Github = 'GITHUB',
-  Gitlab = 'GITLAB',
+  Gitlab = 'GITLAB'
 }
 
 export type PullRequest = {
@@ -1019,7 +1043,7 @@ export enum PullRequestStatus {
   Closed = 'CLOSED',
   Expected = 'EXPECTED',
   Merged = 'MERGED',
-  Open = 'OPEN',
+  Open = 'OPEN'
 }
 
 export type PutSetupCompletedInput = {
@@ -1058,49 +1082,61 @@ export type Query = {
   verifyRemediation: Scalars['Boolean']['output'];
 };
 
+
 export type QueryActionResultArgs = {
   id: Scalars['ID']['input'];
 };
+
 
 export type QueryLinkArgs = {
   id: Scalars['ID']['input'];
 };
 
+
 export type QueryOrcaAlertArgs = {
   id: Scalars['ID']['input'];
 };
+
 
 export type QueryPolicyObservationArgs = {
   id: Scalars['ID']['input'];
 };
 
+
 export type QueryScanArgs = {
   id: Scalars['ID']['input'];
 };
+
 
 export type QueryScanBranchArgs = {
   scanRequestId: Scalars['ID']['input'];
 };
 
+
 export type QueryScanDirectoryArgs = {
   scanRequestId: Scalars['ID']['input'];
 };
+
 
 export type QueryScanRequestArgs = {
   id: Scalars['ID']['input'];
 };
 
+
 export type QuerySearchScanTargetsArgs = {
   cloudResourceId: Scalars['ID']['input'];
 };
+
 
 export type QuerySecurityFrameworkArgs = {
   id: Scalars['ID']['input'];
 };
 
+
 export type QueryUnifiedObservationsCommentArgs = {
   policyObservationIds: Array<Scalars['ID']['input']>;
 };
+
 
 export type QueryVerifyRemediationArgs = {
   alertId: Scalars['ID']['input'];
@@ -1120,11 +1156,13 @@ export type Repository = {
   ownerName: Scalars['String']['output'];
 };
 
+
 export type RepositoryBranchesArgs = {
   isProtected?: InputMaybe<Scalars['Boolean']['input']>;
   page?: InputMaybe<Scalars['Int']['input']>;
   pageSize?: InputMaybe<Scalars['Int']['input']>;
 };
+
 
 export type RepositoryDirectoryNamesArgs = {
   branch?: InputMaybe<Scalars['String']['input']>;
@@ -1140,14 +1178,14 @@ export type RepositoryBranch = {
 export enum RepositorySelection {
   All = 'ALL',
   Linked = 'LINKED',
-  Unlinked = 'UNLINKED',
+  Unlinked = 'UNLINKED'
 }
 
 /** Places from where scan requests can originate */
 export enum RequestOrigin {
   OrcaSecurity = 'ORCA_SECURITY',
   Portal = 'PORTAL',
-  Workflow = 'WORKFLOW',
+  Workflow = 'WORKFLOW'
 }
 
 export type ResultingPolicy = {
@@ -1166,6 +1204,7 @@ export type Scan = {
   scanRequestId: Scalars['ID']['output'];
   scanScope: Scalars['String']['output'];
 };
+
 
 export type ScanChildrenArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
@@ -1231,9 +1270,7 @@ export type ScanFileOrScenarioVscodeInput = {
   metaData: MetaDataInput;
 };
 
-export type ScanFileOrScenarioVscodeOutput =
-  | GombocError
-  | ScanFileOrScenarioVscode;
+export type ScanFileOrScenarioVscodeOutput = GombocError | ScanFileOrScenarioVscode;
 
 export type ScanFromOrcaInput = {
   /** The effect -- defaults to 'SubmitForReview' */
@@ -1314,10 +1351,12 @@ export type ScanRequest = {
   scans: ScanPage;
 };
 
+
 export type ScanRequestActionResultsArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
   size?: InputMaybe<Scalars['Int']['input']>;
 };
+
 
 export type ScanRequestScansArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
@@ -1406,7 +1445,7 @@ export type SetScanTargetInput = {
 
 export enum StatementSource {
   Organization = 'ORGANIZATION',
-  Project = 'PROJECT',
+  Project = 'PROJECT'
 }
 
 export type Success = {
@@ -1448,219 +1487,24 @@ export type User = {
   username: Scalars['String']['output'];
 };
 
-export type TestOrganizationQueryVariables = Exact<{ [key: string]: never }>;
+export type TestOrganizationQueryVariables = Exact<{ [key: string]: never; }>;
 
-export type TestOrganizationQuery = {
-  __typename?: 'Query';
-  organization:
-    | { __typename?: 'GombocError' }
-    | { __typename?: 'Organization'; id: string };
-};
 
-export type OrganizationQueryVariables = Exact<{ [key: string]: never }>;
+export type TestOrganizationQuery = { __typename?: 'Query', organization: { __typename?: 'GombocError' } | { __typename?: 'Organization', id: string } };
 
-export type OrganizationQuery = {
-  __typename?: 'Query';
-  organization:
-    | { __typename?: 'GombocError' }
-    | {
-        __typename?: 'Organization';
-        id: string;
-        name: string;
-        policy: {
-          __typename?: 'Policy';
-          statements: Array<{
-            __typename?: 'SetPolicyStatement';
-            id: string;
-            framework?: string | null;
-            identifier?: string | null;
-            description?: string | null;
-            createdBy: string;
-            createdAt: string;
-            payload: {
-              __typename?: 'PolicyStatementPayloadMustImplementType';
-              capability: {
-                __typename?: 'Capability';
-                id: string;
-                title: string;
-              };
-            };
-          }>;
-        };
-      };
-};
+export type GetSecurityFrameworksQueryVariables = Exact<{ [key: string]: never; }>;
 
-export const TestOrganizationDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'query',
-      name: { kind: 'Name', value: 'testOrganization' },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'organization' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                {
-                  kind: 'InlineFragment',
-                  typeCondition: {
-                    kind: 'NamedType',
-                    name: { kind: 'Name', value: 'Organization' },
-                  },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<
-  TestOrganizationQuery,
-  TestOrganizationQueryVariables
->;
-export const OrganizationDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'query',
-      name: { kind: 'Name', value: 'Organization' },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'organization' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                {
-                  kind: 'InlineFragment',
-                  typeCondition: {
-                    kind: 'NamedType',
-                    name: { kind: 'Name', value: 'Organization' },
-                  },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'policy' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'statements' },
-                              selectionSet: {
-                                kind: 'SelectionSet',
-                                selections: [
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'id' },
-                                  },
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'payload' },
-                                    selectionSet: {
-                                      kind: 'SelectionSet',
-                                      selections: [
-                                        {
-                                          kind: 'InlineFragment',
-                                          typeCondition: {
-                                            kind: 'NamedType',
-                                            name: {
-                                              kind: 'Name',
-                                              value:
-                                                'PolicyStatementPayloadMustImplementType',
-                                            },
-                                          },
-                                          selectionSet: {
-                                            kind: 'SelectionSet',
-                                            selections: [
-                                              {
-                                                kind: 'Field',
-                                                name: {
-                                                  kind: 'Name',
-                                                  value: 'capability',
-                                                },
-                                                selectionSet: {
-                                                  kind: 'SelectionSet',
-                                                  selections: [
-                                                    {
-                                                      kind: 'Field',
-                                                      name: {
-                                                        kind: 'Name',
-                                                        value: 'id',
-                                                      },
-                                                    },
-                                                    {
-                                                      kind: 'Field',
-                                                      name: {
-                                                        kind: 'Name',
-                                                        value: 'title',
-                                                      },
-                                                    },
-                                                  ],
-                                                },
-                                              },
-                                            ],
-                                          },
-                                        },
-                                      ],
-                                    },
-                                  },
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'framework' },
-                                  },
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'identifier' },
-                                  },
-                                  {
-                                    kind: 'Field',
-                                    name: {
-                                      kind: 'Name',
-                                      value: 'description',
-                                    },
-                                  },
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'createdBy' },
-                                  },
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'createdAt' },
-                                  },
-                                ],
-                              },
-                            },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<OrganizationQuery, OrganizationQueryVariables>;
+
+export type GetSecurityFrameworksQuery = { __typename?: 'Query', organization: { __typename?: 'GombocError' } | { __typename?: 'Organization', id: string, name: string, policy: { __typename?: 'Policy', statements: Array<{ __typename?: 'SetPolicyStatement', id: string, framework?: string | null, identifier?: string | null, description?: string | null, createdBy: string, createdAt: string, payload: { __typename?: 'PolicyStatementPayloadMustImplementType', capability: { __typename?: 'Capability', id: string, title: string } } }> } } };
+
+export type ScanFileOrScenarioVscodeMutationVariables = Exact<{
+  input: ScanFileOrScenarioVscodeInput;
+}>;
+
+
+export type ScanFileOrScenarioVscodeMutation = { __typename?: 'Mutation', scanFileOrScenarioVscode: { __typename?: 'GombocError', message: string, code?: GombocErrorCode | null } | { __typename?: 'ScanFileOrScenarioVscode', results: Array<{ __typename?: 'ScanFileOrScenarioVscodeComments', category?: string | null, description: string, documentationLink?: string | null, iacTool: InfrastructureTool, fileName: string, fixes: Array<{ __typename?: 'ScanFileOrScenarioVscodeFixes', currentValue: string, newValue: string, lineNumber: number, issueType: string }> }> } };
+
+
+export const TestOrganizationDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"testOrganization"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"organization"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Organization"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]}}]} as unknown as DocumentNode<TestOrganizationQuery, TestOrganizationQueryVariables>;
+export const GetSecurityFrameworksDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"getSecurityFrameworks"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"organization"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Organization"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"policy"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"statements"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"payload"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"PolicyStatementPayloadMustImplementType"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"capability"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"title"}}]}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"framework"}},{"kind":"Field","name":{"kind":"Name","value":"identifier"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"createdBy"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}}]}}]}}]}}]}}]}}]} as unknown as DocumentNode<GetSecurityFrameworksQuery, GetSecurityFrameworksQueryVariables>;
+export const ScanFileOrScenarioVscodeDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"ScanFileOrScenarioVscode"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ScanFileOrScenarioVscodeInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"scanFileOrScenarioVscode"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"ScanFileOrScenarioVscode"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"results"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"category"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"documentationLink"}},{"kind":"Field","name":{"kind":"Name","value":"iacTool"}},{"kind":"Field","name":{"kind":"Name","value":"fileName"}},{"kind":"Field","name":{"kind":"Name","value":"fixes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"currentValue"}},{"kind":"Field","name":{"kind":"Name","value":"newValue"}},{"kind":"Field","name":{"kind":"Name","value":"lineNumber"}},{"kind":"Field","name":{"kind":"Name","value":"issueType"}}]}}]}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GombocError"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"code"}}]}}]}}]}}]} as unknown as DocumentNode<ScanFileOrScenarioVscodeMutation, ScanFileOrScenarioVscodeMutationVariables>;

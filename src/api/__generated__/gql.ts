@@ -14,14 +14,14 @@ import { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/
  * Learn more about it here: https://the-guild.dev/graphql/codegen/plugins/presets/preset-client#reducing-bundle-size
  */
 type Documents = {
-  '\n  query testOrganization {\n    organization {\n      ... on Organization {\n        id\n      }\n    }\n  }\n': typeof types.TestOrganizationDocument;
-  '\n  query Organization {\n    organization {\n      ... on Organization {\n        id\n        name\n        policy {\n          statements {\n            id\n            payload {\n              ... on PolicyStatementPayloadMustImplementType {\n                capability {\n                  id\n                  title\n                }\n              }\n            }\n            framework\n            identifier\n            description\n            createdBy\n            createdAt\n          }\n        }\n      }\n    }\n  }\n': typeof types.OrganizationDocument;
+    "\n  query testOrganization {\n    organization {\n      ... on Organization {\n        id\n      }\n    }\n  }\n": typeof types.TestOrganizationDocument,
+    "\n  query getSecurityFrameworks {\n    organization {\n      ... on Organization {\n        id\n        name\n        policy {\n          statements {\n            id\n            payload {\n              ... on PolicyStatementPayloadMustImplementType {\n                capability {\n                  id\n                  title\n                }\n              }\n            }\n            framework\n            identifier\n            description\n            createdBy\n            createdAt\n          }\n        }\n      }\n    }\n  }\n": typeof types.GetSecurityFrameworksDocument,
+    "\n  mutation ScanFileOrScenarioVscode($input: ScanFileOrScenarioVscodeInput!) {\n    scanFileOrScenarioVscode(input: $input) {\n      ... on ScanFileOrScenarioVscode {\n        results {\n          category\n          description\n          documentationLink\n          iacTool\n          fileName\n          fixes {\n            currentValue\n            newValue\n            lineNumber\n            issueType\n          }\n        }\n      }\n      ... on GombocError {\n        message\n        code\n      }\n    }\n  }\n": typeof types.ScanFileOrScenarioVscodeDocument,
 };
 const documents: Documents = {
-  '\n  query testOrganization {\n    organization {\n      ... on Organization {\n        id\n      }\n    }\n  }\n':
-    types.TestOrganizationDocument,
-  '\n  query Organization {\n    organization {\n      ... on Organization {\n        id\n        name\n        policy {\n          statements {\n            id\n            payload {\n              ... on PolicyStatementPayloadMustImplementType {\n                capability {\n                  id\n                  title\n                }\n              }\n            }\n            framework\n            identifier\n            description\n            createdBy\n            createdAt\n          }\n        }\n      }\n    }\n  }\n':
-    types.OrganizationDocument,
+    "\n  query testOrganization {\n    organization {\n      ... on Organization {\n        id\n      }\n    }\n  }\n": types.TestOrganizationDocument,
+    "\n  query getSecurityFrameworks {\n    organization {\n      ... on Organization {\n        id\n        name\n        policy {\n          statements {\n            id\n            payload {\n              ... on PolicyStatementPayloadMustImplementType {\n                capability {\n                  id\n                  title\n                }\n              }\n            }\n            framework\n            identifier\n            description\n            createdBy\n            createdAt\n          }\n        }\n      }\n    }\n  }\n": types.GetSecurityFrameworksDocument,
+    "\n  mutation ScanFileOrScenarioVscode($input: ScanFileOrScenarioVscodeInput!) {\n    scanFileOrScenarioVscode(input: $input) {\n      ... on ScanFileOrScenarioVscode {\n        results {\n          category\n          description\n          documentationLink\n          iacTool\n          fileName\n          fixes {\n            currentValue\n            newValue\n            lineNumber\n            issueType\n          }\n        }\n      }\n      ... on GombocError {\n        message\n        code\n      }\n    }\n  }\n": types.ScanFileOrScenarioVscodeDocument,
 };
 
 /**
@@ -41,19 +41,18 @@ export function gql(source: string): unknown;
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function gql(
-  source: '\n  query testOrganization {\n    organization {\n      ... on Organization {\n        id\n      }\n    }\n  }\n',
-): (typeof documents)['\n  query testOrganization {\n    organization {\n      ... on Organization {\n        id\n      }\n    }\n  }\n'];
+export function gql(source: "\n  query testOrganization {\n    organization {\n      ... on Organization {\n        id\n      }\n    }\n  }\n"): (typeof documents)["\n  query testOrganization {\n    organization {\n      ... on Organization {\n        id\n      }\n    }\n  }\n"];
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function gql(
-  source: '\n  query Organization {\n    organization {\n      ... on Organization {\n        id\n        name\n        policy {\n          statements {\n            id\n            payload {\n              ... on PolicyStatementPayloadMustImplementType {\n                capability {\n                  id\n                  title\n                }\n              }\n            }\n            framework\n            identifier\n            description\n            createdBy\n            createdAt\n          }\n        }\n      }\n    }\n  }\n',
-): (typeof documents)['\n  query Organization {\n    organization {\n      ... on Organization {\n        id\n        name\n        policy {\n          statements {\n            id\n            payload {\n              ... on PolicyStatementPayloadMustImplementType {\n                capability {\n                  id\n                  title\n                }\n              }\n            }\n            framework\n            identifier\n            description\n            createdBy\n            createdAt\n          }\n        }\n      }\n    }\n  }\n'];
+export function gql(source: "\n  query getSecurityFrameworks {\n    organization {\n      ... on Organization {\n        id\n        name\n        policy {\n          statements {\n            id\n            payload {\n              ... on PolicyStatementPayloadMustImplementType {\n                capability {\n                  id\n                  title\n                }\n              }\n            }\n            framework\n            identifier\n            description\n            createdBy\n            createdAt\n          }\n        }\n      }\n    }\n  }\n"): (typeof documents)["\n  query getSecurityFrameworks {\n    organization {\n      ... on Organization {\n        id\n        name\n        policy {\n          statements {\n            id\n            payload {\n              ... on PolicyStatementPayloadMustImplementType {\n                capability {\n                  id\n                  title\n                }\n              }\n            }\n            framework\n            identifier\n            description\n            createdBy\n            createdAt\n          }\n        }\n      }\n    }\n  }\n"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "\n  mutation ScanFileOrScenarioVscode($input: ScanFileOrScenarioVscodeInput!) {\n    scanFileOrScenarioVscode(input: $input) {\n      ... on ScanFileOrScenarioVscode {\n        results {\n          category\n          description\n          documentationLink\n          iacTool\n          fileName\n          fixes {\n            currentValue\n            newValue\n            lineNumber\n            issueType\n          }\n        }\n      }\n      ... on GombocError {\n        message\n        code\n      }\n    }\n  }\n"): (typeof documents)["\n  mutation ScanFileOrScenarioVscode($input: ScanFileOrScenarioVscodeInput!) {\n    scanFileOrScenarioVscode(input: $input) {\n      ... on ScanFileOrScenarioVscode {\n        results {\n          category\n          description\n          documentationLink\n          iacTool\n          fileName\n          fixes {\n            currentValue\n            newValue\n            lineNumber\n            issueType\n          }\n        }\n      }\n      ... on GombocError {\n        message\n        code\n      }\n    }\n  }\n"];
 
 export function gql(source: string) {
   return (documents as any)[source] ?? {};
 }
 
-export type DocumentType<TDocumentNode extends DocumentNode<any, any>> =
-  TDocumentNode extends DocumentNode<infer TType, any> ? TType : never;
+export type DocumentType<TDocumentNode extends DocumentNode<any, any>> = TDocumentNode extends DocumentNode<  infer TType,  any>  ? TType  : never;
