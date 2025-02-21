@@ -26,6 +26,8 @@ This project is organzied under the central src directory, all of the commands a
   npm run graphql:generate
 ```
 
+> The frontegg PAT is required in your .env in order to run the graphql generate schema function. In order for the plugin to actually connect and work, you have to put the PAT in the vscode settings json.
+
 🎉🎉Congrats🎉🎉 you are now ready for development :-)
 
 ### Development

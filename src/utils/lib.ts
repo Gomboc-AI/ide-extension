@@ -97,8 +97,8 @@ const generateGitMetaData = async (): Promise<GitMetaDataInput> => {
     const head = repo.state.HEAD; // points to the branch
 
     const branch = head?.name ? head.name : 'ERROR';
-
-    const mainBranch = 'main';
+    const config = vscode.workspace.getConfiguration('gomboc-vscode-extension');
+    const mainBranch = config.get('defaultBranchName', 'main');
     // const branchDetails = await repo.getBranch(mainBranch);
     const lastMergeCommit = await repo.getMergeBase(branch, mainBranch);
 
