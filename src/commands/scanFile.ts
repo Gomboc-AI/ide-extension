@@ -93,7 +93,7 @@ async function getTFScenarioFiles(
 
   const entries = await vscode.workspace.fs.readDirectory(directoryUri);
 
-  const contents: IACScanContent[] = [];
+  const contents = [];
   for (const [name, fileType] of entries) {
     if (fileType === vscode.FileType.File) {
       const fileUri = vscode.Uri.joinPath(directoryUri, name);
