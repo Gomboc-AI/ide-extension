@@ -1,0 +1,52 @@
+name: Lint
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+env:
+  CFNAPI_SCHEMA_CDN_URL: https://cdn.graphql-hive.com/artifacts/v1/53cacb6d-a9fc-4b65-a538-e87a5d5ecda7/sdl?ext=.graphql
+  CFNAPI_SCHEMA_CDN_KEY: ${{ secrets.CFN_BETA_CDN_TOKEN }}
+
+  CUSTOMER_API_URL: http://customerapi:5001/graphql
+  CUSTOMER_API_SCHEMA_CDN_URL: hv2MTJkZTViOGQtZjQ2My00YmQ3LWE2NDMtZDY1NzdjYWY3M2YwOjEyZGY3ODY3M2MxNDAzYThjM2I1ZjgxY2U3OWEyODBjNmQ3YTYyYTc=
+
+jobs:
+  lint-and-typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          registry-url: https://npm.pkg.github.com/
+          scope: '@Gomboc-AI'
+      
+      - name: Save NPMRC File
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo 'engine-strict=true' > ~/.npmrc
+          echo '@Gomboc-AI:registry=https://npm.pkg.github.com/' >> ~/.npmrc
+          echo '//npm.pkg.github.com/:_authToken=${{env.NODE_AUTH_TOKEN}}' >> ~/.npmrc
+          # Copy the .npmrc file to the current directory
+          cp ~/.npmrc .npmrc
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate cfnapi types
+        run: npm run graphql:generate
+
+      - name: Lint
+        run: npm run lint
+      
+      - name: Format
+        run: npm run format:check
