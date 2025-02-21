@@ -1,7 +1,7 @@
 // api key retrieval helper and other utils
 
 import { CustomerApiClient } from '../api/client';
-import { GitMetaData, IIpCurl, OSMetaData, SecurityPolicy } from '../types';
+import { SecurityPolicy } from '../types';
 import * as vscode from 'vscode';
 import { GitExtension } from '../types/git';
 import * as os from 'os';
