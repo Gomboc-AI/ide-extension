@@ -1,11 +1,12 @@
-import {
-  ScanLocalScenarioInput,
-} from './../api/__generated__/graphql';
+import { ScanLocalScenarioInput } from './../api/__generated__/graphql';
 // scans current working file or scenarioimport * as vscode from 'vscode';
 import * as vscode from 'vscode';
 import { CustomerApiClient } from '../api/client';
 import { generateRequestMetadata, getFileType } from '../utils/lib';
-import { InfrastructureTool, IacScanContent } from '../api/__generated__/graphql';
+import {
+  InfrastructureTool,
+  IacScanContent,
+} from '../api/__generated__/graphql';
 import { ScanResultsProvider } from '../providers/scanResultsProvider';
 
 /**

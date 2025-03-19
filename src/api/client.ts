@@ -100,9 +100,12 @@ export class CustomerApiClient {
         throw new Error('GombocError');
       }
       // excluding this for tsc bc apparently the if isn't catching it -_-
-      return data.scanLocalScenario as Exclude<ScanLocalScenario, {__typename: 'GombocError'}>;
+      return data.scanLocalScenario as Exclude<
+        ScanLocalScenario,
+        { __typename: 'GombocError' }
+      >;
     } catch (error) {
-      console.log(error)
+      console.log(error);
       logger.error('Sending a single file or scenario failed', { error });
       throw error;
     }

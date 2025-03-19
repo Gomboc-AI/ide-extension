@@ -11,7 +11,7 @@
       "request": "launch",
       "args": [
         "${workspaceFolder}/test_development/tf_test",
-        "--extensionDevelopmentPath=${workspaceFolder}",
+        "--extensionDevelopmentPath=${workspaceFolder}"
       ],
       "outFiles": ["${workspaceFolder}/dist/**/*.js"],
       "preLaunchTask": "${defaultBuildTask}",

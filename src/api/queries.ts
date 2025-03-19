@@ -48,25 +48,25 @@ export const SINGLE_SCAN = gql`
   mutation scanLocalScenario($input: ScanLocalScenarioInput!) {
     scanLocalScenario(input: $input) {
       ... on ScanLocalScenario {
-            results {
-                category
-                description
-                documentationLink
-                iacTool
-                fileName
-                fixes {
-                    oldValue
-                    newValue
-                    issueType
-                    lineOffset
-                    fixType
-                    position {
-                        column
-                        line
-                    }
-                }
+        results {
+          category
+          description
+          documentationLink
+          iacTool
+          fileName
+          fixes {
+            oldValue
+            newValue
+            issueType
+            lineOffset
+            fixType
+            position {
+              column
+              line
             }
+          }
         }
+      }
     }
-}
+  }
 `;

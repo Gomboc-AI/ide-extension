@@ -43,11 +43,15 @@ export class ScanResultsProvider {
       // sometimes will be multiple diagnostics on a single file
       const curDiag = this.diagnosticCollection.get(uri) as GombocDiagnostic[];
       for (const fix of result.fixes) {
-        const startPosition = new vscode.Position(fix.position.line, fix.position.column);
+        const startPosition = new vscode.Position(
+          fix.position.line,
+          fix.position.column,
+        );
         const endPosition = new vscode.Position(fix.position.line, 999);
 
         diagnostic.push({
-          message: result.description === '' ? 'Gomboc fix ...' : result.description,
+          message:
+            result.description === '' ? 'Gomboc fix ...' : result.description,
           gombocResult: result,
           range: new vscode.Range(startPosition, endPosition),
           severity: vscode.DiagnosticSeverity.Error,
@@ -82,18 +86,19 @@ export class ScanResultsProvider {
       const file = vscode.Uri.file(result.fileName);
       const document = await vscode.workspace.openTextDocument(file);
       for (const fix of result.fixes) {
-        const startPosition = new vscode.Position(fix.position.line, fix.position.column);
+        const startPosition = new vscode.Position(
+          fix.position.line,
+          fix.position.column,
+        );
         const endPosition = new vscode.Position(fix.position.line, 999);
         const range = new vscode.Range(startPosition, endPosition);
         if (fix.fixType === 'ADD') {
-          edit.insert(file, startPosition, fix.newValue + '\n');   
-        }
-        else if (fix.fixType === 'UPDATE') {
+          edit.insert(file, startPosition, fix.newValue + '\n');
+        } else if (fix.fixType === 'UPDATE') {
           edit.replace(file, range, fix.newValue);
-        }
-        else {
+        } else {
           // delete but delete type doesn't exist yet for us
-          edit.delete(file, range)
+          edit.delete(file, range);
         }
       }
     }
