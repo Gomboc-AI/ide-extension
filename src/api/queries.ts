@@ -47,25 +47,26 @@ export const SECURITY_FRAMEWORKS = gql`
 export const SINGLE_SCAN = gql`
   mutation scanLocalScenario($input: ScanLocalScenarioInput!) {
     scanLocalScenario(input: $input) {
-      ... on GombocError {
-        message
-        code
-      }
       ... on ScanLocalScenario {
-        results {
-          fixes {
-            oldValue
-            newValue
-            lineNumber
-            issueType
-          }
-          category
-          description
-          iacTool
-          documentationLink
-          fileName
+            results {
+                category
+                description
+                documentationLink
+                iacTool
+                fileName
+                fixes {
+                    oldValue
+                    newValue
+                    issueType
+                    lineOffset
+                    fixType
+                    position {
+                        column
+                        line
+                    }
+                }
+            }
         }
-      }
     }
-  }
+}
 `;
