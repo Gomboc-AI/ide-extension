@@ -6,7 +6,6 @@ import { CustomerApiClient } from './api/client';
 import logger from './utils/logger';
 import { ScanResultsProvider } from './providers/scanResultsProvider';
 
-
 export function activate(context: vscode.ExtensionContext) {
   logger.info('VSCode extension activated .... ');
   const apiClient = new CustomerApiClient();
@@ -17,7 +16,7 @@ export function activate(context: vscode.ExtensionContext) {
   const scanResults = new ScanResultsProvider(
     context,
     diagnosticCollection,
-    []
+    [],
   );
 
   scanResults.registerApplyRemediation();
@@ -44,4 +43,4 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(...disposables, diagnosticCollection);
 }
 
-export function deactivate() { }
+export function deactivate() {}

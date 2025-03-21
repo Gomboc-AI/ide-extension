@@ -68,7 +68,7 @@ export class ScanResultsProvider {
             existingResourcePolicyFixes[uniqueResourceName][fix.position.line] =
               [
                 ...existingResourcePolicyFixes[uniqueResourceName][
-                fix.position.line
+                  fix.position.line
                 ],
                 result.policyStatement.id,
               ];
