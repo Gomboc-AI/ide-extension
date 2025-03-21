@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { testApiKeyCommand } from './commands/testApiKey';
 import { scanFileCommand } from './commands/scanFile';
-import { scanAllFilesCommand } from './commands/scanAllFiles';
 import { showFrameworksCommand } from './commands/showFrameworks';
 import { CustomerApiClient } from './api/client';
 import logger from './utils/logger';
@@ -19,6 +18,7 @@ export function activate(context: vscode.ExtensionContext) {
     diagnosticCollection,
     [],
   );
+
   scanResults.registerApplyRemediation();
 
   const commands = [
@@ -31,10 +31,6 @@ export function activate(context: vscode.ExtensionContext) {
       handler: () => scanFileCommand(context, apiClient, scanResults),
     },
     {
-      name: 'gomboc-vscode-extension.scanAllFiles',
-      handler: () => scanAllFilesCommand(context, apiClient),
-    },
-    {
       name: 'gomboc-vscode-extension.showFrameworks',
       handler: () => showFrameworksCommand(context, apiClient),
     },
@@ -44,7 +40,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(name, handler),
   );
 
-  context.subscriptions.push(...disposables);
+  context.subscriptions.push(...disposables, diagnosticCollection);
 }
 
-export function deactivate() {} // prob don't need to cleanup anything here
+export function deactivate() {}

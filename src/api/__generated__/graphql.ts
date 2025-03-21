@@ -733,6 +733,7 @@ export type ManualRemediationCfn = {
   __typename?: 'ManualRemediationCfn';
   documentationLink?: Maybe<Scalars['String']['output']>;
   fixes: Array<RemediationFixCfn>;
+  logicalResource: LogicalResource;
   policyStatement?: Maybe<AppliedPolicyStatement>;
 };
 
@@ -1449,12 +1450,11 @@ export type RemediationComment = {
   __typename?: 'RemediationComment';
   /** We should include a category and description of each fix. */
   category?: Maybe<Scalars['String']['output']>;
-  description: Scalars['String']['output'];
-  /** We might want to add this later so I'm including it */
-  documentationLink?: Maybe<Scalars['String']['output']>;
   fileName: Scalars['String']['output'];
   fixes: Array<LineFix>;
   iacTool: InfrastructureTool;
+  logicalResource: LogicalResource;
+  policyStatement: PolicyStatement;
 };
 
 export type RemediationFixCfn = {
@@ -2167,8 +2167,8 @@ export type GetSecurityFrameworksQuery = {
             __typename?: 'SetPolicyStatement';
             id: string;
             framework?: string | null;
-            identifier?: string | null;
             description?: string | null;
+            identifier?: string | null;
             createdBy: string;
             createdAt: string;
             payload: {
@@ -2197,10 +2197,30 @@ export type ScanLocalScenarioMutation = {
         results: Array<{
           __typename?: 'RemediationComment';
           category?: string | null;
-          description: string;
-          documentationLink?: string | null;
           iacTool: InfrastructureTool;
           fileName: string;
+          logicalResource: {
+            __typename?: 'LogicalResource';
+            line: number;
+            name: string;
+            filepath: string;
+            type: string;
+          };
+          policyStatement: {
+            __typename?: 'PolicyStatement';
+            id: string;
+            framework?: string | null;
+            identifier?: string | null;
+            description?: string | null;
+            payload: {
+              __typename?: 'PolicyStatementPayloadMustImplement';
+              capability: {
+                __typename?: 'Capability';
+                id: string;
+                title: string;
+              };
+            };
+          };
           fixes: Array<{
             __typename?: 'LineFix';
             oldValue: string;
@@ -2354,14 +2374,14 @@ export const GetSecurityFrameworksDocument = {
                                   },
                                   {
                                     kind: 'Field',
-                                    name: { kind: 'Name', value: 'identifier' },
-                                  },
-                                  {
-                                    kind: 'Field',
                                     name: {
                                       kind: 'Name',
                                       value: 'description',
                                     },
+                                  },
+                                  {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'identifier' },
                                   },
                                   {
                                     kind: 'Field',
@@ -2454,22 +2474,115 @@ export const ScanLocalScenarioDocument = {
                             },
                             {
                               kind: 'Field',
-                              name: { kind: 'Name', value: 'description' },
-                            },
-                            {
-                              kind: 'Field',
-                              name: {
-                                kind: 'Name',
-                                value: 'documentationLink',
-                              },
-                            },
-                            {
-                              kind: 'Field',
                               name: { kind: 'Name', value: 'iacTool' },
                             },
                             {
                               kind: 'Field',
                               name: { kind: 'Name', value: 'fileName' },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'logicalResource' },
+                              selectionSet: {
+                                kind: 'SelectionSet',
+                                selections: [
+                                  {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'line' },
+                                  },
+                                  {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'name' },
+                                  },
+                                  {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'filepath' },
+                                  },
+                                  {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'type' },
+                                  },
+                                ],
+                              },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'policyStatement' },
+                              selectionSet: {
+                                kind: 'SelectionSet',
+                                selections: [
+                                  {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'id' },
+                                  },
+                                  {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'payload' },
+                                    selectionSet: {
+                                      kind: 'SelectionSet',
+                                      selections: [
+                                        {
+                                          kind: 'InlineFragment',
+                                          typeCondition: {
+                                            kind: 'NamedType',
+                                            name: {
+                                              kind: 'Name',
+                                              value:
+                                                'PolicyStatementPayloadMustImplement',
+                                            },
+                                          },
+                                          selectionSet: {
+                                            kind: 'SelectionSet',
+                                            selections: [
+                                              {
+                                                kind: 'Field',
+                                                name: {
+                                                  kind: 'Name',
+                                                  value: 'capability',
+                                                },
+                                                selectionSet: {
+                                                  kind: 'SelectionSet',
+                                                  selections: [
+                                                    {
+                                                      kind: 'Field',
+                                                      name: {
+                                                        kind: 'Name',
+                                                        value: 'id',
+                                                      },
+                                                    },
+                                                    {
+                                                      kind: 'Field',
+                                                      name: {
+                                                        kind: 'Name',
+                                                        value: 'title',
+                                                      },
+                                                    },
+                                                  ],
+                                                },
+                                              },
+                                            ],
+                                          },
+                                        },
+                                      ],
+                                    },
+                                  },
+                                  {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'framework' },
+                                  },
+                                  {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'identifier' },
+                                  },
+                                  {
+                                    kind: 'Field',
+                                    name: {
+                                      kind: 'Name',
+                                      value: 'description',
+                                    },
+                                  },
+                                ],
+                              },
                             },
                             {
                               kind: 'Field',

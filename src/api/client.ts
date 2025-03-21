@@ -28,7 +28,6 @@ export class CustomerApiClient {
     }
     const config = vscode.workspace.getConfiguration('gomboc-vscode-extension');
     const apiKey = config.get('apiKey');
-
     this.client = new ApolloClient({
       ssrMode: true,
       link: createHttpLink({
@@ -105,7 +104,6 @@ export class CustomerApiClient {
         { __typename: 'GombocError' }
       >;
     } catch (error) {
-      console.log(error);
       logger.error('Sending a single file or scenario failed', { error });
       throw error;
     }
