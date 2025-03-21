@@ -34,9 +34,12 @@ export class ScanResultsProvider {
     // clears the diagnostics and quick fixes
     this.diagnosticCollection.clear();
     if (this.codeActionDisposable) {
-      this.codeActionDisposable.dispose;
+      this.codeActionDisposable.dispose();
     }
-    const existingResourcePolicyFixes: Record<string, Record<string, string[]>> = {};
+    const existingResourcePolicyFixes: Record<
+      string,
+      Record<string, string[]>
+    > = {};
 
     for (const result of this.results) {
       const uniqueResourceName = `${result.logicalResource.type}.${result.logicalResource.name}`;
@@ -52,15 +55,28 @@ export class ScanResultsProvider {
       // sometimes will be multiple diagnostics on a single file
       const curDiag = this.diagnosticCollection.get(uri) as GombocDiagnostic[];
       for (const fix of result.fixes) {
-        if (existingResourcePolicyFixes[uniqueResourceName][fix.position.line]) {
-          if (existingResourcePolicyFixes[uniqueResourceName][fix.position.line].includes(result.policyStatement.id)) {
+        if (
+          existingResourcePolicyFixes[uniqueResourceName][fix.position.line]
+        ) {
+          if (
+            existingResourcePolicyFixes[uniqueResourceName][
+              fix.position.line
+            ].includes(result.policyStatement.id)
+          ) {
             continue;
           } else {
-            existingResourcePolicyFixes[uniqueResourceName][fix.position.line] = [...(existingResourcePolicyFixes[uniqueResourceName][fix.position.line]), result.policyStatement.id];
+            existingResourcePolicyFixes[uniqueResourceName][fix.position.line] =
+              [
+                ...existingResourcePolicyFixes[uniqueResourceName][
+                fix.position.line
+                ],
+                result.policyStatement.id,
+              ];
           }
           continue;
         } else {
-          existingResourcePolicyFixes[uniqueResourceName][fix.position.line] = [];
+          existingResourcePolicyFixes[uniqueResourceName][fix.position.line] =
+            [];
         }
         let startPosition = new vscode.Position(
           fix.position.line - 1,
@@ -70,10 +86,7 @@ export class ScanResultsProvider {
 
         if (fix.fixType === FixType.Add) {
           const resourceLine = result.logicalResource.line - 1;
-          startPosition = new vscode.Position(
-            resourceLine,
-            0
-          );
+          startPosition = new vscode.Position(resourceLine, 0);
           endPosition = new vscode.Position(resourceLine, 999);
         }
 

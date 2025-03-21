@@ -44,8 +44,6 @@ export const SECURITY_FRAMEWORKS = gql`
   }
 `;
 
-
-
 export const SINGLE_SCAN = gql`
   mutation scanLocalScenario($input: ScanLocalScenarioInput!) {
     scanLocalScenario(input: $input) {
@@ -54,13 +52,13 @@ export const SINGLE_SCAN = gql`
           category
           iacTool
           fileName
-          logicalResource{
+          logicalResource {
             line
             name
             filepath
             type
           }
-          policyStatement{
+          policyStatement {
             id
             payload {
               ... on PolicyStatementPayloadMustImplement {

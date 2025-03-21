@@ -6,6 +6,7 @@ import { CustomerApiClient } from './api/client';
 import logger from './utils/logger';
 import { ScanResultsProvider } from './providers/scanResultsProvider';
 
+
 export function activate(context: vscode.ExtensionContext) {
   logger.info('VSCode extension activated .... ');
   const apiClient = new CustomerApiClient();
@@ -16,8 +17,9 @@ export function activate(context: vscode.ExtensionContext) {
   const scanResults = new ScanResultsProvider(
     context,
     diagnosticCollection,
-    [],
+    []
   );
+
   scanResults.registerApplyRemediation();
 
   const commands = [
@@ -39,7 +41,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(name, handler),
   );
 
-  context.subscriptions.push(...disposables);
+  context.subscriptions.push(...disposables, diagnosticCollection);
 }
 
-export function deactivate() { } // prob don't need to cleanup anything here
+export function deactivate() { }

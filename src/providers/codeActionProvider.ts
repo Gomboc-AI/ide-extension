@@ -25,12 +25,10 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
     token: vscode.CancellationToken,
   ): vscode.CodeAction[] {
     // goes through all the diagnostics and applies the code changes
-    const diagnostics = context.diagnostics
-      .filter(isGombocDiagnostic);
-    return diagnostics.
-      map((diagnostic: GombocDiagnostic) =>
-        this.createCommandCodeAction(diagnostic),
-      );
+    const diagnostics = context.diagnostics.filter(isGombocDiagnostic);
+    return diagnostics.map((diagnostic: GombocDiagnostic) =>
+      this.createCommandCodeAction(diagnostic),
+    );
     // when ready for the apply all, add it here
   }
 

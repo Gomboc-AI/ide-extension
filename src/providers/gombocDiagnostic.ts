@@ -12,6 +12,6 @@ export class GombocDiagnostic extends vscode.Diagnostic {
   ) {
     super(range, message, severity);
     this.gombocResult = gombocResult;
-    this.quickFixMessage = quickFixMessage
+    this.quickFixMessage = quickFixMessage;
   }
 }

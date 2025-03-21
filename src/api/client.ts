@@ -104,7 +104,6 @@ export class CustomerApiClient {
         { __typename: 'GombocError' }
       >;
     } catch (error) {
-      console.log(error);
       logger.error('Sending a single file or scenario failed', { error });
       throw error;
     }
