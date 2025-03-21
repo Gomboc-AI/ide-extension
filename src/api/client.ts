@@ -28,7 +28,6 @@ export class CustomerApiClient {
     }
     const config = vscode.workspace.getConfiguration('gomboc-vscode-extension');
     const apiKey = config.get('apiKey');
-
     this.client = new ApolloClient({
       ssrMode: true,
       link: createHttpLink({

@@ -33,8 +33,8 @@ export const SECURITY_FRAMEWORKS = gql`
               }
             }
             framework
-            identifier
             description
+            identifier
             createdBy
             createdAt
           }
@@ -44,16 +44,36 @@ export const SECURITY_FRAMEWORKS = gql`
   }
 `;
 
+
+
 export const SINGLE_SCAN = gql`
   mutation scanLocalScenario($input: ScanLocalScenarioInput!) {
     scanLocalScenario(input: $input) {
       ... on ScanLocalScenario {
         results {
           category
-          description
-          documentationLink
           iacTool
           fileName
+          logicalResource{
+            line
+            name
+            filepath
+            type
+          }
+          policyStatement{
+            id
+            payload {
+              ... on PolicyStatementPayloadMustImplement {
+                capability {
+                  id
+                  title
+                }
+              }
+            }
+            framework
+            identifier
+            description
+          }
           fixes {
             oldValue
             newValue
