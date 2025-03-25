@@ -13,6 +13,7 @@
   "categories": [
     "Other"
   ],
+  "icon": "Gomboc-Full-Logo.png",
   "activationEvents": [],
   "main": "./dist/extension.js",
   "extensionDependencies": [
