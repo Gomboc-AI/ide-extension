@@ -110,3 +110,6 @@ We are using the `vsce` package in order to publish. For now, this will be done 
   vsce publish
 ```
 
+> It will take about 5-10 minutes for the new version to appear on the marketplace
+https://marketplace.visualstudio.com/items?itemName=GombocAI.gomboc-vscode-extension
+
