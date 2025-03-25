@@ -79,3 +79,34 @@ For Example:
     );
   }
 ```
+
+#### Publishing
+We are using the `vsce` package in order to publish. For now, this will be done as a manual process. 
+
+1. Install `vsce` globally (make sure you have node installed)
+```bash 
+  npm install -g @vscode/vsce
+```
+
+2. Login to our publisher, `GOMB
+```bash 
+  vsce login <GombocAI>
+```
+
+3. Enter our PAT from 1password
+```bash
+  Personal Access Token for publisher 'GombocAI': <PAT>
+```
+
+4. Bump the version in the package.json, either a major or minor version
+
+5. Package the plugin
+```bash
+  vsce package
+```
+
+6. Publish the plugin
+```bash
+  vsce publish
+```
+

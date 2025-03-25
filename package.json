@@ -1,5 +1,6 @@
 {
   "name": "gomboc-vscode-extension",
+  "publisher": "GombocAI",
   "displayName": "Gomboc",
   "description": "",
   "repository": {
