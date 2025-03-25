@@ -48,7 +48,7 @@ export async function scanFileCommand(
   if (filetype === 'tf') {
     tool = InfrastructureTool.Terraform;
     fileContents = await getTFScenarioFiles(document);
-  // } else if (filetype === 'yml' || filetype === 'yaml') {
+    // } else if (filetype === 'yml' || filetype === 'yaml') {
     // tool = InfrastructureTool.Cloudformation;
     // fileContents = getCFNFile(document);
   } else {
