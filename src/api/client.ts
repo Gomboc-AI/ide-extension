@@ -8,6 +8,7 @@ import { ApolloClient, createHttpLink, InMemoryCache } from '@apollo/client';
 import { HEALTH_CHECK, SECURITY_FRAMEWORKS, SINGLE_SCAN } from './queries';
 import {
   GetSecurityFrameworksQuery,
+  ScanLocalScenario,
   ScanLocalScenarioInput,
   ScanLocalScenarioMutation,
   ScanLocalScenarioMutationVariables,
@@ -27,7 +28,6 @@ export class CustomerApiClient {
     }
     const config = vscode.workspace.getConfiguration('gomboc-vscode-extension');
     const apiKey = config.get('apiKey');
-
     this.client = new ApolloClient({
       ssrMode: true,
       link: createHttpLink({
@@ -79,7 +79,7 @@ export class CustomerApiClient {
 
   public async singleScanMutation(args: {
     inputObject: ScanLocalScenarioInput;
-  }) {
+  }): Promise<ScanLocalScenario> {
     logger.info('Sending a single file or scenario scan request');
     try {
       const { data } = await this.client.mutate<
@@ -98,7 +98,11 @@ export class CustomerApiClient {
       ) {
         throw new Error('GombocError');
       }
-      return data.scanLocalScenario;
+      // excluding this for tsc bc apparently the if isn't catching it -_-
+      return data.scanLocalScenario as Exclude<
+        ScanLocalScenario,
+        { __typename: 'GombocError' }
+      >;
     } catch (error) {
       logger.error('Sending a single file or scenario failed', { error });
       throw error;

@@ -1,13 +1,12 @@
-import {
-  ScanContent,
-  ScanLocalScenarioInput,
-} from './../api/__generated__/graphql';
+import { ScanLocalScenarioInput } from './../api/__generated__/graphql';
 // scans current working file or scenarioimport * as vscode from 'vscode';
 import * as vscode from 'vscode';
 import { CustomerApiClient } from '../api/client';
 import { generateRequestMetadata, getFileType } from '../utils/lib';
-import { InfrastructureTool } from '../api/__generated__/graphql';
-import { IACScanContent, SingleScanInput } from '../types';
+import {
+  InfrastructureTool,
+  IacScanContent,
+} from '../api/__generated__/graphql';
 import { ScanResultsProvider } from '../providers/scanResultsProvider';
 
 /**
@@ -44,7 +43,7 @@ export async function scanFileCommand(
   const filePath = document.uri.fsPath;
   const filetype = getFileType(filePath);
 
-  let fileContents: IACScanContent[];
+  let fileContents: IacScanContent[];
   let tool: InfrastructureTool;
   if (filetype === 'tf') {
     tool = InfrastructureTool.Terraform;
@@ -82,7 +81,7 @@ export async function scanFileCommand(
 
 async function getTFScenarioFiles(
   document: vscode.TextDocument,
-): Promise<ScanContent[]> {
+): Promise<IacScanContent[]> {
   const currentFileUri = document.uri;
   const directoryUri = currentFileUri.with({
     path: currentFileUri.path.replace(/\/[^/]*$/, '/'),
@@ -90,7 +89,7 @@ async function getTFScenarioFiles(
 
   const entries = await vscode.workspace.fs.readDirectory(directoryUri);
 
-  const contents = [];
+  const contents: IacScanContent[] = [];
   for (const [name, fileType] of entries) {
     if (fileType === vscode.FileType.File) {
       const fileUri = vscode.Uri.joinPath(directoryUri, name);
@@ -98,7 +97,7 @@ async function getTFScenarioFiles(
       const contentString = new TextDecoder().decode(data); // cant convert from unit8array to base64 directly
       contents.push({
         filePath: fileUri.fsPath,
-        fileContents: btoa(contentString),
+        fileContent: btoa(contentString),
       });
     }
   }
@@ -108,11 +107,11 @@ async function getTFScenarioFiles(
 /**
  * Only care about the current file, just return base64 of it
  */
-function getCFNFile(document: vscode.TextDocument): ScanContent[] {
+function getCFNFile(document: vscode.TextDocument): IacScanContent[] {
   return [
     {
       filePath: document.uri.fsPath,
-      fileContents: btoa(document.getText()),
+      fileContent: btoa(document.getText()),
     },
   ];
 }

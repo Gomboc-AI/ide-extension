@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { RemediationComment } from '../api/__generated__/graphql';
+import { FixType, RemediationComment } from '../api/__generated__/graphql';
 import { GombocDiagnostic } from './gombocDiagnostic';
 import { CodeActionProvider } from './codeActionProvider';
 
@@ -34,21 +34,66 @@ export class ScanResultsProvider {
     // clears the diagnostics and quick fixes
     this.diagnosticCollection.clear();
     if (this.codeActionDisposable) {
-      this.codeActionDisposable.dispose;
+      this.codeActionDisposable.dispose();
     }
+    const existingResourcePolicyFixes: Record<
+      string,
+      Record<string, string[]>
+    > = {};
+
     for (const result of this.results) {
+      const uniqueResourceName = `${result.logicalResource.type}.${result.logicalResource.name}`;
+      if (!existingResourcePolicyFixes[uniqueResourceName]) {
+        existingResourcePolicyFixes[uniqueResourceName] = {};
+      }
       // each result is one remediation
       const uri = vscode.Uri.parse(result.fileName);
       const diagnostic: GombocDiagnostic[] = [];
+      // Currently, there is an edge case where a single resource
+      // may have multiple separate fixes to resolve the
+      // to avoid confusion for the customer, we'll only show one of these fixes
       // sometimes will be multiple diagnostics on a single file
       const curDiag = this.diagnosticCollection.get(uri) as GombocDiagnostic[];
       for (const fix of result.fixes) {
-        const startPosition = new vscode.Position(fix.lineNumber, 0);
-        const endPosition = new vscode.Position(fix.lineNumber, 999);
+        if (
+          existingResourcePolicyFixes[uniqueResourceName][fix.position.line]
+        ) {
+          if (
+            existingResourcePolicyFixes[uniqueResourceName][
+              fix.position.line
+            ].includes(result.policyStatement.id)
+          ) {
+            continue;
+          } else {
+            existingResourcePolicyFixes[uniqueResourceName][fix.position.line] =
+              [
+                ...existingResourcePolicyFixes[uniqueResourceName][
+                  fix.position.line
+                ],
+                result.policyStatement.id,
+              ];
+          }
+          continue;
+        } else {
+          existingResourcePolicyFixes[uniqueResourceName][fix.position.line] =
+            [];
+        }
+        let startPosition = new vscode.Position(
+          fix.position.line - 1,
+          fix.position.column,
+        );
+        let endPosition = new vscode.Position(fix.position.line - 1, 999);
+
+        if (fix.fixType === FixType.Add) {
+          const resourceLine = result.logicalResource.line - 1;
+          startPosition = new vscode.Position(resourceLine, 0);
+          endPosition = new vscode.Position(resourceLine, 999);
+        }
 
         diagnostic.push({
-          message: result.description,
+          message: `Fix for ${result.logicalResource.type} to enforce apply recommendation ${result.policyStatement.payload.capability.title}`,
           gombocResult: result,
+          quickFixMessage: `Enforce ${result.policyStatement.payload.capability.title} for ${result.logicalResource.type}`,
           range: new vscode.Range(startPosition, endPosition),
           severity: vscode.DiagnosticSeverity.Error,
           source: 'Gomboc ',
@@ -80,14 +125,38 @@ export class ScanResultsProvider {
     for (const result of fixedResults) {
       // the filepath might point to a different file
       const file = vscode.Uri.file(result.fileName);
-      const document = await vscode.workspace.openTextDocument(file);
       for (const fix of result.fixes) {
-        const lineRange = document.lineAt(fix.lineNumber).range;
-        edit.replace(file, lineRange, fix.newValue);
+        let startPosition = new vscode.Position(
+          fix.position.line - 1,
+          fix.position.column,
+        );
+        let endPosition = new vscode.Position(fix.position.line - 1, 999);
+
+        const range = new vscode.Range(startPosition, endPosition);
+        if (fix.fixType === 'ADD') {
+          edit.insert(file, startPosition, fix.newValue + '\n');
+        } else if (fix.fixType === 'UPDATE') {
+          edit.replace(file, range, fix.newValue);
+        } else {
+          // delete but delete type doesn't exist yet for us
+          edit.delete(file, range);
+        }
       }
     }
-    await vscode.workspace.applyEdit(edit);
+    const success = await vscode.workspace.applyEdit(edit);
+    if (success) {
+      const textEditor = vscode.window.activeTextEditor;
+      if (textEditor) {
+        await vscode.window.activeTextEditor?.document.save();
 
+        // once we apply a remediation we have to dispose and clear everything and re-run
+        this.diagnosticCollection.clear();
+        if (this.codeActionDisposable) {
+          this.codeActionDisposable.dispose();
+        }
+        vscode.commands.executeCommand('gomboc-vscode-extension.scanFile');
+      }
+    }
     // once we apply a remediation we have to dispose and clear everything and re-run
     this.diagnosticCollection.clear();
     if (this.codeActionDisposable) {
