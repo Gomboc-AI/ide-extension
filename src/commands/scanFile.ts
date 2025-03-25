@@ -49,8 +49,10 @@ export async function scanFileCommand(
     tool = InfrastructureTool.Terraform;
     fileContents = await getTFScenarioFiles(document);
   } else if (filetype === 'yml' || filetype === 'yaml') {
-    tool = InfrastructureTool.Cloudformation;
-    fileContents = getCFNFile(document);
+    vscode.window.showErrorMessage('Only terraform is currently available');
+    return;
+    // tool = InfrastructureTool.Cloudformation;
+    // fileContents = getCFNFile(document);
   } else {
     vscode.window.showErrorMessage(
       'Current file is not a cloudformation or terraform file',
