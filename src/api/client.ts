@@ -21,23 +21,14 @@ export class CustomerApiClient {
 
   constructor() {
     const _settings = settings();
-    let customerApiUrl = '';
 
-    if (_settings instanceof Error) {
-      logger.error('Invalid settings', _settings);
-      // throw new Error(_settings.message);
-      customerApiUrl = 'https://app.gomboc.ai/graphql';
-    } else {
-      customerApiUrl = _settings.CUSTOMER_API_URL;
-    }
-    console.log(customerApiUrl)
     const config = vscode.workspace.getConfiguration('gomboc-vscode-extension');
     const apiKey = config.get('apiKey');
     this.client = new ApolloClient({
       ssrMode: true,
       link: createHttpLink({
         // bad but i don't want to expose this to the user within their settings.json
-        uri: `${customerApiUrl}`,
+        uri: `${_settings.CUSTOMER_API_URL}`,
         credentials: 'same-origin',
         headers: {
           Authorization: `Bearer ${apiKey}`,

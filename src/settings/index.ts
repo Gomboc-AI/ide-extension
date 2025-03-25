@@ -16,11 +16,16 @@ const envSchema = z.object({
 
 const settings = () => {
   const parsedEnvs = envSchema.safeParse(process.env);
+  const customerApiProdUrl = 'https://app.gomboc.ai/graphql';
 
   if (parsedEnvs.success) {
     return parsedEnvs.data;
   }
-  return new InvalidEnvironment(parsedEnvs.error.message);
+  return {
+    CUSTOMER_API_URL: customerApiProdUrl,
+  };
+
+  // return new InvalidEnvironment(parsedEnvs.error.message);
 };
 
 export default settings;
