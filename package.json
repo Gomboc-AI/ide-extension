@@ -2,6 +2,10 @@
   "name": "gomboc-vscode-extension",
   "displayName": "Gomboc",
   "description": "",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Gomboc-AI/ide-extension"
+  },
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.97.0"
@@ -23,10 +27,6 @@
       {
         "command": "gomboc-vscode-extension.scanFile",
         "title": "Gomboc: Scan current file or scenario"
-      },
-      {
-        "command": "gomboc-vscode-extension.scanAllFiles",
-        "title": "Gomboc: Scan all files or scenarios in repository"
       },
       {
         "command": "gomboc-vscode-extension.showFrameworks",

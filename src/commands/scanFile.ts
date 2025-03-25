@@ -45,17 +45,20 @@ export async function scanFileCommand(
 
   let fileContents: IacScanContent[];
   let tool: InfrastructureTool;
+
   if (filetype === 'tf') {
     tool = InfrastructureTool.Terraform;
     fileContents = await getTFScenarioFiles(document);
-  } else if (filetype === 'yml' || filetype === 'yaml') {
-    tool = InfrastructureTool.Cloudformation;
-    fileContents = getCFNFile(document);
+    // } else if (filetype === 'yml' || filetype === 'yaml') {
+    //   tool = InfrastructureTool.Cloudformation;
+    //   fileContents = getCFNFile(document);
   } else {
-    vscode.window.showErrorMessage(
-      'Current file is not a cloudformation or terraform file',
-    );
-    throw new Error('Current file is not a cloudformation or terraform file');
+    vscode.window.showErrorMessage('Only terraform is currently available');
+    return;
+    // vscode.window.showErrorMessage(
+    //   'Current file is not a cloudformation or terraform file',
+    // );
+    // throw new Error('Current file is not a cloudformation or terraform file');
   }
 
   const metaData = await generateRequestMetadata();
