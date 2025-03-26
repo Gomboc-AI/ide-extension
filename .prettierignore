@@ -1,7 +1,9 @@
 node_modules/
 *.yaml
 *.yml
+README_DEV.md
 README.md
+SUPPORT.md
 
 out/
 .npmrc

@@ -1,18 +1,20 @@
 {
   "name": "gomboc-vscode-extension",
+  "publisher": "GombocAI",
   "displayName": "Gomboc",
   "description": "",
   "repository": {
     "type": "git",
     "url": "https://github.com/Gomboc-AI/ide-extension"
   },
-  "version": "0.0.1",
+  "version": "0.0.2",
   "engines": {
     "vscode": "^1.97.0"
   },
   "categories": [
     "Other"
   ],
+  "icon": "Gomboc-Full-Logo.png",
   "activationEvents": [],
   "main": "./dist/extension.js",
   "extensionDependencies": [
