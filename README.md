@@ -25,7 +25,7 @@ To begin using the Gomboc VSCode plugin, you will need to acquire an API key. Yo
 – Matt Sweeney, CPO & Co-Founder, Gomboc.ai    
    
 ## Resources    
-\- \[Information\](https://www.gomboc.ai/devops)    
-\- \[Documentation](https://docs.gomboc.ai/)
-\- \[Submit Feedback\](mailto:support@gomboc.ai)  
+\- [Information](https://www.gomboc.ai/devops)    
+\- [Documentation](https://docs.gomboc.ai/)
+\- [Submit Feedback](mailto:support@gomboc.ai)  
 
