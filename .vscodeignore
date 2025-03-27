@@ -13,4 +13,4 @@ test_development
 .github
 .husky
 README_DEV.md
-*.env
+*.env*
