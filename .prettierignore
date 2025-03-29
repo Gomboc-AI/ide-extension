@@ -3,6 +3,7 @@ node_modules/
 *.yml
 README_DEV.md
 README.md
+SUPPORT.md
 
 out/
 .npmrc
