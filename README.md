@@ -32,7 +32,7 @@ That's all you need!
 ## Why Gomboc AI?    
 "Security shouldn’t derail development. Our plugin gives engineers real-time fixes that meet security requirements, right in their workflow — no more chasing tickets or delayed releases."   
 – Matt Sweeney, CPO & Co-Founder, Gomboc.ai    
-   
+
 ## Resources    
 * [Information](https://www.gomboc.ai/devops)    
 * [Documentation](https://docs.gomboc.ai/)
