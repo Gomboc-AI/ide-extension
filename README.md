@@ -18,7 +18,7 @@ The Gomboc.ai VSCode Plugin transforms how developers handle cloud security in I
   Understand why a security control matters and how to implement it—eliminates hours of research.
 
 ## Getting Started
-To begin using the Gomboc VSCode plugin, you will need to acquire an API key. You can follow the [directions for API key creation](https://docs.gomboc.ai) if you have a Gomboc subscription or you can get started with a [free trial](https://www.gomboc.ai/free-trial).
+To begin using the Gomboc VSCode plugin, you will need to acquire an API key. You can follow the [directions for API key creation](https://docs.gomboc.ai/api#creating-api-credentials) if you have a Gomboc subscription or you can get started with a [free trial](https://www.gomboc.ai/free-trial).
 
 Once you have the API key go to `Settings > Extensions > Gomboc` and drop it in the `Api Key` field.
 
