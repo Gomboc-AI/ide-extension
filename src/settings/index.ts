@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import * as vscode from 'vscode';
 // import dotenv from 'dotenv';
 import 'dotenv/config';
 class InvalidEnvironment extends Error {
@@ -15,12 +16,18 @@ const envSchema = z.object({
 // dotenv.config(); // loads .env file into process.env
 
 const settings = () => {
-  const parsedEnvs = envSchema.safeParse(process.env);
+  // const parsedEnvs = envSchema.safeParse(process.env);
   const customerApiProdUrl = 'https://app.gomboc.ai/graphql';
 
-  if (parsedEnvs.success) {
-    return parsedEnvs.data;
+  const config = vscode.workspace.getConfiguration('gomboc-vscode-extension');
+  const useCustomEndpoint = config.get('useCustomEndpoint');
+  if (useCustomEndpoint) {
+    const custom = config.get('serviceEndpoint');
+    return {
+      CUSTOMER_API_URL: custom,
+    };
   }
+
   return {
     CUSTOMER_API_URL: customerApiProdUrl,
   };

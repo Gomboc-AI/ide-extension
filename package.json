@@ -2,15 +2,19 @@
   "name": "gomboc-vscode-extension",
   "publisher": "GombocAI",
   "displayName": "Gomboc",
-  "description": "",
+  "description": "Find and fix infrastructure as code misconfigurations",
   "repository": {
     "type": "git",
     "url": "https://github.com/Gomboc-AI/ide-extension"
   },
-  "version": "0.0.5",
+  "homepage": "https://github.com/Gomboc-AI/ide-extension?tab=readme-ov-file",
+  "version": "0.0.8",
   "engines": {
     "vscode": "^1.63.0"
   },
+  "extensionKind": [
+    "workspace"
+  ],
   "categories": [
     "Other"
   ],
@@ -54,6 +58,16 @@
             "type": "string",
             "default": "main",
             "description": "Default main branch for reporting purposes"
+          },
+          "gomboc-vscode-extension.useCustomEndpoint": {
+            "type": "boolean",
+            "default": false,
+            "description": "When enabled will send requests to custom specified endpoint"
+          },
+          "gomboc-vscode-extension.serviceEndpoint": {
+            "type": "string",
+            "default": "https://app.gomboc.ai/graphql",
+            "description": "When enabled will send requests to custom specified endpoint (default is 'https://app.gomboc.ai/graphql')"
           }
         }
       }
@@ -68,6 +82,7 @@
     "package": "npm run check-types && npm run lint && node esbuild.js --production",
     "compile-tests": "tsc -p . --outDir dist",
     "watch-tests": "tsc -p . -w --outDir dist",
+    "version": "auto-changelog -p && git add CHANGELOG.md",
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "check-types": "tsc --noEmit",
     "test": "vscode-test",
@@ -88,6 +103,8 @@
     "@typescript-eslint/parser": "^8.22.0",
     "@vscode/test-cli": "^0.0.10",
     "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^2.15.0",
+    "auto-changelog": "^2.5.0",
     "esbuild": "^0.25.0",
     "eslint": "^9.19.0",
     "eslint-config-prettier": "^9.1.0",

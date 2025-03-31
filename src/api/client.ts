@@ -27,7 +27,6 @@ export class CustomerApiClient {
     this.client = new ApolloClient({
       ssrMode: true,
       link: createHttpLink({
-        // bad but i don't want to expose this to the user within their settings.json
         uri: `${_settings.CUSTOMER_API_URL}`,
         credentials: 'same-origin',
         headers: {
