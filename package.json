@@ -54,6 +54,16 @@
             "type": "string",
             "default": "main",
             "description": "Default main branch for reporting purposes"
+          },
+          "gomboc-vscode-extension.useCustomEndpoint": {
+            "type": "boolean",
+            "default": false,
+            "description": "When enabled will send requests to custom specified endpoint"
+          },
+          "gomboc-vscode-extension.serviceEndpoint": {
+            "type": "string",
+            "default": "https://app.gomboc.ai/graphql",
+            "description": "When enabled will send requests to custom specified endpoint (default is 'https://app.gomboc.ai/graphql')"
           }
         }
       }
