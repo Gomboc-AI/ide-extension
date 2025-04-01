@@ -26,10 +26,10 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}   
       - name: Install dependencies
-        if: version.outputs.changed == 'true'
+        if: steps.version.outputs.changed == 'true'
         run: npm ci
       - name: Publish to Visual Studio Marketplace
-        if: version.outputs.changed == 'true'
+        if: steps.version.outputs.changed == 'true'
         uses: HaaLeo/publish-vscode-extension@v2
         with:
           pat: ${{ secrets.VSCE_TOKEN }}
