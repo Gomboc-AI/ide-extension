@@ -24,7 +24,8 @@ jobs:
         id: version
         uses: EndBug/version-check@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}   
+          token: ${{ secrets.GITHUB_TOKEN }}
+          diff-search: true
       - name: Install dependencies
         if: steps.version.outputs.changed == 'true'
         run: npm ci
