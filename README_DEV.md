@@ -112,6 +112,12 @@ The following is a list of commonly used types:
 
 Optionally you can run `npm run commit` to pull up a command prompt for generating a conventional commit.
 
+#### Releases
+
+Releases are triggered by CI using [semantic-release](https://semantic-release.gitbook.io/semantic-release).
+Pull requests with commits of type `feat`, `fix` and `perf` will trigger a new release. To avoid a release you
+can add a scope of `no-release` to your commits to tell `semantic-release` to not include the commit.
+
 
 #### Publishing
 We are using the `vsce` package in order to publish. For now, this will be done as a manual process. 
