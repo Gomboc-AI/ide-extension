@@ -20,17 +20,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version-file: '.nvmrc'
-      - name: Check version
-        id: version
-        uses: EndBug/version-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          diff-search: true
       - name: Install dependencies
-        if: steps.version.outputs.changed == 'true'
         run: npm ci
       - name: Publish to Visual Studio Marketplace
-        if: steps.version.outputs.changed == 'true'
         uses: HaaLeo/publish-vscode-extension@v2
         with:
           pat: ${{ secrets.VSCE_TOKEN }}
