@@ -8,7 +8,7 @@
     "url": "https://github.com/Gomboc-AI/ide-extension"
   },
   "homepage": "https://github.com/Gomboc-AI/ide-extension?tab=readme-ov-file",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "engines": {
     "vscode": "^1.63.0"
   },
@@ -18,8 +18,10 @@
   "categories": [
     "Other"
   ],
+  "activationEvents": [
+    "*"
+  ],
   "icon": "Gomboc-Full-Logo.png",
-  "activationEvents": [],
   "main": "./dist/extension.js",
   "extensionDependencies": [
     "vscode.git"

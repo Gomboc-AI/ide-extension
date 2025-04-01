@@ -6,7 +6,7 @@ import { CustomerApiClient } from './api/client';
 import logger from './utils/logger';
 import { ScanResultsProvider } from './providers/scanResultsProvider';
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
   logger.info('VSCode extension activated .... ');
   const apiClient = new CustomerApiClient();
 

@@ -1,8 +1,6 @@
 import winston from 'winston';
 import * as crypto from 'crypto';
 
-globalThis.crypto = crypto as any;
-
 const customFormat = winston.format(info => {
   info.insertId = crypto.randomUUID();
   info.timestamp = new Date().toISOString();
