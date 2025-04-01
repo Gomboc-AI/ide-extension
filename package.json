@@ -66,8 +66,8 @@
           },
           "gomboc-vscode-extension.serviceEndpoint": {
             "type": "string",
-            "default": "https://app.gomboc.ai/graphql",
-            "description": "When enabled will send requests to custom specified endpoint (default is 'https://app.gomboc.ai/graphql')"
+            "default": "https://api.app.gomboc.ai/graphql",
+            "description": "When enabled will send requests to custom specified endpoint (default is 'https://api.app.gomboc.ai/graphql')"
           }
         }
       }
