@@ -7,16 +7,6 @@
       {
         "packageVsix": true
       }
-    ],
-    [
-      "@semantic-release/github",
-      {
-        "assets": [
-          {
-            "path": "*.vsix"
-          }
-        ]
-      }
     ]
   ]
 }
