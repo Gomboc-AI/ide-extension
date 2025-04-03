@@ -68,7 +68,7 @@ export class ScanResultsProvider {
             existingResourcePolicyFixes[uniqueResourceName][fix.position.line] =
               [
                 ...existingResourcePolicyFixes[uniqueResourceName][
-                fix.position.line
+                  fix.position.line
                 ],
                 result.policyStatement.id,
               ];
@@ -130,16 +130,17 @@ export class ScanResultsProvider {
       // With VScode, the edits are made without the previous fix, so an offset is needed
       for (const fix of result.fixes) {
         const fixPosition = fix.position.line - 1 - offset;
-        let startPosition = new vscode.Position(
-          fixPosition,
-          0
-        );
+        let startPosition = new vscode.Position(fixPosition, 0);
         offset = offset + fix.lineOffset;
         let endPosition = new vscode.Position(fix.position.line - 1, 999);
 
         const range = new vscode.Range(startPosition, endPosition);
         if (fix.fixType === 'ADD') {
-          edit.insert(file, startPosition, `${' '.repeat(fix.position.column)}${fix.newValue}` + '\n');
+          edit.insert(
+            file,
+            startPosition,
+            `${' '.repeat(fix.position.column)}${fix.newValue}` + '\n',
+          );
         } else if (fix.fixType === 'UPDATE') {
           edit.replace(file, range, fix.newValue);
         } else {
