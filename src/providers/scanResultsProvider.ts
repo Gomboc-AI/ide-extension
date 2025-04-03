@@ -68,7 +68,7 @@ export class ScanResultsProvider {
             existingResourcePolicyFixes[uniqueResourceName][fix.position.line] =
               [
                 ...existingResourcePolicyFixes[uniqueResourceName][
-                  fix.position.line
+                fix.position.line
                 ],
                 result.policyStatement.id,
               ];
@@ -125,16 +125,21 @@ export class ScanResultsProvider {
     for (const result of fixedResults) {
       // the filepath might point to a different file
       const file = vscode.Uri.file(result.fileName);
+      let offset = 0;
+      // Fixes are assumed to be in order.
+      // With VScode, the edits are made without the previous fix, so an offset is needed
       for (const fix of result.fixes) {
+        const fixPosition = fix.position.line - 1 - offset;
         let startPosition = new vscode.Position(
-          fix.position.line - 1,
-          fix.position.column,
+          fixPosition,
+          0
         );
+        offset = offset + fix.lineOffset;
         let endPosition = new vscode.Position(fix.position.line - 1, 999);
 
         const range = new vscode.Range(startPosition, endPosition);
         if (fix.fixType === 'ADD') {
-          edit.insert(file, startPosition, fix.newValue + '\n');
+          edit.insert(file, startPosition, `${' '.repeat(fix.position.column)}${fix.newValue}` + '\n');
         } else if (fix.fixType === 'UPDATE') {
           edit.replace(file, range, fix.newValue);
         } else {
@@ -144,6 +149,7 @@ export class ScanResultsProvider {
       }
     }
     const success = await vscode.workspace.applyEdit(edit);
+
     if (success) {
       const textEditor = vscode.window.activeTextEditor;
       if (textEditor) {
@@ -155,6 +161,7 @@ export class ScanResultsProvider {
           this.codeActionDisposable.dispose();
         }
         vscode.commands.executeCommand('gomboc-vscode-extension.scanFile');
+        return;
       }
     }
     // once we apply a remediation we have to dispose and clear everything and re-run
