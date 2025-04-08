@@ -1,0 +1,38 @@
+# When all else fails allow anyone to review
+* @Gomboc-AI/rnd
+
+# Language reviewers
+*.js @Gomboc-AI/rvr-typescript
+*.ts @Gomboc-AI/rvr-typescript
+*.json @Gomboc-AI/rvr-typescript
+.npmrc @Gomboc-AI/rvr-typescript
+.nvmrc @Gomboc-AI/rvr-typescript
+
+*.py @Gomboc-AI/rvr-python
+pyproject.toml @Gomboc-AI/rvr-python
+requirements.txt @Gomboc-AI/rvr-python
+
+*.go @Gomboc-AI/rvr-golang
+go.mod @Gomboc-AI/rvr-golang
+
+*.tf @Gomboc-AI/rvr-terraform
+*.hcl @Gomboc-AI/rvr-terraform
+*.tfvars @Gomboc-AI/rvr-terraform
+
+*.sql @Gomboc-AI/rvr-sql
+
+*.graphql @Gomboc-AI/rvr-graph
+
+#### Repo specific behavior goes here ####
+
+#### END ####
+
+# General Areas of review
+CODEOWNERS @Gomboc-AI/rvr-codeowners
+/.github/workflows/* @Gomboc-AI/rvr-cicd
+skaffold.yaml @Gomboc-AI/rvr-cicd
+Dockerfile @Gomboc-AI/rvr-container
+compose.yaml @Gomboc-AI/rvr-container
+.devcontainer/* @Gomboc-AI/rvr-container
+*.op-tmpl @Gomboc-AI/rvr-security
+.env @Gomboc-AI/rvr-security
