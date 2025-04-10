@@ -4,6 +4,7 @@
 # Language reviewers
 *.js @Gomboc-AI/rvr-typescript
 *.ts @Gomboc-AI/rvr-typescript
+*.tsx @Gomboc-AI/rvr-typescript
 *.json @Gomboc-AI/rvr-typescript
 .npmrc @Gomboc-AI/rvr-typescript
 .nvmrc @Gomboc-AI/rvr-typescript
