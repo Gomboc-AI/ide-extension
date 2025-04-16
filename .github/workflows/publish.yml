@@ -1,4 +1,4 @@
-name: Publish Extension
+name: Publish
 permissions:
   contents: read
 
@@ -9,29 +9,25 @@ on:
   workflow_dispatch: {}
 
 jobs:
-  
   publish:
     name: Publish
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Install NodeJS
         uses: actions/setup-node@v4
         with:
           node-version-file: '.nvmrc'
-      - name: Check version
-        id: version
-        uses: EndBug/version-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          diff-search: true
       - name: Install dependencies
-        if: steps.version.outputs.changed == 'true'
         run: npm ci
-      - name: Publish to Visual Studio Marketplace
-        if: steps.version.outputs.changed == 'true'
-        uses: HaaLeo/publish-vscode-extension@v2
-        with:
-          pat: ${{ secrets.VSCE_TOKEN }}
-          registryUrl: https://marketplace.visualstudio.com
+      - name: Release
+        run: npx semantic-release
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

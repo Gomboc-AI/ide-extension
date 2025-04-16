@@ -80,6 +80,45 @@ For Example:
   }
 ```
 
+#### Changelogs
+
+We use [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/) and [semantic-releases](https://semantic-release.gitbook.io/semantic-release/usage/getting-started) to generate changelogs. Commits messages should be structured as follows:
+
+```yml
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer(s)]
+
+# e.g. git commit -m "chore: setup linting"
+```
+
+The following is a list of commonly used types:
+
+```yml
+  feat:     A new feature 
+  fix:      A bug fix 
+  docs:     Documentation only changes 
+  style:    Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons, etc) 
+  refactor: A code change that neither fixes a bug nor adds a feature 
+  perf:     A code change that improves performance 
+  test:     Adding missing tests or correcting existing tests
+  build:    Changes that affect the build system or external dependencies (example scopes: gulp, broccoli, npm) 
+  ci:       Changes to our CI configuration files and scripts (example scopes: Travis, Circle, BrowserStack, SauceLabs) 
+  chore:    Other changes that don't modify src or test files 
+  revert:   Reverts a previous commit
+```
+
+Optionally you can run `npm run commit` to pull up a command prompt for generating a conventional commit.
+
+#### Releases
+
+Releases are triggered by CI using [semantic-release](https://semantic-release.gitbook.io/semantic-release).
+Pull requests with commits of type `feat`, `fix` and `perf` will trigger a new release. To avoid a release you
+can add a scope of `no-release` to your commits to tell `semantic-release` to not include the commit.
+
+
 #### Publishing
 We are using the `vsce` package in order to publish. For now, this will be done as a manual process. 
 
