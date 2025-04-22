@@ -40,7 +40,40 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(name, handler),
   );
 
-  context.subscriptions.push(...disposables, diagnosticCollection);
+  const onEdit = vscode.workspace.onDidChangeTextDocument(() => {
+    diagnosticCollection.clear();
+  });
+
+  context.subscriptions.push(
+    ...disposables,
+    diagnosticCollection,
+    onSave,
+    onEdit,
+    onConfigChange(disposables, commands),
+  );
 }
+
+const onSave = vscode.workspace.onDidSaveTextDocument(() => {
+  const onSaveSetting = vscode.workspace
+    .getConfiguration('gomboc-vscode-extension')
+    .get('scanOnFileSave');
+  if (onSaveSetting) {
+    vscode.commands.executeCommand('gomboc-vscode-extension.scanFile');
+  }
+});
+
+const onConfigChange = (
+  disposables: vscode.Disposable[],
+  commands: { name: string; handler: () => Promise<void> }[],
+) => {
+  return vscode.workspace.onDidChangeConfiguration(() => {
+    for (const disposable of disposables) {
+      disposable.dispose();
+    }
+    for (const command of commands) {
+      vscode.commands.registerCommand(command.name, command.handler);
+    }
+  });
+};
 
 export function deactivate() {}
