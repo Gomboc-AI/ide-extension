@@ -85,11 +85,6 @@ export class ScanResultsProvider {
         );
         let endPosition = new vscode.Position(fix.position.line - 1, 999);
 
-        // if (fix.fixType === FixType.Add) {
-        //   const resourceLine = result.logicalResource.line - 1;
-        //   startPosition = new vscode.Position(resourceLine, 0);
-        //   endPosition = new vscode.Position(resourceLine, 999);
-        // }
         diagnostic.push({
           message: `Fix for ${result.logicalResource.type} to enforce apply recommendation ${result.policyStatement.payload.capability.title}`,
           gombocResult: result,
