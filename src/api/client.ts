@@ -78,7 +78,7 @@ export class CustomerApiClient {
       const { data } = await this.client.query<SecurityBenchmarksQuery>({
         query: SECURITY_BENCHMARKS,
       });
-      console.log('---securityAdoptedBenchmarkRecommendations', data)
+      console.log('---securityAdoptedBenchmarkRecommendations', data);
       logger.info('Fetched security benchmarks');
       const retval: SecurityBenchmarkQueryBenchmarkArray = [];
       for (const benchmark of data.securityBenchmarks) {
