@@ -22,37 +22,6 @@ export const getFileType = (filename: string) => {
   );
 };
 
-/**
- * Generates the security policies in the correct format
- *  input PolicyStatementPayloadMustImplementType {
-      id: ID!
-      capabilityId: String!
-      metadata: InputStatementMetadata!
-    }
- * 
- * @param apiClient 
- */
-export const generateSecurityPolicies = async (
-  apiClient: CustomerApiClient,
-): Promise<SecurityPolicy[]> => {
-  // this just needs to be reformatted for some reason?
-
-  const organization = await apiClient.securityFrameworks();
-  return organization.policy.statements.map(item => ({
-    id: item.id,
-    capabilityId: item.payload.capability.id,
-    metadata: {
-      // is it fine to null these!
-      framework: item.framework!,
-      identifier: item.identifier!,
-      description: item.description!,
-      // source: ORGANIZATION
-      createdBy: item.createdBy,
-      createdAt: item.createdAt,
-    },
-  }));
-};
-
 export const generateRequestMetadata = async (): Promise<MetaDataInput> => {
   const gitMetaData = await generateGitMetaData();
   const osMetaData = await generateOSMetadata();

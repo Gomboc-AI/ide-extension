@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { testApiKeyCommand } from './commands/testApiKey';
 import { scanFileCommand } from './commands/scanFile';
-import { showFrameworksCommand } from './commands/showFrameworks';
+import { showBenchmarksCommand } from './commands/showFrameworks';
 import { CustomerApiClient } from './api/client';
 import logger from './utils/logger';
 import { ScanResultsProvider } from './providers/scanResultsProvider';
@@ -31,8 +31,8 @@ export async function activate(context: vscode.ExtensionContext) {
       handler: () => scanFileCommand(context, apiClient, scanResults),
     },
     {
-      name: 'gomboc-vscode-extension.showFrameworks',
-      handler: () => showFrameworksCommand(context, apiClient),
+      name: 'gomboc-vscode-extension.showBenchmarks',
+      handler: () => showBenchmarksCommand(context, apiClient),
     },
   ];
 

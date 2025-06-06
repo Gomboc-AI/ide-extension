@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { GombocDiagnostic } from './gombocDiagnostic';
 import { RemediationComment } from '../api/__generated__/graphql';
+import { IndividualFixesQueryRemediation } from '../api/client';
 export class CodeActionProvider implements vscode.CodeActionProvider {
   private results;
   private readonly diagnosticCollection: vscode.DiagnosticCollection;
@@ -10,7 +11,7 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
   private readonly fixableResults = [];
 
   constructor(
-    results: RemediationComment[],
+    results: IndividualFixesQueryRemediation[],
     diagnosticCollection: vscode.DiagnosticCollection,
   ) {
     this.results = results;

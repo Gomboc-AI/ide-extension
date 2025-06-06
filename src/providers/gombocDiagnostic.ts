@@ -1,13 +1,13 @@
 import * as vscode from 'vscode';
-import { RemediationComment } from '../api/__generated__/graphql';
+import { IndividualFixesQueryRemediation } from '../api/client';
 export class GombocDiagnostic extends vscode.Diagnostic {
-  gombocResult: RemediationComment;
+  gombocResult: IndividualFixesQueryRemediation;
   quickFixMessage: string;
   constructor(
     range: vscode.Range,
     message: string,
     quickFixMessage: string,
-    gombocResult: RemediationComment,
+    gombocResult: IndividualFixesQueryRemediation,
     severity?: vscode.DiagnosticSeverity,
   ) {
     super(range, message, severity);
