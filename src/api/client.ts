@@ -44,7 +44,7 @@ export type IndividualFixesQueryFixesArray = Pick<
 >['individualFixes'];
 export type IndividualFixesQuerySuccess = Extract<
   IndividualFixesQueryFixesArray,
-  { __typename?: 'IndividualFixesSuccess' }
+  { __typename: 'IndividualFixesSuccess' }
 >;
 export type IndividualFixesQueryRemediation = Pick<
   IndividualFixesQuerySuccess,
@@ -140,11 +140,7 @@ export class CustomerApiClient {
           input: args.inputObject,
         },
       });
-      if (
-        data !== null &&
-        data !== undefined &&
-        data.individualFixes.__typename === 'IndividualFixesSuccess'
-      ) {
+      if (data.individualFixes.__typename === 'IndividualFixesSuccess') {
         return data.individualFixes.remediations;
       } else if (data.individualFixes.__typename === 'GombocError') {
         throw new Error(data.individualFixes.message);
