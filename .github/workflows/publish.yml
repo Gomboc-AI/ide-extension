@@ -15,7 +15,8 @@ jobs:
     permissions:
       pull-requests: write
       id-token: write
-      contents: read
+      contents: write
+      issues: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
