@@ -46,8 +46,7 @@ const config = {
         nonOptionalTypename: true,
         avoidOptionals: false,
         inputMaybeValue: 'T | null | undefined',
-
-      }
+      },
     },
   },
   ignoreNoDocuments: false,

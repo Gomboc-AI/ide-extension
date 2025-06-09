@@ -2,19 +2,32 @@
 import { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/core';
 export type Maybe<T> = T | null;
 export type InputMaybe<T> = Maybe<T>;
-export type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
-export type MakeOptional<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]?: Maybe<T[SubKey]> };
-export type MakeMaybe<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]: Maybe<T[SubKey]> };
-export type MakeEmpty<T extends { [key: string]: unknown }, K extends keyof T> = { [_ in K]?: never };
-export type Incremental<T> = T | { [P in keyof T]?: P extends ' $fragmentName' | '__typename' ? T[P] : never };
+export type Exact<T extends { [key: string]: unknown }> = {
+  [K in keyof T]: T[K];
+};
+export type MakeOptional<T, K extends keyof T> = Omit<T, K> & {
+  [SubKey in K]?: Maybe<T[SubKey]>;
+};
+export type MakeMaybe<T, K extends keyof T> = Omit<T, K> & {
+  [SubKey in K]: Maybe<T[SubKey]>;
+};
+export type MakeEmpty<
+  T extends { [key: string]: unknown },
+  K extends keyof T,
+> = { [_ in K]?: never };
+export type Incremental<T> =
+  | T
+  | {
+      [P in keyof T]?: P extends ' $fragmentName' | '__typename' ? T[P] : never;
+    };
 /** All built-in and custom scalars, mapped to their actual values */
 export type Scalars = {
-  ID: { input: string; output: string; }
-  String: { input: string; output: string; }
-  Boolean: { input: boolean; output: boolean; }
-  Int: { input: number; output: number; }
-  Float: { input: number; output: number; }
-  JSON: { input: any; output: any; }
+  ID: { input: string; output: string };
+  String: { input: string; output: string };
+  Boolean: { input: boolean; output: boolean };
+  Int: { input: number; output: number };
+  Float: { input: number; output: number };
+  JSON: { input: any; output: any };
 };
 
 export type AssetInstanceLocation = {
@@ -41,7 +54,7 @@ export type AssetType = {
 };
 
 export enum BitBucketApiVersion {
-  V2_0 = 'V2_0'
+  V2_0 = 'V2_0',
 }
 
 export type BulkAllLinkScanRemoteInput = {
@@ -115,7 +128,7 @@ export type CloudResource = {
 export enum CloudResourceProvider {
   Aws = 'AWS',
   Azure = 'AZURE',
-  Gcp = 'GCP'
+  Gcp = 'GCP',
 }
 
 export type CodeObservation = {
@@ -138,7 +151,6 @@ export type CodeResource = {
   id: Scalars['ID']['output'];
   infrastructureTool: InfrastructureTool;
 };
-
 
 export type CodeResourceConfigOptionsArgs = {
   input: PageInput;
@@ -197,7 +209,9 @@ export type CreateBitBucketIntegrationInput = {
 
 export type CreateBitBucketIntegrationOutput = GombocError | ScmIntegration;
 
-export type CreateCspmIntegrationOutput = CreateCspmIntegrationResponse | GombocError;
+export type CreateCspmIntegrationOutput =
+  | CreateCspmIntegrationResponse
+  | GombocError;
 
 export type CreateCspmIntegrationResponse = {
   __typename: 'CreateCspmIntegrationResponse';
@@ -385,7 +399,7 @@ export enum Disposition {
   AutoRemediated = 'AUTO_REMEDIATED',
   CannotRemediate = 'CANNOT_REMEDIATE',
   InsufficientInfoToRemediate = 'INSUFFICIENT_INFO_TO_REMEDIATE',
-  NotApplicable = 'NOT_APPLICABLE'
+  NotApplicable = 'NOT_APPLICABLE',
 }
 
 export type Edge = {
@@ -398,7 +412,7 @@ export type Edge = {
 
 export enum Effect {
   Preview = 'Preview',
-  SubmitForReview = 'SubmitForReview'
+  SubmitForReview = 'SubmitForReview',
 }
 
 export type FailedScan = {
@@ -412,16 +426,16 @@ export type FailedScan = {
 export enum FixType {
   Add = 'ADD',
   Delete = 'DELETE',
-  Update = 'UPDATE'
+  Update = 'UPDATE',
 }
 
 export enum GitHubApp {
   Community = 'COMMUNITY',
-  Enterprise = 'ENTERPRISE'
+  Enterprise = 'ENTERPRISE',
 }
 
 export enum GitLabApiVersion {
-  V4 = 'V4'
+  V4 = 'V4',
 }
 
 export type GitMetaDataInput = {
@@ -442,7 +456,7 @@ export enum GombocErrorCode {
   InvalidArgument = 'INVALID_ARGUMENT',
   NotFound = 'NOT_FOUND',
   NotImplemented = 'NOT_IMPLEMENTED',
-  Unauthorized = 'UNAUTHORIZED'
+  Unauthorized = 'UNAUTHORIZED',
 }
 
 export type IacScanContent = {
@@ -471,14 +485,14 @@ export type IndividualRemediation = {
 
 export enum InfrastructureTool {
   Cloudformation = 'CLOUDFORMATION',
-  Terraform = 'TERRAFORM'
+  Terraform = 'TERRAFORM',
 }
 
 export enum IntegrationType {
   Custom = 'CUSTOM',
   Customgomboc = 'CUSTOMGOMBOC',
   Orca = 'ORCA',
-  Wiz = 'WIZ'
+  Wiz = 'WIZ',
 }
 
 export type LineFix = {
@@ -513,11 +527,9 @@ export type Link = {
   slug: Scalars['ID']['output'];
 };
 
-
 export type LinkPullRequestsArgs = {
   input: LinkPullRequestsInput;
 };
-
 
 export type LinkScanResultsArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
@@ -649,166 +661,133 @@ export type Mutation = {
   updatePullRequestStatus?: Maybe<GombocError>;
 };
 
-
 export type MutationBulkAllLinkScanRemoteArgs = {
   input: BulkAllLinkScanRemoteInput;
 };
-
 
 export type MutationBulkLinkScanRemoteArgs = {
   input: BulkLinkScanRemoteInput;
 };
 
-
 export type MutationCreateAzdoIntegrationArgs = {
   input: CreateAzdoIntegrationInput;
 };
-
 
 export type MutationCreateBitBucketIntegrationArgs = {
   input: CreateBitBucketIntegrationInput;
 };
 
-
 export type MutationCreateCspmCustomIntegrationArgs = {
   input: CreateCustomIntegrationInput;
 };
-
 
 export type MutationCreateCspmOrcaIntegrationArgs = {
   input: CreateOrcaIntegrationInput;
 };
 
-
 export type MutationCreateCspmWizIntegrationArgs = {
   input: CreateWizIntegrationInput;
 };
-
 
 export type MutationCreateGitHubIntegrationArgs = {
   input: CreateGitHubIntegrationInput;
 };
 
-
 export type MutationCreateGitLabIntegrationArgs = {
   input: CreateGitLabIntegrationInput;
 };
-
 
 export type MutationCreateProjectArgs = {
   projectName: Scalars['String']['input'];
 };
 
-
 export type MutationCreateScalarCustomRuleArgs = {
   input: CreateScalarCustomRuleInput;
 };
-
 
 export type MutationCreateTicketArgs = {
   input: CreateTicketInput;
 };
 
-
 export type MutationDeleteCspmIntegrationArgs = {
   id: Scalars['ID']['input'];
 };
-
 
 export type MutationDeleteCustomRulesArgs = {
   input: DeleteCustomRulesInput;
 };
 
-
 export type MutationDeleteLinkArgs = {
   linkId: Scalars['ID']['input'];
 };
-
 
 export type MutationDeleteProjectArgs = {
   projectId: Scalars['ID']['input'];
 };
 
-
 export type MutationDeleteScmIntegrationArgs = {
   input: DeleteScmIntegrationInput;
 };
-
 
 export type MutationDeleteTicketArgs = {
   input: DeleteTicketInput;
 };
 
-
 export type MutationDiscoverIacRepositoriesArgs = {
   input: DiscoverIacRepositoriesInput;
 };
-
 
 export type MutationLinkRepositoriesArgs = {
   input: LinkRepositoriesInput;
 };
 
-
 export type MutationLinkScanRemoteArgs = {
   input: LinkScanRemoteInput;
 };
-
 
 export type MutationOnGitHubMetaEventArgs = {
   input: OnGitHubMetaEventInput;
 };
 
-
 export type MutationOnGitHubPullRequestEventArgs = {
   input: OnGitHubPullRequestEventInput;
 };
-
 
 export type MutationPutSetupCompletedArgs = {
   input: PutSetupCompletedInput;
 };
 
-
 export type MutationScanFromCspmArgs = {
   input: ScanFromCspmInput;
 };
-
 
 export type MutationScanLocalScenarioArgs = {
   input: ScanLocalScenarioInput;
 };
 
-
 export type MutationScanOnPullRequestArgs = {
   input: ScanOnPullRequestInput;
 };
-
 
 export type MutationScanOnScheduleArgs = {
   input: ScanOnScheduleInput;
 };
 
-
 export type MutationSetCspmAssetInstanceLocationArgs = {
   input: SetAssetInstanceLocationInput;
 };
-
 
 export type MutationToggleAdoptSecurityBenchmarkRecommendationsArgs = {
   input: ToggleAdoptSecurityBenchmarkRecommendationsInput;
 };
 
-
 export type MutationToggleAdoptSecurityBenchmarkVersionArgs = {
   input: ToggleAdoptSecurityBenchmarkVersionInput;
 };
 
-
 export type MutationUnlinkCspmAssetInstanceLocationArgs = {
   id: Scalars['ID']['input'];
 };
-
 
 export type MutationUpdatePullRequestStatusArgs = {
   pullRequestNumber: Scalars['String']['input'];
@@ -860,7 +839,7 @@ export enum OrcaRegion {
   Europe = 'EUROPE',
   India = 'INDIA',
   Israel = 'ISRAEL',
-  Us = 'US'
+  Us = 'US',
 }
 
 /** A customer organization as represented in the system */
@@ -898,24 +877,20 @@ export type Organization = {
   scmIntegrations: Array<ScmIntegration>;
 };
 
-
 /** A customer organization as represented in the system */
 export type OrganizationProjectArgs = {
   slug: Scalars['String']['input'];
 };
-
 
 /** A customer organization as represented in the system */
 export type OrganizationPullRequestsArgs = {
   input: OrganizationPullRequestsInput;
 };
 
-
 /** A customer organization as represented in the system */
 export type OrganizationScansArgs = {
   before?: InputMaybe<Scalars['String']['input']>;
 };
-
 
 /** A customer organization as represented in the system */
 export type OrganizationScmIntegrationArgs = {
@@ -1055,16 +1030,13 @@ export type Project = {
   slug: Scalars['String']['output'];
 };
 
-
 export type ProjectLinkArgs = {
   linkId: Scalars['ID']['input'];
 };
 
-
 export type ProjectLinkBySlugArgs = {
   slug: Scalars['ID']['input'];
 };
-
 
 export type ProjectLinksPageArgs = {
   pageSize?: InputMaybe<Scalars['Int']['input']>;
@@ -1086,7 +1058,7 @@ export enum PullRequestEvent {
   Discarded = 'DISCARDED',
   Merged = 'MERGED',
   Opened = 'OPENED',
-  Synchronized = 'SYNCHRONIZED'
+  Synchronized = 'SYNCHRONIZED',
 }
 
 export type PullRequestPage = {
@@ -1103,7 +1075,7 @@ export enum PullRequestStatus {
   Closed = 'CLOSED',
   Expected = 'EXPECTED',
   Merged = 'MERGED',
-  Open = 'OPEN'
+  Open = 'OPEN',
 }
 
 export type PutSetupCompletedInput = {
@@ -1164,31 +1136,25 @@ export type Query = {
   tfResources: TfResourcePage;
 };
 
-
 export type QueryCfnPropertyArgs = {
   id: Scalars['ID']['input'];
 };
-
 
 export type QueryCfnResourceArgs = {
   id: Scalars['ID']['input'];
 };
 
-
 export type QueryCfnResourcesArgs = {
   input: CfnResourcePageInput;
 };
-
 
 export type QueryCfnSubPropertyArgs = {
   id: Scalars['ID']['input'];
 };
 
-
 export type QueryCodeResourceArgs = {
   id: Scalars['ID']['input'];
 };
-
 
 export type QueryCodeResourcesArgs = {
   infrastructureTool?: InputMaybe<InfrastructureTool>;
@@ -1196,116 +1162,93 @@ export type QueryCodeResourcesArgs = {
   pageSize?: InputMaybe<Scalars['Int']['input']>;
 };
 
-
 export type QueryCspmObservationArgs = {
   id: Scalars['ID']['input'];
 };
-
 
 export type QueryCspmObservationsArgs = {
   input: CspmObservationsInput;
 };
 
-
 export type QueryCustomRuleArgs = {
   id: Scalars['ID']['input'];
 };
-
 
 export type QueryCustomRulesArgs = {
   input: CustomRulesInput;
 };
 
-
 export type QueryIndividualFixesArgs = {
   input: IndividualFixesInput;
 };
-
 
 export type QueryLinkArgs = {
   id: Scalars['ID']['input'];
 };
 
-
 export type QueryPolicyObservationArgs = {
   id: Scalars['ID']['input'];
 };
-
 
 export type QueryPullRequestArgs = {
   id: Scalars['ID']['input'];
 };
 
-
 export type QueryScanArgs = {
   id: Scalars['ID']['input'];
 };
-
 
 export type QueryScanBranchArgs = {
   scanRequestId: Scalars['ID']['input'];
 };
 
-
 export type QueryScanDirectoryArgs = {
   scanRequestId: Scalars['ID']['input'];
 };
-
 
 export type QueryScanRequestArgs = {
   id: Scalars['ID']['input'];
 };
 
-
 export type QueryScanResultArgs = {
   id: Scalars['ID']['input'];
 };
-
 
 export type QuerySearchScanTargetsArgs = {
   cloudResourceId: Scalars['ID']['input'];
 };
 
-
 export type QuerySecurityBenchmarkArgs = {
   id: Scalars['ID']['input'];
 };
-
 
 export type QuerySecurityBenchmarkRecommendationArgs = {
   id: Scalars['String']['input'];
 };
 
-
 export type QuerySecurityBenchmarkVersionArgs = {
   id: Scalars['ID']['input'];
 };
-
 
 export type QuerySecurityFrameworkArgs = {
   id: Scalars['ID']['input'];
 };
 
-
 export type QuerySecurityFrameworkVersionArgs = {
   id: Scalars['ID']['input'];
 };
-
 
 export type QueryTfAttributeArgs = {
   id: Scalars['ID']['input'];
 };
 
-
 export type QueryTfNestedBlockArgs = {
   id: Scalars['ID']['input'];
 };
 
-
 export type QueryTfResourceArgs = {
   id: Scalars['ID']['input'];
 };
-
 
 export type QueryTfResourcesArgs = {
   input: TfResourcePageInput;
@@ -1337,7 +1280,7 @@ export enum RequestOrigin {
   Community = 'COMMUNITY',
   CspmService = 'CSPM_SERVICE',
   Portal = 'PORTAL',
-  Workflow = 'WORKFLOW'
+  Workflow = 'WORKFLOW',
 }
 
 /** Custom policy, points to a target attribute or property */
@@ -1373,7 +1316,6 @@ export type Scan = {
   scanResult?: Maybe<ScanResult>;
   scanScope: Scalars['String']['output'];
 };
-
 
 export type ScanChildrenArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
@@ -1488,12 +1430,10 @@ export type ScanRequest = {
   scans: ScanPage;
 };
 
-
 export type ScanRequestScanResultsArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
   size?: InputMaybe<Scalars['Int']['input']>;
 };
-
 
 export type ScanRequestScansArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
@@ -1568,7 +1508,6 @@ export type ScanResult = {
   violationsCount: Scalars['Int']['output'];
 };
 
-
 /** A Scan Result that originated from a Scan Request */
 export type ScanResultObservationsArgs = {
   exclude?: InputMaybe<Array<Disposition>>;
@@ -1576,14 +1515,12 @@ export type ScanResultObservationsArgs = {
   size?: InputMaybe<Scalars['Int']['input']>;
 };
 
-
 /** A Scan Result that originated from a Scan Request */
 export type ScanResultPolicyObservationsArgs = {
   exclude?: InputMaybe<Array<Disposition>>;
   page?: InputMaybe<Scalars['Int']['input']>;
   size?: InputMaybe<Scalars['Int']['input']>;
 };
-
 
 /** A Scan Result that originated from a Scan Request */
 export type ScanResultTicketsArgs = {
@@ -1595,7 +1532,7 @@ export enum ScanResultCondition {
   AllFixed = 'ALL_FIXED',
   Compliant = 'COMPLIANT',
   NoneFixed = 'NONE_FIXED',
-  SomeFixed = 'SOME_FIXED'
+  SomeFixed = 'SOME_FIXED',
 }
 
 export type ScanResultPage = {
@@ -1657,7 +1594,6 @@ export type ScmIntegration = {
   scmType: ScmType;
 };
 
-
 /** Integrations grant access to SCM repositories */
 export type ScmIntegrationRepoOwnerArgs = {
   scope?: InputMaybe<Scalars['String']['input']>;
@@ -1678,18 +1614,15 @@ export type ScmRepoOwner = {
   type: Scalars['String']['output'];
 };
 
-
 export type ScmRepoOwnerChildrenArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
   size?: InputMaybe<Scalars['Int']['input']>;
 };
 
-
 export type ScmRepoOwnerRepositoriesArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
   size?: InputMaybe<Scalars['Int']['input']>;
 };
-
 
 export type ScmRepoOwnerSearchRepositoriesArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
@@ -1723,7 +1656,6 @@ export type ScmRepository = {
   owner: ScmRepoOwner;
 };
 
-
 export type ScmRepositoryBranchesArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
   size?: InputMaybe<Scalars['Int']['input']>;
@@ -1733,7 +1665,7 @@ export enum ScmType {
   Azdo = 'AZDO',
   Bitbucket = 'BITBUCKET',
   Github = 'GITHUB',
-  Gitlab = 'GITLAB'
+  Gitlab = 'GITLAB',
 }
 
 export type SecurityBenchmark = {
@@ -1754,7 +1686,9 @@ export type SecurityBenchmarkRecommendation = {
   name: Scalars['String']['output'];
 };
 
-export type SecurityBenchmarkRecommendationResponse = GombocError | SecurityBenchmarkRecommendation;
+export type SecurityBenchmarkRecommendationResponse =
+  | GombocError
+  | SecurityBenchmarkRecommendation;
 
 export type SecurityBenchmarkVersion = {
   __typename: 'SecurityBenchmarkVersion';
@@ -1805,7 +1739,7 @@ export enum Severity {
   Info = 'INFO',
   Low = 'LOW',
   Medium = 'MEDIUM',
-  Unknown = 'UNKNOWN'
+  Unknown = 'UNKNOWN',
 }
 
 export type TfAttribute = {
@@ -1891,24 +1825,496 @@ export type WorkflowResponse = {
   id: Scalars['ID']['output'];
 };
 
-export type TestOrganizationQueryVariables = Exact<{ [key: string]: never; }>;
+export type TestOrganizationQueryVariables = Exact<{ [key: string]: never }>;
 
+export type TestOrganizationQuery = {
+  __typename: 'Query';
+  organization:
+    | { __typename: 'GombocError' }
+    | { __typename: 'Organization'; id: string };
+};
 
-export type TestOrganizationQuery = { __typename: 'Query', organization: { __typename: 'GombocError' } | { __typename: 'Organization', id: string } };
+export type SecurityBenchmarksQueryVariables = Exact<{ [key: string]: never }>;
 
-export type SecurityBenchmarksQueryVariables = Exact<{ [key: string]: never; }>;
-
-
-export type SecurityBenchmarksQuery = { __typename: 'Query', securityBenchmarks: Array<{ __typename: 'SecurityBenchmark', id: string, name: string, versions: Array<{ __typename: 'SecurityBenchmarkVersion', id: string, name: string, recommendations: Array<{ __typename: 'SecurityBenchmarkRecommendation', id: string, identifier: string, name: string, description?: string | null, isAdopted: boolean }> }> }> };
+export type SecurityBenchmarksQuery = {
+  __typename: 'Query';
+  securityBenchmarks: Array<{
+    __typename: 'SecurityBenchmark';
+    id: string;
+    name: string;
+    versions: Array<{
+      __typename: 'SecurityBenchmarkVersion';
+      id: string;
+      name: string;
+      recommendations: Array<{
+        __typename: 'SecurityBenchmarkRecommendation';
+        id: string;
+        identifier: string;
+        name: string;
+        description?: string | null;
+        isAdopted: boolean;
+      }>;
+    }>;
+  }>;
+};
 
 export type IndividualFixesQueryVariables = Exact<{
   input: IndividualFixesInput;
 }>;
 
+export type IndividualFixesQuery = {
+  __typename: 'Query';
+  individualFixes:
+    | {
+        __typename: 'GombocError';
+        code?: GombocErrorCode | null;
+        message: string;
+      }
+    | {
+        __typename: 'IndividualFixesSuccess';
+        remediations: Array<{
+          __typename: 'IndividualRemediation';
+          benchmarkRecommendation: {
+            __typename: 'SecurityBenchmarkRecommendation';
+            id: string;
+            identifier: string;
+            name: string;
+            description?: string | null;
+          };
+          fixes: Array<{
+            __typename: 'RemediationFix';
+            filepath: string;
+            oldLine: Array<string>;
+            newLine: Array<string>;
+            lineOffset: number;
+            fixType: FixType;
+            codePosition: {
+              __typename: 'CodePosition';
+              line: number;
+              column: number;
+            };
+          }>;
+          codeObservation: {
+            __typename: 'CodeObservation';
+            codeResourceInstance: {
+              __typename: 'CodeResourceInstance';
+              name: string;
+              type: string;
+              filepath: string;
+              line: number;
+              codeResource: {
+                __typename: 'CodeResource';
+                id: string;
+                infrastructureTool: InfrastructureTool;
+                documentationUrl?: string | null;
+                cloudResource?: {
+                  __typename: 'CloudResource';
+                  id: string;
+                  provider: CloudResourceProvider;
+                  title: string;
+                  documentationUrl?: string | null;
+                } | null;
+              };
+            };
+          };
+        }>;
+      };
+};
 
-export type IndividualFixesQuery = { __typename: 'Query', individualFixes: { __typename: 'GombocError', code?: GombocErrorCode | null, message: string } | { __typename: 'IndividualFixesSuccess', remediations: Array<{ __typename: 'IndividualRemediation', benchmarkRecommendation: { __typename: 'SecurityBenchmarkRecommendation', id: string, identifier: string, name: string, description?: string | null }, fixes: Array<{ __typename: 'RemediationFix', filepath: string, oldLine: Array<string>, newLine: Array<string>, lineOffset: number, fixType: FixType, codePosition: { __typename: 'CodePosition', line: number, column: number } }>, codeObservation: { __typename: 'CodeObservation', codeResourceInstance: { __typename: 'CodeResourceInstance', name: string, type: string, filepath: string, line: number, codeResource: { __typename: 'CodeResource', id: string, infrastructureTool: InfrastructureTool, documentationUrl?: string | null, cloudResource?: { __typename: 'CloudResource', id: string, provider: CloudResourceProvider, title: string, documentationUrl?: string | null } | null } } } }> } };
-
-
-export const TestOrganizationDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"testOrganization"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"organization"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Organization"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]}}]} as unknown as DocumentNode<TestOrganizationQuery, TestOrganizationQueryVariables>;
-export const SecurityBenchmarksDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"securityBenchmarks"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"securityBenchmarks"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"versions"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"recommendations"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"identifier"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"isAdopted"}}]}}]}}]}}]}}]} as unknown as DocumentNode<SecurityBenchmarksQuery, SecurityBenchmarksQueryVariables>;
-export const IndividualFixesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"individualFixes"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"IndividualFixesInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"individualFixes"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GombocError"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"message"}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"IndividualFixesSuccess"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"remediations"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"benchmarkRecommendation"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"identifier"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}}]}},{"kind":"Field","name":{"kind":"Name","value":"fixes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"filepath"}},{"kind":"Field","name":{"kind":"Name","value":"oldLine"}},{"kind":"Field","name":{"kind":"Name","value":"newLine"}},{"kind":"Field","name":{"kind":"Name","value":"codePosition"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"line"}},{"kind":"Field","name":{"kind":"Name","value":"column"}}]}},{"kind":"Field","name":{"kind":"Name","value":"lineOffset"}},{"kind":"Field","name":{"kind":"Name","value":"fixType"}}]}},{"kind":"Field","name":{"kind":"Name","value":"codeObservation"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"codeResourceInstance"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"filepath"}},{"kind":"Field","name":{"kind":"Name","value":"line"}},{"kind":"Field","name":{"kind":"Name","value":"codeResource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"infrastructureTool"}},{"kind":"Field","name":{"kind":"Name","value":"documentationUrl"}},{"kind":"Field","name":{"kind":"Name","value":"cloudResource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"provider"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"documentationUrl"}}]}}]}}]}}]}}]}}]}}]}}]}}]} as unknown as DocumentNode<IndividualFixesQuery, IndividualFixesQueryVariables>;
+export const TestOrganizationDocument = {
+  kind: 'Document',
+  definitions: [
+    {
+      kind: 'OperationDefinition',
+      operation: 'query',
+      name: { kind: 'Name', value: 'testOrganization' },
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'organization' },
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                {
+                  kind: 'InlineFragment',
+                  typeCondition: {
+                    kind: 'NamedType',
+                    name: { kind: 'Name', value: 'Organization' },
+                  },
+                  selectionSet: {
+                    kind: 'SelectionSet',
+                    selections: [
+                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  TestOrganizationQuery,
+  TestOrganizationQueryVariables
+>;
+export const SecurityBenchmarksDocument = {
+  kind: 'Document',
+  definitions: [
+    {
+      kind: 'OperationDefinition',
+      operation: 'query',
+      name: { kind: 'Name', value: 'securityBenchmarks' },
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'securityBenchmarks' },
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                {
+                  kind: 'Field',
+                  name: { kind: 'Name', value: 'versions' },
+                  selectionSet: {
+                    kind: 'SelectionSet',
+                    selections: [
+                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                      {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'recommendations' },
+                        selectionSet: {
+                          kind: 'SelectionSet',
+                          selections: [
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'id' },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'identifier' },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'name' },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'description' },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'isAdopted' },
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  SecurityBenchmarksQuery,
+  SecurityBenchmarksQueryVariables
+>;
+export const IndividualFixesDocument = {
+  kind: 'Document',
+  definitions: [
+    {
+      kind: 'OperationDefinition',
+      operation: 'query',
+      name: { kind: 'Name', value: 'individualFixes' },
+      variableDefinitions: [
+        {
+          kind: 'VariableDefinition',
+          variable: {
+            kind: 'Variable',
+            name: { kind: 'Name', value: 'input' },
+          },
+          type: {
+            kind: 'NonNullType',
+            type: {
+              kind: 'NamedType',
+              name: { kind: 'Name', value: 'IndividualFixesInput' },
+            },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'individualFixes' },
+            arguments: [
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'input' },
+                value: {
+                  kind: 'Variable',
+                  name: { kind: 'Name', value: 'input' },
+                },
+              },
+            ],
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                {
+                  kind: 'InlineFragment',
+                  typeCondition: {
+                    kind: 'NamedType',
+                    name: { kind: 'Name', value: 'GombocError' },
+                  },
+                  selectionSet: {
+                    kind: 'SelectionSet',
+                    selections: [
+                      { kind: 'Field', name: { kind: 'Name', value: 'code' } },
+                      {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'message' },
+                      },
+                    ],
+                  },
+                },
+                {
+                  kind: 'InlineFragment',
+                  typeCondition: {
+                    kind: 'NamedType',
+                    name: { kind: 'Name', value: 'IndividualFixesSuccess' },
+                  },
+                  selectionSet: {
+                    kind: 'SelectionSet',
+                    selections: [
+                      {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'remediations' },
+                        selectionSet: {
+                          kind: 'SelectionSet',
+                          selections: [
+                            {
+                              kind: 'Field',
+                              name: {
+                                kind: 'Name',
+                                value: 'benchmarkRecommendation',
+                              },
+                              selectionSet: {
+                                kind: 'SelectionSet',
+                                selections: [
+                                  {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'id' },
+                                  },
+                                  {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'identifier' },
+                                  },
+                                  {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'name' },
+                                  },
+                                  {
+                                    kind: 'Field',
+                                    name: {
+                                      kind: 'Name',
+                                      value: 'description',
+                                    },
+                                  },
+                                ],
+                              },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'fixes' },
+                              selectionSet: {
+                                kind: 'SelectionSet',
+                                selections: [
+                                  {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'filepath' },
+                                  },
+                                  {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'oldLine' },
+                                  },
+                                  {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'newLine' },
+                                  },
+                                  {
+                                    kind: 'Field',
+                                    name: {
+                                      kind: 'Name',
+                                      value: 'codePosition',
+                                    },
+                                    selectionSet: {
+                                      kind: 'SelectionSet',
+                                      selections: [
+                                        {
+                                          kind: 'Field',
+                                          name: { kind: 'Name', value: 'line' },
+                                        },
+                                        {
+                                          kind: 'Field',
+                                          name: {
+                                            kind: 'Name',
+                                            value: 'column',
+                                          },
+                                        },
+                                      ],
+                                    },
+                                  },
+                                  {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'lineOffset' },
+                                  },
+                                  {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'fixType' },
+                                  },
+                                ],
+                              },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'codeObservation' },
+                              selectionSet: {
+                                kind: 'SelectionSet',
+                                selections: [
+                                  {
+                                    kind: 'Field',
+                                    name: {
+                                      kind: 'Name',
+                                      value: 'codeResourceInstance',
+                                    },
+                                    selectionSet: {
+                                      kind: 'SelectionSet',
+                                      selections: [
+                                        {
+                                          kind: 'Field',
+                                          name: { kind: 'Name', value: 'name' },
+                                        },
+                                        {
+                                          kind: 'Field',
+                                          name: { kind: 'Name', value: 'type' },
+                                        },
+                                        {
+                                          kind: 'Field',
+                                          name: {
+                                            kind: 'Name',
+                                            value: 'filepath',
+                                          },
+                                        },
+                                        {
+                                          kind: 'Field',
+                                          name: { kind: 'Name', value: 'line' },
+                                        },
+                                        {
+                                          kind: 'Field',
+                                          name: {
+                                            kind: 'Name',
+                                            value: 'codeResource',
+                                          },
+                                          selectionSet: {
+                                            kind: 'SelectionSet',
+                                            selections: [
+                                              {
+                                                kind: 'Field',
+                                                name: {
+                                                  kind: 'Name',
+                                                  value: 'id',
+                                                },
+                                              },
+                                              {
+                                                kind: 'Field',
+                                                name: {
+                                                  kind: 'Name',
+                                                  value: 'infrastructureTool',
+                                                },
+                                              },
+                                              {
+                                                kind: 'Field',
+                                                name: {
+                                                  kind: 'Name',
+                                                  value: 'documentationUrl',
+                                                },
+                                              },
+                                              {
+                                                kind: 'Field',
+                                                name: {
+                                                  kind: 'Name',
+                                                  value: 'cloudResource',
+                                                },
+                                                selectionSet: {
+                                                  kind: 'SelectionSet',
+                                                  selections: [
+                                                    {
+                                                      kind: 'Field',
+                                                      name: {
+                                                        kind: 'Name',
+                                                        value: 'id',
+                                                      },
+                                                    },
+                                                    {
+                                                      kind: 'Field',
+                                                      name: {
+                                                        kind: 'Name',
+                                                        value: 'provider',
+                                                      },
+                                                    },
+                                                    {
+                                                      kind: 'Field',
+                                                      name: {
+                                                        kind: 'Name',
+                                                        value: 'title',
+                                                      },
+                                                    },
+                                                    {
+                                                      kind: 'Field',
+                                                      name: {
+                                                        kind: 'Name',
+                                                        value:
+                                                          'documentationUrl',
+                                                      },
+                                                    },
+                                                  ],
+                                                },
+                                              },
+                                            ],
+                                          },
+                                        },
+                                      ],
+                                    },
+                                  },
+                                ],
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  IndividualFixesQuery,
+  IndividualFixesQueryVariables
+>;
