@@ -2,36 +2,23 @@
 import { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/core';
 export type Maybe<T> = T | null;
 export type InputMaybe<T> = Maybe<T>;
-export type Exact<T extends { [key: string]: unknown }> = {
-  [K in keyof T]: T[K];
-};
-export type MakeOptional<T, K extends keyof T> = Omit<T, K> & {
-  [SubKey in K]?: Maybe<T[SubKey]>;
-};
-export type MakeMaybe<T, K extends keyof T> = Omit<T, K> & {
-  [SubKey in K]: Maybe<T[SubKey]>;
-};
-export type MakeEmpty<
-  T extends { [key: string]: unknown },
-  K extends keyof T,
-> = { [_ in K]?: never };
-export type Incremental<T> =
-  | T
-  | {
-      [P in keyof T]?: P extends ' $fragmentName' | '__typename' ? T[P] : never;
-    };
+export type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
+export type MakeOptional<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]?: Maybe<T[SubKey]> };
+export type MakeMaybe<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]: Maybe<T[SubKey]> };
+export type MakeEmpty<T extends { [key: string]: unknown }, K extends keyof T> = { [_ in K]?: never };
+export type Incremental<T> = T | { [P in keyof T]?: P extends ' $fragmentName' | '__typename' ? T[P] : never };
 /** All built-in and custom scalars, mapped to their actual values */
 export type Scalars = {
-  ID: { input: string; output: string };
-  String: { input: string; output: string };
-  Boolean: { input: boolean; output: boolean };
-  Int: { input: number; output: number };
-  Float: { input: number; output: number };
-  JSON: { input: any; output: any };
+  ID: { input: string; output: string; }
+  String: { input: string; output: string; }
+  Boolean: { input: boolean; output: boolean; }
+  Int: { input: number; output: number; }
+  Float: { input: number; output: number; }
+  JSON: { input: any; output: any; }
 };
 
 export type AssetInstanceLocation = {
-  __typename?: 'AssetInstanceLocation';
+  __typename: 'AssetInstanceLocation';
   /** The scenario path: a directory or a filepath */
   branch: Scalars['String']['output'];
   id: Scalars['ID']['output'];
@@ -44,7 +31,7 @@ export type AssetInstanceLocation = {
 export type AssetInstanceLocationResponse = AssetInstanceLocation | GombocError;
 
 export type AssetType = {
-  __typename?: 'AssetType';
+  __typename: 'AssetType';
   /** The name of the cloud provider (AWS, GCP, Azure) */
   cloudProviderName: Scalars['String']['output'];
   /** This is the internal mapping of what a cloud resource is, originally was in cfn */
@@ -54,7 +41,7 @@ export type AssetType = {
 };
 
 export enum BitBucketApiVersion {
-  V2_0 = 'V2_0',
+  V2_0 = 'V2_0'
 }
 
 export type BulkAllLinkScanRemoteInput = {
@@ -67,19 +54,19 @@ export type BulkLinkScanRemoteInput = {
 };
 
 export type Capability = {
-  __typename?: 'Capability';
+  __typename: 'Capability';
   id: Scalars['ID']['output'];
   title: Scalars['String']['output'];
 };
 
 export type CfnAttribute = {
-  __typename?: 'CfnAttribute';
+  __typename: 'CfnAttribute';
   description?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
 };
 
 export type CfnProperty = {
-  __typename?: 'CfnProperty';
+  __typename: 'CfnProperty';
   customRules: Array<CustomRule>;
   description?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
@@ -88,7 +75,7 @@ export type CfnProperty = {
 };
 
 export type CfnResource = {
-  __typename?: 'CfnResource';
+  __typename: 'CfnResource';
   attributes: Array<CfnAttribute>;
   codeResource?: Maybe<CodeResource>;
   description?: Maybe<Scalars['String']['output']>;
@@ -97,7 +84,7 @@ export type CfnResource = {
 };
 
 export type CfnResourcePage = {
-  __typename?: 'CfnResourcePage';
+  __typename: 'CfnResourcePage';
   page: Scalars['Int']['output'];
   results: Array<CfnResource>;
   size: Scalars['Int']['output'];
@@ -111,14 +98,14 @@ export type CfnResourcePageInput = {
 };
 
 export type CfnSubProperty = {
-  __typename?: 'CfnSubProperty';
+  __typename: 'CfnSubProperty';
   description?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
   properties: Array<CfnProperty>;
 };
 
 export type CloudResource = {
-  __typename?: 'CloudResource';
+  __typename: 'CloudResource';
   documentationUrl?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
   provider: CloudResourceProvider;
@@ -128,23 +115,23 @@ export type CloudResource = {
 export enum CloudResourceProvider {
   Aws = 'AWS',
   Azure = 'AZURE',
-  Gcp = 'GCP',
+  Gcp = 'GCP'
 }
 
 export type CodeObservation = {
-  __typename?: 'CodeObservation';
+  __typename: 'CodeObservation';
   codeResourceInstance: CodeResourceInstance;
   disposition: Disposition;
 };
 
 export type CodePosition = {
-  __typename?: 'CodePosition';
+  __typename: 'CodePosition';
   column: Scalars['Int']['output'];
   line: Scalars['Int']['output'];
 };
 
 export type CodeResource = {
-  __typename?: 'CodeResource';
+  __typename: 'CodeResource';
   cloudResource?: Maybe<CloudResource>;
   configOptions: ConfigOptionPage;
   documentationUrl?: Maybe<Scalars['String']['output']>;
@@ -152,12 +139,13 @@ export type CodeResource = {
   infrastructureTool: InfrastructureTool;
 };
 
+
 export type CodeResourceConfigOptionsArgs = {
   input: PageInput;
 };
 
 export type CodeResourceInstance = {
-  __typename?: 'CodeResourceInstance';
+  __typename: 'CodeResourceInstance';
   codeResource: CodeResource;
   filepath: Scalars['String']['output'];
   line: Scalars['Int']['output'];
@@ -166,7 +154,7 @@ export type CodeResourceInstance = {
 };
 
 export type CodeResourcePage = {
-  __typename?: 'CodeResourcePage';
+  __typename: 'CodeResourcePage';
   page: Scalars['Int']['output'];
   results: Array<CodeResource>;
   size: Scalars['Int']['output'];
@@ -174,7 +162,7 @@ export type CodeResourcePage = {
 };
 
 export type ConfigOption = {
-  __typename?: 'ConfigOption';
+  __typename: 'ConfigOption';
   capability: Capability;
   /** @deprecated This is moved inside of the CodeResource object. DEV-2330 */
   cloudResource?: Maybe<CloudResource>;
@@ -186,7 +174,7 @@ export type ConfigOption = {
 };
 
 export type ConfigOptionPage = {
-  __typename?: 'ConfigOptionPage';
+  __typename: 'ConfigOptionPage';
   page: Scalars['Int']['output'];
   results: Array<ConfigOption>;
   size: Scalars['Int']['output'];
@@ -209,12 +197,10 @@ export type CreateBitBucketIntegrationInput = {
 
 export type CreateBitBucketIntegrationOutput = GombocError | ScmIntegration;
 
-export type CreateCspmIntegrationOutput =
-  | CreateCspmIntegrationResponse
-  | GombocError;
+export type CreateCspmIntegrationOutput = CreateCspmIntegrationResponse | GombocError;
 
 export type CreateCspmIntegrationResponse = {
-  __typename?: 'CreateCspmIntegrationResponse';
+  __typename: 'CreateCspmIntegrationResponse';
   apiKey: Scalars['String']['output'];
   id: Scalars['ID']['output'];
   integration: CspmIntegration;
@@ -281,7 +267,7 @@ export type CreateWizIntegrationInput = {
 };
 
 export type CspmIntegration = {
-  __typename?: 'CspmIntegration';
+  __typename: 'CspmIntegration';
   /** If applicable, this will be the associated cloud provider (AWS, GCP) */
   cloudResourceProviderName?: Maybe<Scalars['String']['output']>;
   createdAt: Scalars['String']['output'];
@@ -296,7 +282,7 @@ export type CspmIntegration = {
 };
 
 export type CspmObservation = {
-  __typename?: 'CspmObservation';
+  __typename: 'CspmObservation';
   /** The cloud account id if it exists, otherwise an empty string */
   cloudAccountId: Scalars['String']['output'];
   /** The specific unique id of the cloud asset i.e 'vm_215151194724_i-09b8a8f38e1ccebff"' */
@@ -324,7 +310,7 @@ export type CspmObservation = {
 export type CspmObservationOutput = CspmObservation | GombocError;
 
 export type CspmObservationSource = {
-  __typename?: 'CspmObservationSource';
+  __typename: 'CspmObservationSource';
   /** A short HTML‑encoded description of the finding. */
   description?: Maybe<Scalars['String']['output']>;
   /** The name or unique ID of the alert, shown to the user. */
@@ -347,7 +333,7 @@ export type CspmObservationsInput = {
 };
 
 export type CspmObservationsPage = {
-  __typename?: 'CspmObservationsPage';
+  __typename: 'CspmObservationsPage';
   page: Scalars['Int']['output'];
   results: Array<CspmObservation>;
   size: Scalars['Int']['output'];
@@ -366,7 +352,7 @@ export type CustomRulesInput = {
 };
 
 export type CustomRulesPage = {
-  __typename?: 'CustomRulesPage';
+  __typename: 'CustomRulesPage';
   page: Scalars['Int']['output'];
   results: Array<CustomRule>;
   size: Scalars['Int']['output'];
@@ -399,11 +385,11 @@ export enum Disposition {
   AutoRemediated = 'AUTO_REMEDIATED',
   CannotRemediate = 'CANNOT_REMEDIATE',
   InsufficientInfoToRemediate = 'INSUFFICIENT_INFO_TO_REMEDIATE',
-  NotApplicable = 'NOT_APPLICABLE',
+  NotApplicable = 'NOT_APPLICABLE'
 }
 
 export type Edge = {
-  __typename?: 'Edge';
+  __typename: 'Edge';
   label: Scalars['String']['output'];
   source: Node;
   target: Node;
@@ -412,11 +398,11 @@ export type Edge = {
 
 export enum Effect {
   Preview = 'Preview',
-  SubmitForReview = 'SubmitForReview',
+  SubmitForReview = 'SubmitForReview'
 }
 
 export type FailedScan = {
-  __typename?: 'FailedScan';
+  __typename: 'FailedScan';
   createdAt: Scalars['String']['output'];
   createdBy: Scalars['String']['output'];
   id: Scalars['ID']['output'];
@@ -426,16 +412,16 @@ export type FailedScan = {
 export enum FixType {
   Add = 'ADD',
   Delete = 'DELETE',
-  Update = 'UPDATE',
+  Update = 'UPDATE'
 }
 
 export enum GitHubApp {
   Community = 'COMMUNITY',
-  Enterprise = 'ENTERPRISE',
+  Enterprise = 'ENTERPRISE'
 }
 
 export enum GitLabApiVersion {
-  V4 = 'V4',
+  V4 = 'V4'
 }
 
 export type GitMetaDataInput = {
@@ -446,7 +432,7 @@ export type GitMetaDataInput = {
 };
 
 export type GombocError = {
-  __typename?: 'GombocError';
+  __typename: 'GombocError';
   code?: Maybe<GombocErrorCode>;
   message: Scalars['String']['output'];
 };
@@ -456,7 +442,7 @@ export enum GombocErrorCode {
   InvalidArgument = 'INVALID_ARGUMENT',
   NotFound = 'NOT_FOUND',
   NotImplemented = 'NOT_IMPLEMENTED',
-  Unauthorized = 'UNAUTHORIZED',
+  Unauthorized = 'UNAUTHORIZED'
 }
 
 export type IacScanContent = {
@@ -472,12 +458,12 @@ export type IndividualFixesInput = {
 export type IndividualFixesResponse = GombocError | IndividualFixesSuccess;
 
 export type IndividualFixesSuccess = {
-  __typename?: 'IndividualFixesSuccess';
+  __typename: 'IndividualFixesSuccess';
   remediations: Array<IndividualRemediation>;
 };
 
 export type IndividualRemediation = {
-  __typename?: 'IndividualRemediation';
+  __typename: 'IndividualRemediation';
   benchmarkRecommendation: SecurityBenchmarkRecommendation;
   codeObservation: CodeObservation;
   fixes: Array<RemediationFix>;
@@ -485,18 +471,18 @@ export type IndividualRemediation = {
 
 export enum InfrastructureTool {
   Cloudformation = 'CLOUDFORMATION',
-  Terraform = 'TERRAFORM',
+  Terraform = 'TERRAFORM'
 }
 
 export enum IntegrationType {
   Custom = 'CUSTOM',
   Customgomboc = 'CUSTOMGOMBOC',
   Orca = 'ORCA',
-  Wiz = 'WIZ',
+  Wiz = 'WIZ'
 }
 
 export type LineFix = {
-  __typename?: 'LineFix';
+  __typename: 'LineFix';
   fixType: FixType;
   issueType: Scalars['String']['output'];
   lineOffset: Scalars['Int']['output'];
@@ -506,7 +492,7 @@ export type LineFix = {
 };
 
 export type Link = {
-  __typename?: 'Link';
+  __typename: 'Link';
   createdAt: Scalars['String']['output'];
   /** Returns the email of the user who linked the repository */
   createdBy: Scalars['String']['output'];
@@ -527,9 +513,11 @@ export type Link = {
   slug: Scalars['ID']['output'];
 };
 
+
 export type LinkPullRequestsArgs = {
   input: LinkPullRequestsInput;
 };
+
 
 export type LinkScanResultsArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
@@ -568,14 +556,14 @@ export type LinkScanRemoteInput = {
 export type LinkedScmRepository = ScmRepository | UnreachableRepository;
 
 export type LinksPage = {
-  __typename?: 'LinksPage';
+  __typename: 'LinksPage';
   /** Use this to get the next page */
   lastKey?: Maybe<Scalars['ID']['output']>;
   links: Array<Link>;
 };
 
 export type LogicalResource = {
-  __typename?: 'LogicalResource';
+  __typename: 'LogicalResource';
   /** @deprecated This has been relocated into codeResource. DEV-2330 */
   cloudResource?: Maybe<CloudResource>;
   codeResource?: Maybe<CodeResource>;
@@ -591,7 +579,7 @@ export type MetaDataInput = {
 };
 
 export type Mutation = {
-  __typename?: 'Mutation';
+  __typename: 'Mutation';
   /**
    * Adopt all security benchmarkversions and all of their recommendations -> on initial creation of account
    * during onboarding wizard
@@ -661,133 +649,166 @@ export type Mutation = {
   updatePullRequestStatus?: Maybe<GombocError>;
 };
 
+
 export type MutationBulkAllLinkScanRemoteArgs = {
   input: BulkAllLinkScanRemoteInput;
 };
+
 
 export type MutationBulkLinkScanRemoteArgs = {
   input: BulkLinkScanRemoteInput;
 };
 
+
 export type MutationCreateAzdoIntegrationArgs = {
   input: CreateAzdoIntegrationInput;
 };
+
 
 export type MutationCreateBitBucketIntegrationArgs = {
   input: CreateBitBucketIntegrationInput;
 };
 
+
 export type MutationCreateCspmCustomIntegrationArgs = {
   input: CreateCustomIntegrationInput;
 };
+
 
 export type MutationCreateCspmOrcaIntegrationArgs = {
   input: CreateOrcaIntegrationInput;
 };
 
+
 export type MutationCreateCspmWizIntegrationArgs = {
   input: CreateWizIntegrationInput;
 };
+
 
 export type MutationCreateGitHubIntegrationArgs = {
   input: CreateGitHubIntegrationInput;
 };
 
+
 export type MutationCreateGitLabIntegrationArgs = {
   input: CreateGitLabIntegrationInput;
 };
+
 
 export type MutationCreateProjectArgs = {
   projectName: Scalars['String']['input'];
 };
 
+
 export type MutationCreateScalarCustomRuleArgs = {
   input: CreateScalarCustomRuleInput;
 };
+
 
 export type MutationCreateTicketArgs = {
   input: CreateTicketInput;
 };
 
+
 export type MutationDeleteCspmIntegrationArgs = {
   id: Scalars['ID']['input'];
 };
+
 
 export type MutationDeleteCustomRulesArgs = {
   input: DeleteCustomRulesInput;
 };
 
+
 export type MutationDeleteLinkArgs = {
   linkId: Scalars['ID']['input'];
 };
+
 
 export type MutationDeleteProjectArgs = {
   projectId: Scalars['ID']['input'];
 };
 
+
 export type MutationDeleteScmIntegrationArgs = {
   input: DeleteScmIntegrationInput;
 };
+
 
 export type MutationDeleteTicketArgs = {
   input: DeleteTicketInput;
 };
 
+
 export type MutationDiscoverIacRepositoriesArgs = {
   input: DiscoverIacRepositoriesInput;
 };
+
 
 export type MutationLinkRepositoriesArgs = {
   input: LinkRepositoriesInput;
 };
 
+
 export type MutationLinkScanRemoteArgs = {
   input: LinkScanRemoteInput;
 };
+
 
 export type MutationOnGitHubMetaEventArgs = {
   input: OnGitHubMetaEventInput;
 };
 
+
 export type MutationOnGitHubPullRequestEventArgs = {
   input: OnGitHubPullRequestEventInput;
 };
+
 
 export type MutationPutSetupCompletedArgs = {
   input: PutSetupCompletedInput;
 };
 
+
 export type MutationScanFromCspmArgs = {
   input: ScanFromCspmInput;
 };
+
 
 export type MutationScanLocalScenarioArgs = {
   input: ScanLocalScenarioInput;
 };
 
+
 export type MutationScanOnPullRequestArgs = {
   input: ScanOnPullRequestInput;
 };
+
 
 export type MutationScanOnScheduleArgs = {
   input: ScanOnScheduleInput;
 };
 
+
 export type MutationSetCspmAssetInstanceLocationArgs = {
   input: SetAssetInstanceLocationInput;
 };
+
 
 export type MutationToggleAdoptSecurityBenchmarkRecommendationsArgs = {
   input: ToggleAdoptSecurityBenchmarkRecommendationsInput;
 };
 
+
 export type MutationToggleAdoptSecurityBenchmarkVersionArgs = {
   input: ToggleAdoptSecurityBenchmarkVersionInput;
 };
 
+
 export type MutationUnlinkCspmAssetInstanceLocationArgs = {
   id: Scalars['ID']['input'];
 };
+
 
 export type MutationUpdatePullRequestStatusArgs = {
   pullRequestNumber: Scalars['String']['input'];
@@ -797,7 +818,7 @@ export type MutationUpdatePullRequestStatusArgs = {
 };
 
 export type Node = {
-  __typename?: 'Node';
+  __typename: 'Node';
   id: Scalars['ID']['output'];
   label: Scalars['String']['output'];
 };
@@ -828,7 +849,7 @@ export type OnGitHubPullRequestEventInput = {
 };
 
 export type OntologicalSubgraph = {
-  __typename?: 'OntologicalSubgraph';
+  __typename: 'OntologicalSubgraph';
   edges: Array<Edge>;
   nodes: Array<Node>;
 };
@@ -839,12 +860,12 @@ export enum OrcaRegion {
   Europe = 'EUROPE',
   India = 'INDIA',
   Israel = 'ISRAEL',
-  Us = 'US',
+  Us = 'US'
 }
 
 /** A customer organization as represented in the system */
 export type Organization = {
-  __typename?: 'Organization';
+  __typename: 'Organization';
   /**
    * CSPM Integrations associated with the account
    * @deprecated Use Query.cspmIntegrations instead
@@ -877,20 +898,24 @@ export type Organization = {
   scmIntegrations: Array<ScmIntegration>;
 };
 
+
 /** A customer organization as represented in the system */
 export type OrganizationProjectArgs = {
   slug: Scalars['String']['input'];
 };
+
 
 /** A customer organization as represented in the system */
 export type OrganizationPullRequestsArgs = {
   input: OrganizationPullRequestsInput;
 };
 
+
 /** A customer organization as represented in the system */
 export type OrganizationScansArgs = {
   before?: InputMaybe<Scalars['String']['input']>;
 };
+
 
 /** A customer organization as represented in the system */
 export type OrganizationScmIntegrationArgs = {
@@ -910,7 +935,7 @@ export type PageInput = {
 };
 
 export type PolicyObservation = {
-  __typename?: 'PolicyObservation';
+  __typename: 'PolicyObservation';
   /**
    * The policy statement capability ID involved
    * @deprecated Deprecated in favor of recommendation
@@ -972,7 +997,7 @@ export type PolicyObservation = {
 export type PolicyObservationResponse = GombocError | PolicyObservation;
 
 export type PolicyObservationsPage = {
-  __typename?: 'PolicyObservationsPage';
+  __typename: 'PolicyObservationsPage';
   page: Scalars['Int']['output'];
   results: Array<PolicyObservation>;
   size: Scalars['Int']['output'];
@@ -980,7 +1005,7 @@ export type PolicyObservationsPage = {
 };
 
 export type PolicyStatement = {
-  __typename?: 'PolicyStatement';
+  __typename: 'PolicyStatement';
   description?: Maybe<Scalars['String']['output']>;
   framework?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
@@ -989,14 +1014,14 @@ export type PolicyStatement = {
 };
 
 export type PolicyStatementPayloadMustImplement = {
-  __typename?: 'PolicyStatementPayloadMustImplement';
+  __typename: 'PolicyStatementPayloadMustImplement';
   capability: Capability;
 };
 
 export type PolicyStatementPayloadType = PolicyStatementPayloadMustImplement;
 
 export type Position = {
-  __typename?: 'Position';
+  __typename: 'Position';
   /** @deprecated Use type CodePosition */
   column: Scalars['Int']['output'];
   /** @deprecated Use type CodePosition */
@@ -1004,7 +1029,7 @@ export type Position = {
 };
 
 export type Project = {
-  __typename?: 'Project';
+  __typename: 'Project';
   createdAt: Scalars['String']['output'];
   /** Returns the email of the user who created the project */
   createdBy: Scalars['String']['output'];
@@ -1030,13 +1055,16 @@ export type Project = {
   slug: Scalars['String']['output'];
 };
 
+
 export type ProjectLinkArgs = {
   linkId: Scalars['ID']['input'];
 };
 
+
 export type ProjectLinkBySlugArgs = {
   slug: Scalars['ID']['input'];
 };
+
 
 export type ProjectLinksPageArgs = {
   pageSize?: InputMaybe<Scalars['Int']['input']>;
@@ -1046,7 +1074,7 @@ export type ProjectLinksPageArgs = {
 export type ProjectResponse = GombocError | Project;
 
 export type PullRequest = {
-  __typename?: 'PullRequest';
+  __typename: 'PullRequest';
   externalUrl: Scalars['String']['output'];
   id: Scalars['ID']['output'];
   identifier: Scalars['String']['output'];
@@ -1058,11 +1086,11 @@ export enum PullRequestEvent {
   Discarded = 'DISCARDED',
   Merged = 'MERGED',
   Opened = 'OPENED',
-  Synchronized = 'SYNCHRONIZED',
+  Synchronized = 'SYNCHRONIZED'
 }
 
 export type PullRequestPage = {
-  __typename?: 'PullRequestPage';
+  __typename: 'PullRequestPage';
   page: Scalars['Int']['output'];
   results: Array<PullRequest>;
   size: Scalars['Int']['output'];
@@ -1075,7 +1103,7 @@ export enum PullRequestStatus {
   Closed = 'CLOSED',
   Expected = 'EXPECTED',
   Merged = 'MERGED',
-  Open = 'OPEN',
+  Open = 'OPEN'
 }
 
 export type PutSetupCompletedInput = {
@@ -1083,7 +1111,7 @@ export type PutSetupCompletedInput = {
 };
 
 export type Query = {
-  __typename?: 'Query';
+  __typename: 'Query';
   /** @deprecated No longer supported */
   capabilities: Array<Capability>;
   cfnProperty?: Maybe<CfnProperty>;
@@ -1136,25 +1164,31 @@ export type Query = {
   tfResources: TfResourcePage;
 };
 
+
 export type QueryCfnPropertyArgs = {
   id: Scalars['ID']['input'];
 };
+
 
 export type QueryCfnResourceArgs = {
   id: Scalars['ID']['input'];
 };
 
+
 export type QueryCfnResourcesArgs = {
   input: CfnResourcePageInput;
 };
+
 
 export type QueryCfnSubPropertyArgs = {
   id: Scalars['ID']['input'];
 };
 
+
 export type QueryCodeResourceArgs = {
   id: Scalars['ID']['input'];
 };
+
 
 export type QueryCodeResourcesArgs = {
   infrastructureTool?: InputMaybe<InfrastructureTool>;
@@ -1162,100 +1196,123 @@ export type QueryCodeResourcesArgs = {
   pageSize?: InputMaybe<Scalars['Int']['input']>;
 };
 
+
 export type QueryCspmObservationArgs = {
   id: Scalars['ID']['input'];
 };
+
 
 export type QueryCspmObservationsArgs = {
   input: CspmObservationsInput;
 };
 
+
 export type QueryCustomRuleArgs = {
   id: Scalars['ID']['input'];
 };
+
 
 export type QueryCustomRulesArgs = {
   input: CustomRulesInput;
 };
 
+
 export type QueryIndividualFixesArgs = {
   input: IndividualFixesInput;
 };
+
 
 export type QueryLinkArgs = {
   id: Scalars['ID']['input'];
 };
 
+
 export type QueryPolicyObservationArgs = {
   id: Scalars['ID']['input'];
 };
+
 
 export type QueryPullRequestArgs = {
   id: Scalars['ID']['input'];
 };
 
+
 export type QueryScanArgs = {
   id: Scalars['ID']['input'];
 };
+
 
 export type QueryScanBranchArgs = {
   scanRequestId: Scalars['ID']['input'];
 };
 
+
 export type QueryScanDirectoryArgs = {
   scanRequestId: Scalars['ID']['input'];
 };
+
 
 export type QueryScanRequestArgs = {
   id: Scalars['ID']['input'];
 };
 
+
 export type QueryScanResultArgs = {
   id: Scalars['ID']['input'];
 };
+
 
 export type QuerySearchScanTargetsArgs = {
   cloudResourceId: Scalars['ID']['input'];
 };
 
+
 export type QuerySecurityBenchmarkArgs = {
   id: Scalars['ID']['input'];
 };
+
 
 export type QuerySecurityBenchmarkRecommendationArgs = {
   id: Scalars['String']['input'];
 };
 
+
 export type QuerySecurityBenchmarkVersionArgs = {
   id: Scalars['ID']['input'];
 };
+
 
 export type QuerySecurityFrameworkArgs = {
   id: Scalars['ID']['input'];
 };
 
+
 export type QuerySecurityFrameworkVersionArgs = {
   id: Scalars['ID']['input'];
 };
+
 
 export type QueryTfAttributeArgs = {
   id: Scalars['ID']['input'];
 };
 
+
 export type QueryTfNestedBlockArgs = {
   id: Scalars['ID']['input'];
 };
 
+
 export type QueryTfResourceArgs = {
   id: Scalars['ID']['input'];
 };
+
 
 export type QueryTfResourcesArgs = {
   input: TfResourcePageInput;
 };
 
 export type RemediationComment = {
-  __typename?: 'RemediationComment';
+  __typename: 'RemediationComment';
   /** We should include a category and description of each fix. */
   category?: Maybe<Scalars['String']['output']>;
   fileName: Scalars['String']['output'];
@@ -1266,7 +1323,7 @@ export type RemediationComment = {
 };
 
 export type RemediationFix = {
-  __typename?: 'RemediationFix';
+  __typename: 'RemediationFix';
   codePosition: CodePosition;
   filepath: Scalars['String']['output'];
   fixType: FixType;
@@ -1280,12 +1337,12 @@ export enum RequestOrigin {
   Community = 'COMMUNITY',
   CspmService = 'CSPM_SERVICE',
   Portal = 'PORTAL',
-  Workflow = 'WORKFLOW',
+  Workflow = 'WORKFLOW'
 }
 
 /** Custom policy, points to a target attribute or property */
 export type ScalarRule = {
-  __typename?: 'ScalarRule';
+  __typename: 'ScalarRule';
   /** the comment that will show up in a PR when a remediation is found */
   comment: Scalars['String']['output'];
   createdAt: Scalars['String']['output'];
@@ -1305,7 +1362,7 @@ export type ScalarRule = {
 export type ScalarRuleTarget = CfnProperty | TfAttribute;
 
 export type Scan = {
-  __typename?: 'Scan';
+  __typename: 'Scan';
   children: ScanPage;
   createdAt: Scalars['String']['output'];
   createdBy: Scalars['String']['output'];
@@ -1317,13 +1374,14 @@ export type Scan = {
   scanScope: Scalars['String']['output'];
 };
 
+
 export type ScanChildrenArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
   size?: InputMaybe<Scalars['Int']['input']>;
 };
 
 export type ScanBranch = {
-  __typename?: 'ScanBranch';
+  __typename: 'ScanBranch';
   children: Array<ScanScenarioResponse>;
   childrenCompleted: Scalars['Int']['output'];
   childrenError: Scalars['Int']['output'];
@@ -1337,7 +1395,7 @@ export type ScanBranch = {
 export type ScanBranchResponse = FailedScan | GombocError | ScanBranch;
 
 export type ScanDirectory = {
-  __typename?: 'ScanDirectory';
+  __typename: 'ScanDirectory';
   children: Array<ScanScenarioResponse>;
   childrenCompleted: Scalars['Int']['output'];
   childrenError: Scalars['Int']['output'];
@@ -1360,7 +1418,7 @@ export type ScanFromCspmInput = {
 };
 
 export type ScanLocalScenario = {
-  __typename?: 'ScanLocalScenario';
+  __typename: 'ScanLocalScenario';
   results: Array<RemediationComment>;
 };
 
@@ -1387,7 +1445,7 @@ export type ScanOnScheduleInput = {
 };
 
 export type ScanPage = {
-  __typename?: 'ScanPage';
+  __typename: 'ScanPage';
   page: Scalars['Int']['output'];
   results: Array<Scan>;
   size: Scalars['Int']['output'];
@@ -1395,7 +1453,7 @@ export type ScanPage = {
 };
 
 export type ScanRepository = {
-  __typename?: 'ScanRepository';
+  __typename: 'ScanRepository';
   children: Array<ScanBranchResponse>;
   childrenCompleted: Scalars['Int']['output'];
   childrenError: Scalars['Int']['output'];
@@ -1409,7 +1467,7 @@ export type ScanRepository = {
 export type ScanRepositoryResponse = FailedScan | GombocError | ScanRepository;
 
 export type ScanRequest = {
-  __typename?: 'ScanRequest';
+  __typename: 'ScanRequest';
   /** @deprecated No longer supported */
   children: Array<ScanRepositoryResponse>;
   childrenCompleted: Scalars['Int']['output'];
@@ -1430,10 +1488,12 @@ export type ScanRequest = {
   scans: ScanPage;
 };
 
+
 export type ScanRequestScanResultsArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
   size?: InputMaybe<Scalars['Int']['input']>;
 };
+
 
 export type ScanRequestScansArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
@@ -1443,7 +1503,7 @@ export type ScanRequestScansArgs = {
 export type ScanRequestResponse = FailedScan | GombocError | ScanRequest;
 
 export type ScanRequestResponseType = {
-  __typename?: 'ScanRequestResponseType';
+  __typename: 'ScanRequestResponseType';
   errors: Array<Maybe<GombocError>>;
   scanRequestId: Scalars['ID']['output'];
 };
@@ -1452,7 +1512,7 @@ export type ScanResponse = FailedScan | GombocError | Scan;
 
 /** A Scan Result that originated from a Scan Request */
 export type ScanResult = {
-  __typename?: 'ScanResult';
+  __typename: 'ScanResult';
   /** The related repository branch name */
   branch?: Maybe<Scalars['String']['output']>;
   /** A general state of the scan result */
@@ -1508,6 +1568,7 @@ export type ScanResult = {
   violationsCount: Scalars['Int']['output'];
 };
 
+
 /** A Scan Result that originated from a Scan Request */
 export type ScanResultObservationsArgs = {
   exclude?: InputMaybe<Array<Disposition>>;
@@ -1515,12 +1576,14 @@ export type ScanResultObservationsArgs = {
   size?: InputMaybe<Scalars['Int']['input']>;
 };
 
+
 /** A Scan Result that originated from a Scan Request */
 export type ScanResultPolicyObservationsArgs = {
   exclude?: InputMaybe<Array<Disposition>>;
   page?: InputMaybe<Scalars['Int']['input']>;
   size?: InputMaybe<Scalars['Int']['input']>;
 };
+
 
 /** A Scan Result that originated from a Scan Request */
 export type ScanResultTicketsArgs = {
@@ -1532,11 +1595,11 @@ export enum ScanResultCondition {
   AllFixed = 'ALL_FIXED',
   Compliant = 'COMPLIANT',
   NoneFixed = 'NONE_FIXED',
-  SomeFixed = 'SOME_FIXED',
+  SomeFixed = 'SOME_FIXED'
 }
 
 export type ScanResultPage = {
-  __typename?: 'ScanResultPage';
+  __typename: 'ScanResultPage';
   page: Scalars['Int']['output'];
   results: Array<ScanResult>;
   size: Scalars['Int']['output'];
@@ -1546,7 +1609,7 @@ export type ScanResultPage = {
 export type ScanResultResponse = GombocError | ScanResult;
 
 export type ScanScenario = {
-  __typename?: 'ScanScenario';
+  __typename: 'ScanScenario';
   createdAt: Scalars['String']['output'];
   createdBy: Scalars['String']['output'];
   id: Scalars['ID']['output'];
@@ -1557,7 +1620,7 @@ export type ScanScenario = {
 export type ScanScenarioResponse = FailedScan | GombocError | ScanScenario;
 
 export type ScanTarget = {
-  __typename?: 'ScanTarget';
+  __typename: 'ScanTarget';
   /** The repository branch */
   branch: Scalars['String']['output'];
   /** Maps to a repository */
@@ -1576,7 +1639,7 @@ export type ScanTargetInput = {
 };
 
 export type ScmBranch = {
-  __typename?: 'ScmBranch';
+  __typename: 'ScmBranch';
   /** Returns additional info on the branch (e.g.  "main", "protected"...) */
   label?: Maybe<Scalars['String']['output']>;
   name: Scalars['String']['output'];
@@ -1584,7 +1647,7 @@ export type ScmBranch = {
 
 /** Integrations grant access to SCM repositories */
 export type ScmIntegration = {
-  __typename?: 'ScmIntegration';
+  __typename: 'ScmIntegration';
   createdAt: Scalars['String']['output'];
   /** Returns the email of the user who integrated the SCM provider */
   createdBy: Scalars['String']['output'];
@@ -1594,6 +1657,7 @@ export type ScmIntegration = {
   scmType: ScmType;
 };
 
+
 /** Integrations grant access to SCM repositories */
 export type ScmIntegrationRepoOwnerArgs = {
   scope?: InputMaybe<Scalars['String']['input']>;
@@ -1602,7 +1666,7 @@ export type ScmIntegrationRepoOwnerArgs = {
 export type ScmIntegrationResponse = GombocError | ScmIntegration;
 
 export type ScmRepoOwner = {
-  __typename?: 'ScmRepoOwner';
+  __typename: 'ScmRepoOwner';
   children: ScmRepoOwnersPage;
   htmlUrl: Scalars['String']['output'];
   name: Scalars['String']['output'];
@@ -1614,15 +1678,18 @@ export type ScmRepoOwner = {
   type: Scalars['String']['output'];
 };
 
+
 export type ScmRepoOwnerChildrenArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
   size?: InputMaybe<Scalars['Int']['input']>;
 };
 
+
 export type ScmRepoOwnerRepositoriesArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
   size?: InputMaybe<Scalars['Int']['input']>;
 };
+
 
 export type ScmRepoOwnerSearchRepositoriesArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
@@ -1631,7 +1698,7 @@ export type ScmRepoOwnerSearchRepositoriesArgs = {
 };
 
 export type ScmRepoOwnersPage = {
-  __typename?: 'ScmRepoOwnersPage';
+  __typename: 'ScmRepoOwnersPage';
   page: Scalars['Int']['output'];
   results: Array<ScmRepoOwner>;
   size: Scalars['Int']['output'];
@@ -1639,7 +1706,7 @@ export type ScmRepoOwnersPage = {
 };
 
 export type ScmRepositoriesPage = {
-  __typename?: 'ScmRepositoriesPage';
+  __typename: 'ScmRepositoriesPage';
   page: Scalars['Int']['output'];
   results: Array<ScmRepository>;
   size: Scalars['Int']['output'];
@@ -1647,7 +1714,7 @@ export type ScmRepositoriesPage = {
 };
 
 export type ScmRepository = {
-  __typename?: 'ScmRepository';
+  __typename: 'ScmRepository';
   branches: Array<ScmBranch>;
   htmlUrl: Scalars['String']['output'];
   id: Scalars['ID']['output'];
@@ -1655,6 +1722,7 @@ export type ScmRepository = {
   name: Scalars['String']['output'];
   owner: ScmRepoOwner;
 };
+
 
 export type ScmRepositoryBranchesArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
@@ -1665,18 +1733,18 @@ export enum ScmType {
   Azdo = 'AZDO',
   Bitbucket = 'BITBUCKET',
   Github = 'GITHUB',
-  Gitlab = 'GITLAB',
+  Gitlab = 'GITLAB'
 }
 
 export type SecurityBenchmark = {
-  __typename?: 'SecurityBenchmark';
+  __typename: 'SecurityBenchmark';
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
   versions: Array<SecurityBenchmarkVersion>;
 };
 
 export type SecurityBenchmarkRecommendation = {
-  __typename?: 'SecurityBenchmarkRecommendation';
+  __typename: 'SecurityBenchmarkRecommendation';
   benchmarkVersion: SecurityBenchmarkVersion;
   controls: Array<SecurityFrameworkControl>;
   description?: Maybe<Scalars['String']['output']>;
@@ -1686,12 +1754,10 @@ export type SecurityBenchmarkRecommendation = {
   name: Scalars['String']['output'];
 };
 
-export type SecurityBenchmarkRecommendationResponse =
-  | GombocError
-  | SecurityBenchmarkRecommendation;
+export type SecurityBenchmarkRecommendationResponse = GombocError | SecurityBenchmarkRecommendation;
 
 export type SecurityBenchmarkVersion = {
-  __typename?: 'SecurityBenchmarkVersion';
+  __typename: 'SecurityBenchmarkVersion';
   benchmark: SecurityBenchmark;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
@@ -1699,14 +1765,14 @@ export type SecurityBenchmarkVersion = {
 };
 
 export type SecurityFramework = {
-  __typename?: 'SecurityFramework';
+  __typename: 'SecurityFramework';
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
   versions: Array<SecurityFrameworkVersion>;
 };
 
 export type SecurityFrameworkControl = {
-  __typename?: 'SecurityFrameworkControl';
+  __typename: 'SecurityFrameworkControl';
   description: Scalars['String']['output'];
   framework: SecurityFrameworkVersion;
   id: Scalars['ID']['output'];
@@ -1716,7 +1782,7 @@ export type SecurityFrameworkControl = {
 };
 
 export type SecurityFrameworkVersion = {
-  __typename?: 'SecurityFrameworkVersion';
+  __typename: 'SecurityFrameworkVersion';
   benchmarks: Array<SecurityBenchmarkVersion>;
   controls: Array<SecurityFrameworkControl>;
   framework: SecurityFramework;
@@ -1739,11 +1805,11 @@ export enum Severity {
   Info = 'INFO',
   Low = 'LOW',
   Medium = 'MEDIUM',
-  Unknown = 'UNKNOWN',
+  Unknown = 'UNKNOWN'
 }
 
 export type TfAttribute = {
-  __typename?: 'TfAttribute';
+  __typename: 'TfAttribute';
   computed?: Maybe<Scalars['Boolean']['output']>;
   customRules: Array<CustomRule>;
   deprecated?: Maybe<Scalars['Boolean']['output']>;
@@ -1757,14 +1823,14 @@ export type TfAttribute = {
 };
 
 export type TfNestedBlock = {
-  __typename?: 'TfNestedBlock';
+  __typename: 'TfNestedBlock';
   attributes: Array<TfAttribute>;
   id: Scalars['ID']['output'];
   nestedBlocks: Array<TfNestedBlock>;
 };
 
 export type TfResource = {
-  __typename?: 'TfResource';
+  __typename: 'TfResource';
   attributes: Array<TfAttribute>;
   codeResource?: Maybe<CodeResource>;
   description?: Maybe<Scalars['String']['output']>;
@@ -1774,7 +1840,7 @@ export type TfResource = {
 };
 
 export type TfResourcePage = {
-  __typename?: 'TfResourcePage';
+  __typename: 'TfResourcePage';
   page: Scalars['Int']['output'];
   results: Array<TfResource>;
   size: Scalars['Int']['output'];
@@ -1788,7 +1854,7 @@ export type TfResourcePageInput = {
 };
 
 export type Ticket = {
-  __typename?: 'Ticket';
+  __typename: 'Ticket';
   createdAt: Scalars['String']['output'];
   /** Returns the email of the user who linked the ticket */
   createdBy: Scalars['String']['output'];
@@ -1798,7 +1864,7 @@ export type Ticket = {
 };
 
 export type TicketPage = {
-  __typename?: 'TicketPage';
+  __typename: 'TicketPage';
   page: Scalars['Int']['output'];
   results: Array<Ticket>;
   totalCount: Scalars['Int']['output'];
@@ -1816,535 +1882,33 @@ export type ToggleAdoptSecurityBenchmarkVersionInput = {
 
 /** Represents a repository that was either deleted or is unreachable due to service or integration issues */
 export type UnreachableRepository = {
-  __typename?: 'UnreachableRepository';
+  __typename: 'UnreachableRepository';
   id: Scalars['ID']['output'];
 };
 
 export type WorkflowResponse = {
-  __typename?: 'WorkflowResponse';
+  __typename: 'WorkflowResponse';
   id: Scalars['ID']['output'];
 };
 
-export type TestOrganizationQueryVariables = Exact<{ [key: string]: never }>;
+export type TestOrganizationQueryVariables = Exact<{ [key: string]: never; }>;
 
-export type TestOrganizationQuery = {
-  __typename?: 'Query';
-  organization:
-    | { __typename?: 'GombocError' }
-    | { __typename?: 'Organization'; id: string };
-};
 
-export type SecurityBenchmarksQueryVariables = Exact<{ [key: string]: never }>;
+export type TestOrganizationQuery = { __typename: 'Query', organization: { __typename: 'GombocError' } | { __typename: 'Organization', id: string } };
 
-export type SecurityBenchmarksQuery = {
-  __typename?: 'Query';
-  securityBenchmarks: Array<{
-    __typename?: 'SecurityBenchmark';
-    id: string;
-    name: string;
-    versions: Array<{
-      __typename?: 'SecurityBenchmarkVersion';
-      id: string;
-      name: string;
-      recommendations: Array<{
-        __typename?: 'SecurityBenchmarkRecommendation';
-        id: string;
-        identifier: string;
-        name: string;
-        description?: string | null;
-        isAdopted: boolean;
-        controls: Array<{
-          __typename?: 'SecurityFrameworkControl';
-          id: string;
-          name: string;
-          description: string;
-        }>;
-      }>;
-    }>;
-  }>;
-};
+export type SecurityBenchmarksQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type SecurityBenchmarksQuery = { __typename: 'Query', securityBenchmarks: Array<{ __typename: 'SecurityBenchmark', id: string, name: string, versions: Array<{ __typename: 'SecurityBenchmarkVersion', id: string, name: string, recommendations: Array<{ __typename: 'SecurityBenchmarkRecommendation', id: string, identifier: string, name: string, description?: string | null, isAdopted: boolean }> }> }> };
 
 export type IndividualFixesQueryVariables = Exact<{
   input: IndividualFixesInput;
 }>;
 
-export type IndividualFixesQuery = {
-  __typename?: 'Query';
-  individualFixes:
-    | {
-        __typename?: 'GombocError';
-        code?: GombocErrorCode | null;
-        message: string;
-      }
-    | {
-        __typename?: 'IndividualFixesSuccess';
-        remediations: Array<{
-          __typename?: 'IndividualRemediation';
-          benchmarkRecommendation: {
-            __typename?: 'SecurityBenchmarkRecommendation';
-            id: string;
-            identifier: string;
-            name: string;
-            description?: string | null;
-          };
-          fixes: Array<{
-            __typename?: 'RemediationFix';
-            filepath: string;
-            oldLine: Array<string>;
-            newLine: Array<string>;
-            lineOffset: number;
-            fixType: FixType;
-            codePosition: {
-              __typename?: 'CodePosition';
-              line: number;
-              column: number;
-            };
-          }>;
-          codeObservation: {
-            __typename?: 'CodeObservation';
-            codeResourceInstance: {
-              __typename?: 'CodeResourceInstance';
-              name: string;
-              type: string;
-              filepath: string;
-              line: number;
-              codeResource: {
-                __typename?: 'CodeResource';
-                id: string;
-                infrastructureTool: InfrastructureTool;
-                documentationUrl?: string | null;
-                cloudResource?: {
-                  __typename?: 'CloudResource';
-                  id: string;
-                  provider: CloudResourceProvider;
-                  title: string;
-                  documentationUrl?: string | null;
-                } | null;
-              };
-            };
-          };
-        }>;
-      };
-};
 
-export const TestOrganizationDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'query',
-      name: { kind: 'Name', value: 'testOrganization' },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'organization' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                {
-                  kind: 'InlineFragment',
-                  typeCondition: {
-                    kind: 'NamedType',
-                    name: { kind: 'Name', value: 'Organization' },
-                  },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<
-  TestOrganizationQuery,
-  TestOrganizationQueryVariables
->;
-export const SecurityBenchmarksDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'query',
-      name: { kind: 'Name', value: 'securityBenchmarks' },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'securityBenchmarks' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'versions' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'name' } },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'recommendations' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'id' },
-                            },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'controls' },
-                              selectionSet: {
-                                kind: 'SelectionSet',
-                                selections: [
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'id' },
-                                  },
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'name' },
-                                  },
-                                  {
-                                    kind: 'Field',
-                                    name: {
-                                      kind: 'Name',
-                                      value: 'description',
-                                    },
-                                  },
-                                ],
-                              },
-                            },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'identifier' },
-                            },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'name' },
-                            },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'description' },
-                            },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'isAdopted' },
-                            },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<
-  SecurityBenchmarksQuery,
-  SecurityBenchmarksQueryVariables
->;
-export const IndividualFixesDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'query',
-      name: { kind: 'Name', value: 'individualFixes' },
-      variableDefinitions: [
-        {
-          kind: 'VariableDefinition',
-          variable: {
-            kind: 'Variable',
-            name: { kind: 'Name', value: 'input' },
-          },
-          type: {
-            kind: 'NonNullType',
-            type: {
-              kind: 'NamedType',
-              name: { kind: 'Name', value: 'IndividualFixesInput' },
-            },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'individualFixes' },
-            arguments: [
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'input' },
-                value: {
-                  kind: 'Variable',
-                  name: { kind: 'Name', value: 'input' },
-                },
-              },
-            ],
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                {
-                  kind: 'InlineFragment',
-                  typeCondition: {
-                    kind: 'NamedType',
-                    name: { kind: 'Name', value: 'GombocError' },
-                  },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'code' } },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'message' },
-                      },
-                    ],
-                  },
-                },
-                {
-                  kind: 'InlineFragment',
-                  typeCondition: {
-                    kind: 'NamedType',
-                    name: { kind: 'Name', value: 'IndividualFixesSuccess' },
-                  },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'remediations' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            {
-                              kind: 'Field',
-                              name: {
-                                kind: 'Name',
-                                value: 'benchmarkRecommendation',
-                              },
-                              selectionSet: {
-                                kind: 'SelectionSet',
-                                selections: [
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'id' },
-                                  },
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'identifier' },
-                                  },
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'name' },
-                                  },
-                                  {
-                                    kind: 'Field',
-                                    name: {
-                                      kind: 'Name',
-                                      value: 'description',
-                                    },
-                                  },
-                                ],
-                              },
-                            },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'fixes' },
-                              selectionSet: {
-                                kind: 'SelectionSet',
-                                selections: [
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'filepath' },
-                                  },
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'oldLine' },
-                                  },
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'newLine' },
-                                  },
-                                  {
-                                    kind: 'Field',
-                                    name: {
-                                      kind: 'Name',
-                                      value: 'codePosition',
-                                    },
-                                    selectionSet: {
-                                      kind: 'SelectionSet',
-                                      selections: [
-                                        {
-                                          kind: 'Field',
-                                          name: { kind: 'Name', value: 'line' },
-                                        },
-                                        {
-                                          kind: 'Field',
-                                          name: {
-                                            kind: 'Name',
-                                            value: 'column',
-                                          },
-                                        },
-                                      ],
-                                    },
-                                  },
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'lineOffset' },
-                                  },
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'fixType' },
-                                  },
-                                ],
-                              },
-                            },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'codeObservation' },
-                              selectionSet: {
-                                kind: 'SelectionSet',
-                                selections: [
-                                  {
-                                    kind: 'Field',
-                                    name: {
-                                      kind: 'Name',
-                                      value: 'codeResourceInstance',
-                                    },
-                                    selectionSet: {
-                                      kind: 'SelectionSet',
-                                      selections: [
-                                        {
-                                          kind: 'Field',
-                                          name: { kind: 'Name', value: 'name' },
-                                        },
-                                        {
-                                          kind: 'Field',
-                                          name: { kind: 'Name', value: 'type' },
-                                        },
-                                        {
-                                          kind: 'Field',
-                                          name: {
-                                            kind: 'Name',
-                                            value: 'filepath',
-                                          },
-                                        },
-                                        {
-                                          kind: 'Field',
-                                          name: { kind: 'Name', value: 'line' },
-                                        },
-                                        {
-                                          kind: 'Field',
-                                          name: {
-                                            kind: 'Name',
-                                            value: 'codeResource',
-                                          },
-                                          selectionSet: {
-                                            kind: 'SelectionSet',
-                                            selections: [
-                                              {
-                                                kind: 'Field',
-                                                name: {
-                                                  kind: 'Name',
-                                                  value: 'id',
-                                                },
-                                              },
-                                              {
-                                                kind: 'Field',
-                                                name: {
-                                                  kind: 'Name',
-                                                  value: 'infrastructureTool',
-                                                },
-                                              },
-                                              {
-                                                kind: 'Field',
-                                                name: {
-                                                  kind: 'Name',
-                                                  value: 'documentationUrl',
-                                                },
-                                              },
-                                              {
-                                                kind: 'Field',
-                                                name: {
-                                                  kind: 'Name',
-                                                  value: 'cloudResource',
-                                                },
-                                                selectionSet: {
-                                                  kind: 'SelectionSet',
-                                                  selections: [
-                                                    {
-                                                      kind: 'Field',
-                                                      name: {
-                                                        kind: 'Name',
-                                                        value: 'id',
-                                                      },
-                                                    },
-                                                    {
-                                                      kind: 'Field',
-                                                      name: {
-                                                        kind: 'Name',
-                                                        value: 'provider',
-                                                      },
-                                                    },
-                                                    {
-                                                      kind: 'Field',
-                                                      name: {
-                                                        kind: 'Name',
-                                                        value: 'title',
-                                                      },
-                                                    },
-                                                    {
-                                                      kind: 'Field',
-                                                      name: {
-                                                        kind: 'Name',
-                                                        value:
-                                                          'documentationUrl',
-                                                      },
-                                                    },
-                                                  ],
-                                                },
-                                              },
-                                            ],
-                                          },
-                                        },
-                                      ],
-                                    },
-                                  },
-                                ],
-                              },
-                            },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<
-  IndividualFixesQuery,
-  IndividualFixesQueryVariables
->;
+export type IndividualFixesQuery = { __typename: 'Query', individualFixes: { __typename: 'GombocError', code?: GombocErrorCode | null, message: string } | { __typename: 'IndividualFixesSuccess', remediations: Array<{ __typename: 'IndividualRemediation', benchmarkRecommendation: { __typename: 'SecurityBenchmarkRecommendation', id: string, identifier: string, name: string, description?: string | null }, fixes: Array<{ __typename: 'RemediationFix', filepath: string, oldLine: Array<string>, newLine: Array<string>, lineOffset: number, fixType: FixType, codePosition: { __typename: 'CodePosition', line: number, column: number } }>, codeObservation: { __typename: 'CodeObservation', codeResourceInstance: { __typename: 'CodeResourceInstance', name: string, type: string, filepath: string, line: number, codeResource: { __typename: 'CodeResource', id: string, infrastructureTool: InfrastructureTool, documentationUrl?: string | null, cloudResource?: { __typename: 'CloudResource', id: string, provider: CloudResourceProvider, title: string, documentationUrl?: string | null } | null } } } }> } };
+
+
+export const TestOrganizationDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"testOrganization"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"organization"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Organization"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]}}]} as unknown as DocumentNode<TestOrganizationQuery, TestOrganizationQueryVariables>;
+export const SecurityBenchmarksDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"securityBenchmarks"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"securityBenchmarks"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"versions"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"recommendations"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"identifier"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"isAdopted"}}]}}]}}]}}]}}]} as unknown as DocumentNode<SecurityBenchmarksQuery, SecurityBenchmarksQueryVariables>;
+export const IndividualFixesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"individualFixes"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"IndividualFixesInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"individualFixes"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GombocError"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"code"}},{"kind":"Field","name":{"kind":"Name","value":"message"}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"IndividualFixesSuccess"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"remediations"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"benchmarkRecommendation"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"identifier"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}}]}},{"kind":"Field","name":{"kind":"Name","value":"fixes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"filepath"}},{"kind":"Field","name":{"kind":"Name","value":"oldLine"}},{"kind":"Field","name":{"kind":"Name","value":"newLine"}},{"kind":"Field","name":{"kind":"Name","value":"codePosition"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"line"}},{"kind":"Field","name":{"kind":"Name","value":"column"}}]}},{"kind":"Field","name":{"kind":"Name","value":"lineOffset"}},{"kind":"Field","name":{"kind":"Name","value":"fixType"}}]}},{"kind":"Field","name":{"kind":"Name","value":"codeObservation"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"codeResourceInstance"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"filepath"}},{"kind":"Field","name":{"kind":"Name","value":"line"}},{"kind":"Field","name":{"kind":"Name","value":"codeResource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"infrastructureTool"}},{"kind":"Field","name":{"kind":"Name","value":"documentationUrl"}},{"kind":"Field","name":{"kind":"Name","value":"cloudResource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"provider"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"documentationUrl"}}]}}]}}]}}]}}]}}]}}]}}]}}]} as unknown as DocumentNode<IndividualFixesQuery, IndividualFixesQueryVariables>;

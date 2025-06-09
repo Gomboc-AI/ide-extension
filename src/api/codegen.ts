@@ -42,6 +42,12 @@ const config = {
       presetConfig: {
         gqlTagName: 'gql',
       },
+      config: {
+        nonOptionalTypename: true,
+        avoidOptionals: false,
+        inputMaybeValue: 'T | null | undefined',
+
+      }
     },
   },
   ignoreNoDocuments: false,
