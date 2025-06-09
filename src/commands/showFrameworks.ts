@@ -1,17 +1,18 @@
 // opens up the webview
 import * as vscode from 'vscode';
 import { CustomerApiClient } from '../api/client';
-import { getHTMLForStatments } from '../views/frameworkPanel';
+import { getHTMLForBenchmarks } from '../views/frameworkPanel';
 
 /**
  * Opens up a webview displaying all the organizations current security policy
  */
-export async function showFrameworksCommand(
+export async function showBenchmarksCommand(
   context: vscode.ExtensionContext,
   apiClient: CustomerApiClient,
 ) {
   try {
-    const organization = await apiClient.securityFrameworks();
+    const benchmarks =
+      await apiClient.securityAdoptedBenchmarkRecommendations();
 
     // if success, display a webview of the data
     const panel = vscode.window.createWebviewPanel(
@@ -20,16 +21,11 @@ export async function showFrameworksCommand(
       vscode.ViewColumn.One,
       {},
     );
-    const htmlContent = getHTMLForStatments(
-      organization.policy,
-      organization.policy.statements,
-      organization.id,
-      organization.name,
-    );
+    const htmlContent = getHTMLForBenchmarks(benchmarks);
     panel.webview.html = htmlContent;
   } catch (error) {
     vscode.window.showErrorMessage(
-      `Error displaying frameworks for organization: ${error}`,
+      `Error displaying benchmarks for organization: ${error}`,
     );
   }
 }

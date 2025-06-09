@@ -59,21 +59,17 @@ export async function scanFileCommand(
     throw new Error('Current file is not a cloudformation or terraform file');
   }
 
-  const metaData = await generateRequestMetadata();
+  // const metaData = await generateRequestMetadata();
 
   // ----- Send data to customerapi ------ //
   const inputObject: ScanLocalScenarioInput = {
     fileContents,
     iacTool: tool,
-    metaData,
   };
 
-  const scanResponse = await apiClient.singleScanMutation({ inputObject });
+  const scanResponse = await apiClient.getIndividualFixes({ inputObject });
 
-  if (scanResponse.__typename !== 'ScanLocalScenario') {
-    throw new Error('gomboc error');
-  }
-  scanResultsProvider.generateComments(scanResponse.results);
+  scanResultsProvider.generateComments(scanResponse);
   scanResultsProvider.createDiagnostic();
 
   // TODO
