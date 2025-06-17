@@ -5,15 +5,15 @@ import { showBenchmarksCommand } from './commands/showFrameworks';
 import { CustomerApiClient } from './api/client';
 import logger from './utils/logger';
 import { ScanResultsProvider } from './providers/scanResultsProvider';
+import { CodeActionProvider } from './providers/codeActionProvider';
 
 export async function activate(context: vscode.ExtensionContext) {
   logger.info('VSCode extension activated .... ');
   const apiClient = new CustomerApiClient();
-
   // diagnostics initialization
   const diagnosticCollection =
     vscode.languages.createDiagnosticCollection('Gomboc-Results');
-  const scanResults = new ScanResultsProvider(
+  const scanResults = ScanResultsProvider.init(
     context,
     diagnosticCollection,
     [],
@@ -50,6 +50,14 @@ export async function activate(context: vscode.ExtensionContext) {
     onSave,
     onEdit,
     onConfigChange(disposables, commands),
+    vscode.languages.registerCodeActionsProvider(
+      [
+        { language: 'terraform', scheme: 'file' },
+        { language: 'json', scheme: 'file' },
+        { language: 'yaml', scheme: 'file' },
+      ],
+      new CodeActionProvider(),
+    ),
   );
 }
 
