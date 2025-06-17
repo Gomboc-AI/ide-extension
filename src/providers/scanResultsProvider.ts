@@ -1,21 +1,35 @@
 import * as vscode from 'vscode';
-import { FixType, RemediationComment } from '../api/__generated__/graphql';
 import { GombocDiagnostic } from './gombocDiagnostic';
-import { CodeActionProvider } from './codeActionProvider';
-import {
-  IndividualFixesQueryFixesArray,
-  IndividualFixesQueryRemediation,
-  IndividualFixesQuerySuccess,
-} from '../api/client';
+import { IndividualFixesQueryRemediation } from '../api/client';
 
 export class ScanResultsProvider {
-  public codeActionDisposable: vscode.Disposable | undefined;
-  constructor(
+  public static codeActionDisposable: vscode.Disposable | undefined;
+  private static scanResultsProviderInstance: ScanResultsProvider | null = null;
+
+  private constructor(
     private context: vscode.ExtensionContext,
     private diagnosticCollection: vscode.DiagnosticCollection,
     private remediations: IndividualFixesQueryRemediation[],
   ) {
     this.remediations = [];
+  }
+
+  static init(
+    context: vscode.ExtensionContext,
+    diagnosticCollection: vscode.DiagnosticCollection,
+    remediations: IndividualFixesQueryRemediation[],
+  ) {
+    if (this.codeActionDisposable !== undefined) {
+      this.codeActionDisposable.dispose();
+    }
+    if (this.scanResultsProviderInstance === null) {
+      this.scanResultsProviderInstance = new ScanResultsProvider(
+        context,
+        diagnosticCollection,
+        remediations,
+      );
+    }
+    return this.scanResultsProviderInstance;
   }
 
   // registers the command so that it can be called
@@ -38,8 +52,8 @@ export class ScanResultsProvider {
   createDiagnostic() {
     // clears the diagnostics and quick fixes
     this.diagnosticCollection.clear();
-    if (this.codeActionDisposable) {
-      this.codeActionDisposable.dispose();
+    if (ScanResultsProvider.codeActionDisposable) {
+      ScanResultsProvider.codeActionDisposable.dispose();
     }
 
     const diagnostic: GombocDiagnostic[] = [];
@@ -92,26 +106,8 @@ export class ScanResultsProvider {
       this.diagnosticCollection.set(uri, curDiag.concat(diagnostic));
     }
     diagnosticTotal += diagnostic.length;
-
     vscode.window.showInformationMessage(
       `We completed a scan of your IaC and found ${diagnosticTotal} fixes to comply with your organization's selected benchmarks.`,
-    );
-
-    this.addQuickFixes();
-  }
-
-  // Registers the code action providers so that they show up under each diagnostic
-  async addQuickFixes() {
-    if (this.codeActionDisposable) {
-      this.codeActionDisposable.dispose;
-    }
-    const file = await this.getCurrentFile();
-    this.codeActionDisposable = vscode.languages.registerCodeActionsProvider(
-      {
-        language: file.editor.document.languageId,
-        scheme: file.editor.document.uri.scheme,
-      },
-      new CodeActionProvider(this.remediations, this.diagnosticCollection),
     );
   }
 
@@ -154,8 +150,8 @@ export class ScanResultsProvider {
 
         // once we apply a remediation we have to dispose and clear everything and re-run
         this.diagnosticCollection.clear();
-        if (this.codeActionDisposable) {
-          this.codeActionDisposable.dispose();
+        if (ScanResultsProvider.codeActionDisposable) {
+          ScanResultsProvider.codeActionDisposable.dispose();
         }
         vscode.commands.executeCommand('gomboc-vscode-extension.scanFile');
         return;
@@ -163,8 +159,8 @@ export class ScanResultsProvider {
     }
     // once we apply a remediation we have to dispose and clear everything and re-run
     this.diagnosticCollection.clear();
-    if (this.codeActionDisposable) {
-      this.codeActionDisposable.dispose();
+    if (ScanResultsProvider.codeActionDisposable) {
+      ScanResultsProvider.codeActionDisposable.dispose();
     }
   }
 
