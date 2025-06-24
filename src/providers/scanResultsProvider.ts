@@ -19,6 +19,9 @@ export class ScanResultsProvider {
     diagnosticCollection: vscode.DiagnosticCollection,
     remediations: IndividualFixesQueryRemediation[],
   ) {
+    if (this.codeActionDisposable !== undefined) {
+      this.codeActionDisposable.dispose();
+    }
     if (this.scanResultsProviderInstance === null) {
       this.scanResultsProviderInstance = new ScanResultsProvider(
         context,
@@ -49,6 +52,9 @@ export class ScanResultsProvider {
   createDiagnostic() {
     // clears the diagnostics and quick fixes
     this.diagnosticCollection.clear();
+    if (ScanResultsProvider.codeActionDisposable) {
+      ScanResultsProvider.codeActionDisposable.dispose();
+    }
 
     const diagnostic: GombocDiagnostic[] = [];
 
@@ -144,12 +150,18 @@ export class ScanResultsProvider {
 
         // once we apply a remediation we have to dispose and clear everything and re-run
         this.diagnosticCollection.clear();
+        if (ScanResultsProvider.codeActionDisposable) {
+          ScanResultsProvider.codeActionDisposable.dispose();
+        }
         vscode.commands.executeCommand('gomboc-vscode-extension.scanFile');
         return;
       }
     }
     // once we apply a remediation we have to dispose and clear everything and re-run
     this.diagnosticCollection.clear();
+    if (ScanResultsProvider.codeActionDisposable) {
+      ScanResultsProvider.codeActionDisposable.dispose();
+    }
   }
 
   async getCurrentFile(): Promise<{ file: string; editor: vscode.TextEditor }> {
