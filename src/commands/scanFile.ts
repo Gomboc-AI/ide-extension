@@ -68,7 +68,7 @@ async function getTFScenarioFiles(
 
   const contents: IacScanContent[] = [];
   for (const [name, fileType] of entries) {
-    if (fileType === vscode.FileType.File) {
+    if (fileType === vscode.FileType.File && name.endsWith('.tf')) {
       const fileUri = vscode.Uri.joinPath(directoryUri, name);
       const data = await vscode.workspace.fs.readFile(fileUri);
       const contentString = new TextDecoder().decode(data); // cant convert from unit8array to base64 directly
