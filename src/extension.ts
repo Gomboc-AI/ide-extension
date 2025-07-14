@@ -13,11 +13,7 @@ export async function activate(context: vscode.ExtensionContext) {
   // diagnostics initialization
   const diagnosticCollection =
     vscode.languages.createDiagnosticCollection('Gomboc-Results');
-  const scanResults = ScanResultsProvider.init(
-    context,
-    diagnosticCollection,
-    [],
-  );
+  const scanResults = ScanResultsProvider.init(context, diagnosticCollection);
 
   scanResults.registerApplyRemediation();
 
@@ -32,6 +28,10 @@ export async function activate(context: vscode.ExtensionContext) {
     },
     {
       name: 'gomboc-vscode-extension.showBenchmarks',
+      handler: () => showBenchmarksCommand(context, apiClient),
+    },
+    {
+      name: 'gomboc-vscode-extension.remediateScenario',
       handler: () => showBenchmarksCommand(context, apiClient),
     },
   ];
