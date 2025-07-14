@@ -80,4 +80,4 @@ const onConfigChange = (
   });
 };
 
-export function deactivate() { }
+export function deactivate() {}
