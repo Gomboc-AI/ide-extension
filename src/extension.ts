@@ -30,10 +30,6 @@ export async function activate(context: vscode.ExtensionContext) {
       name: 'gomboc-vscode-extension.showBenchmarks',
       handler: () => showBenchmarksCommand(context, apiClient),
     },
-    {
-      name: 'gomboc-vscode-extension.remediateScenario',
-      handler: () => showBenchmarksCommand(context, apiClient),
-    },
   ];
 
   const disposables = commands.map(({ name, handler }) =>
@@ -84,4 +80,4 @@ const onConfigChange = (
   });
 };
 
-export function deactivate() {}
+export function deactivate() { }
