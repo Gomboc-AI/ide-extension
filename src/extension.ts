@@ -13,11 +13,7 @@ export async function activate(context: vscode.ExtensionContext) {
   // diagnostics initialization
   const diagnosticCollection =
     vscode.languages.createDiagnosticCollection('Gomboc-Results');
-  const scanResults = ScanResultsProvider.init(
-    context,
-    diagnosticCollection,
-    [],
-  );
+  const scanResults = ScanResultsProvider.init(context, diagnosticCollection);
 
   scanResults.registerApplyRemediation();
 

@@ -35,8 +35,11 @@ export const SECURITY_BENCHMARKS = gql`
 `;
 
 export const INDIVIDUAL_FIXES = gql`
-  query individualFixes($input: IndividualFixesInput!) {
-    individualFixes(input: $input) {
+  query individualFixes(
+    $individualFixesInput: IndividualFixesInput!
+    $groupedFixesInput: GroupedFixesInput!
+  ) {
+    individualFixes(input: $individualFixesInput) {
       ... on GombocError {
         code
         message
@@ -77,6 +80,28 @@ export const INDIVIDUAL_FIXES = gql`
                   documentationUrl
                 }
               }
+            }
+          }
+        }
+      }
+    }
+    groupedFixes(input: $groupedFixesInput) {
+      ... on GombocError {
+        code
+        message
+      }
+      ... on GroupedFixesSuccess {
+        remediatedFiles {
+          path
+          content
+          comments {
+            position {
+              line
+              column
+            }
+            benchmarkRecommendation {
+              id
+              name
             }
           }
         }
