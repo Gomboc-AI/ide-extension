@@ -84,7 +84,7 @@ async function getTFScenarioFiles(
 /**
  * Only care about the current file, just return base64 of it
  */
-function getCFNFile(document: vscode.TextDocument): IacScanContent[] {
+export function getCFNFile(document: vscode.TextDocument): IacScanContent[] {
   return [
     {
       filePath: document.uri.fsPath,
