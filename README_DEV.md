@@ -1,4 +1,5 @@
 # Gomboc VSCode Extension
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/dd4c501acf1742b89fb1ba9ed692faa3)](https://app.codacy.com?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)[![Codacy Badge](https://app.codacy.com/project/badge/Coverage/dd4c501acf1742b89fb1ba9ed692faa3)](https://app.codacy.com?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_coverage)
 
 ### Getting Started
 
