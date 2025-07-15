@@ -47,7 +47,7 @@ export async function scanFileCommand(
     iacTool: tool,
   };
 
-  const scanResponse = await apiClient.getIndividualFixes({ inputObject });
+  const scanResponse = await apiClient.getFixes({ inputObject });
 
   scanResultsProvider.generateComments(scanResponse);
   scanResultsProvider.createDiagnostic();

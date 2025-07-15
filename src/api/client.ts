@@ -7,12 +7,8 @@ import settings from '../settings';
 import { ApolloClient, createHttpLink, InMemoryCache } from '@apollo/client';
 import { HEALTH_CHECK, SECURITY_BENCHMARKS, INDIVIDUAL_FIXES } from './queries';
 import {
-  IndividualFixesInput,
   IndividualFixesQuery,
-  IndividualFixesSuccess,
-  IndividualRemediation,
-  QueryIndividualFixesArgs,
-  ScanLocalScenario,
+  IndividualFixesQueryVariables,
   ScanLocalScenarioInput,
   SecurityBenchmarksQuery,
   TestOrganizationQuery,
@@ -42,14 +38,31 @@ export type IndividualFixesQueryFixesArray = Pick<
   IndividualFixesQuery,
   'individualFixes'
 >['individualFixes'];
+export type GroupedFixesQueryFixesArray = Pick<
+  IndividualFixesQuery,
+  'groupedFixes'
+>['groupedFixes'];
 export type IndividualFixesQuerySuccess = Extract<
   IndividualFixesQueryFixesArray,
   { __typename: 'IndividualFixesSuccess' }
 >;
-export type IndividualFixesQueryRemediation = Pick<
+export type GroupedFixesQuerySuccess = Extract<
+  GroupedFixesQueryFixesArray,
+  { __typename: 'GroupedFixesSuccess' }
+>;
+export type IndividualFixesRemediation = Pick<
   IndividualFixesQuerySuccess,
   'remediations'
 >['remediations'][number];
+export type GroupedFixesRemediation = Pick<
+  GroupedFixesQuerySuccess,
+  'remediatedFiles'
+>['remediatedFiles'][number];
+
+export type Fixes = {
+  individualFixes: IndividualFixesRemediation[];
+  groupedFixes: GroupedFixesRemediation[];
+};
 
 export class CustomerApiClient {
   private client;
@@ -126,26 +139,34 @@ export class CustomerApiClient {
     }
   }
 
-  public async getIndividualFixes(args: {
+  public async getFixes(args: {
     inputObject: ScanLocalScenarioInput;
-  }): Promise<IndividualFixesQueryRemediation[]> {
+  }): Promise<Fixes> {
     logger.info('Sending a single file or scenario scan request');
     try {
       const { data } = await this.client.query<
         IndividualFixesQuery,
-        QueryIndividualFixesArgs
+        IndividualFixesQueryVariables
       >({
         query: INDIVIDUAL_FIXES,
         variables: {
-          input: args.inputObject,
+          individualFixesInput: args.inputObject,
+          groupedFixesInput: args.inputObject,
         },
       });
-      if (data.individualFixes.__typename === 'IndividualFixesSuccess') {
-        return data.individualFixes.remediations;
-      } else if (data.individualFixes.__typename === 'GombocError') {
-        throw new Error(data.individualFixes.message);
+      if (
+        data.individualFixes.__typename === 'IndividualFixesSuccess' &&
+        data.groupedFixes.__typename === 'GroupedFixesSuccess'
+      ) {
+        return {
+          individualFixes: data.individualFixes.remediations,
+          groupedFixes: data.groupedFixes.remediatedFiles,
+        };
+      } else {
+        throw new Error(
+          'Please ensure that you have provided a valid Terraform template',
+        );
       }
-      throw new Error('GombocError');
     } catch (error) {
       logger.error('Sending a single file or scenario failed', { error });
       throw error;

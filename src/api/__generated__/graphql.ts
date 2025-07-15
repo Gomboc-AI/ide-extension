@@ -252,17 +252,18 @@ export type CreateOrcaIntegrationInput = {
   orcaToken: Scalars['String']['input'];
 };
 
-export type CreateProjectResponse = GombocError | Project;
-
-export type CreateScalarCustomRuleInput = {
+export type CreatePresenceBasedCustomRuleInput = {
   comment: Scalars['String']['input'];
   description: Scalars['String']['input'];
+  /** The type of rule being applied to the value as CFN sees it: IMPLEMENTS_IF_PRESENT, IMPLEMENTS_IF_ABSENT */
+  ruleType: PresenceBasedRule;
   targetName: Scalars['String']['input'];
-  targetType: Scalars['String']['input'];
+  /** The type of target that the rule is targeting, tf or cfn */
+  targetType: CustomRuleTargetType;
   title: Scalars['String']['input'];
-  value: Scalars['String']['input'];
-  valueType: Scalars['String']['input'];
 };
+
+export type CreateProjectResponse = GombocError | Project;
 
 export type CreateTicketInput = {
   externalUrl: Scalars['String']['input'];
@@ -270,6 +271,23 @@ export type CreateTicketInput = {
 };
 
 export type CreateTicketOutput = GombocError | Ticket;
+
+export type CreateValueBasedCustomRuleInput = {
+  comment: Scalars['String']['input'];
+  description: Scalars['String']['input'];
+  /** The type of rule being applied to the value as CFN sees it: IMPLEMENTS_IF_EQUAL_TO, IMPLEMENTS_IF_NOT_EQUAL_TO, IMPLEMENTS_IF_REGEX_MATCHES, IMPLEMENTS_IF_NOT_REGEX_MATCHES */
+  ruleType: ValueBasedRule;
+  /** The underlying type of value of the custom rule: BOOL, STRING, NUMBER */
+  scalarType: CustomRuleScalarType;
+  targetName: Scalars['String']['input'];
+  /** The type of target that the rule is targeting, tf or cfn */
+  targetType: CustomRuleTargetType;
+  title: Scalars['String']['input'];
+  /** expects a base64 encoded string */
+  value: Scalars['String']['input'];
+  /** the type of rule that is being created: SCALAR, OTHER */
+  valueType: CustomRuleValueType;
+};
 
 export type CreateWizIntegrationInput = {
   gombocToken: Scalars['String']['input'];
@@ -300,20 +318,24 @@ export type CspmObservation = {
   /** The cloud account id if it exists, otherwise an empty string */
   cloudAccountId: Scalars['String']['output'];
   /** The specific unique id of the cloud asset i.e 'vm_215151194724_i-09b8a8f38e1ccebff"' */
-  cloudAssetId: Scalars['String']['output'];
+  cloudAssetId: Scalars['ID']['output'];
   /** The name of the associated cloud asset type */
   cloudAssetTypeName: Scalars['String']['output'];
   /** The name of the cloud provider (AWS, GCP, Azure) */
   cloudProviderName: Scalars['String']['output'];
   /** The definition of the resource as told by us */
-  cloudResource?: Maybe<AssetType>;
+  cloudResource: AssetType;
   /** location of the asset instance if there is one, and it can be reached */
   codeResource?: Maybe<AssetInstanceLocation>;
   id: Scalars['ID']['output'];
+  /** Reference to the latest scan request if it exists */
+  latestScanRequest?: Maybe<ScanRequest>;
   /** Name of the cspm provider issuing the observation (WIZ, ORCA, ...) */
   observationProviderName: IntegrationType;
   /** Groups all the source types into one object (name, description, id) */
   observationSource: CspmObservationSource;
+  /** The array of security benchmarks */
+  securityBenchmarkRecommendations: Array<SecurityBenchmarkRecommendation>;
   /** The type of security alert (defaults to "unknown"). */
   securityType: Scalars['String']['output'];
   /** The severity of the alert (defaults to "info"). */
@@ -354,9 +376,44 @@ export type CspmObservationsPage = {
   total: Scalars['Int']['output'];
 };
 
-/** Custom policy, stored in remediations. This will be expanded with more types as we start to support them */
-export type CustomRule = ScalarRule;
+/** Custom policy, points to a target attribute or property */
+export type CustomRule = {
+  __typename: 'CustomRule';
+  /** the comment that will show up in a PR when a remediation is found */
+  comment: Scalars['String']['output'];
+  createdAt: Scalars['String']['output'];
+  /** custom description of the custom rule provided by the user */
+  description: Scalars['String']['output'];
+  /** standard iac tool variable */
+  iacTool: InfrastructureTool;
+  id: Scalars['ID']['output'];
+  /** this is a string exposing what the actual rule is implementing, */
+  internalDescription: Scalars['String']['output'];
+  target: CustomRuleTarget;
+  /** title of the custom rule */
+  title: Scalars['String']['output'];
+};
 
+export enum CustomRuleScalarType {
+  Bool = 'BOOL',
+  Integer = 'INTEGER',
+  String = 'STRING',
+}
+
+/** The target of a custom policy, can be either terraform or cloudformation */
+export type CustomRuleTarget = CfnProperty | TfAttribute;
+
+export enum CustomRuleTargetType {
+  CfnProperty = 'CFN_PROPERTY',
+  TfAttribute = 'TF_ATTRIBUTE',
+}
+
+export enum CustomRuleValueType {
+  Other = 'OTHER',
+  Scalar = 'SCALAR',
+}
+
+/** @deprecated - please use presencebased or valuebased custom rule */
 export type CustomRulesInput = {
   order?: InputMaybe<Scalars['String']['input']>;
   page?: InputMaybe<Scalars['Int']['input']>;
@@ -387,19 +444,13 @@ export type DeleteTicketInput = {
   ticketId: Scalars['ID']['input'];
 };
 
-export type DiscoverIacRepositoriesInput = {
-  integrationId: Scalars['ID']['input'];
-  projectId: Scalars['ID']['input'];
-};
-
-export type DiscoverIacRepositoriesOuput = GombocError | WorkflowResponse;
-
 export enum Disposition {
   AlreadyCompliant = 'ALREADY_COMPLIANT',
   AutoRemediated = 'AUTO_REMEDIATED',
   CannotRemediate = 'CANNOT_REMEDIATE',
   InsufficientInfoToRemediate = 'INSUFFICIENT_INFO_TO_REMEDIATE',
   NotApplicable = 'NOT_APPLICABLE',
+  RequiresUserInput = 'REQUIRES_USER_INPUT',
 }
 
 export type Edge = {
@@ -458,6 +509,31 @@ export enum GombocErrorCode {
   NotImplemented = 'NOT_IMPLEMENTED',
   Unauthorized = 'UNAUTHORIZED',
 }
+
+export type GroupRemediatedFileComment = {
+  __typename: 'GroupRemediatedFileComment';
+  benchmarkRecommendation: SecurityBenchmarkRecommendation;
+  position: CodePosition;
+};
+
+export type GroupedFixesInput = {
+  fileContents: Array<IacScanContent>;
+  iacTool: InfrastructureTool;
+};
+
+export type GroupedFixesResponse = GombocError | GroupedFixesSuccess;
+
+export type GroupedFixesSuccess = {
+  __typename: 'GroupedFixesSuccess';
+  remediatedFiles: Array<GroupedRemediatedFile>;
+};
+
+export type GroupedRemediatedFile = {
+  __typename: 'GroupedRemediatedFile';
+  comments: Array<GroupRemediatedFileComment>;
+  content: Scalars['String']['output'];
+  path: Scalars['String']['output'];
+};
 
 export type IacScanContent = {
   fileContent: Scalars['String']['input'];
@@ -609,12 +685,14 @@ export type Mutation = {
   createCspmWizIntegration: CreateCspmIntegrationOutput;
   createGitHubIntegration: CreateGitHubIntegrationResponse;
   createGitLabIntegration: CreateGitLabIntegrationOutput;
+  /** Creates a presence based scalar custom rule */
+  createPresenceBasedCustomRule?: Maybe<GombocError>;
   /** Create a new Gomboc project */
   createProject: CreateProjectResponse;
-  /** Create a custom rule for an account */
-  createScalarCustomRule?: Maybe<GombocError>;
   /** Link a Ticket to a Scan Result */
   createTicket: CreateTicketOutput;
+  /** Creates a value based scalar custom rule */
+  createValueBasedCustomRule?: Maybe<GombocError>;
   /** deletes any of the cspm integrations based on the id */
   deleteCspmIntegration?: Maybe<GombocError>;
   /** deletes a batch of custom rules */
@@ -627,8 +705,6 @@ export type Mutation = {
   deleteScmIntegration?: Maybe<GombocError>;
   /** Unlink a Ticket from a Scan Result */
   deleteTicket?: Maybe<GombocError>;
-  /** Trigger a scan for IAC repositories for a given integration */
-  discoverIacRepositories?: Maybe<DiscoverIacRepositoriesOuput>;
   /** Link repositories to a project */
   linkRepositories: Array<LinkRepositoryResponse>;
   /** Call a scan on a linked repository */
@@ -651,12 +727,21 @@ export type Mutation = {
   scanOnSchedule: ScanRequestResponseType;
   /** Sets the location of the code that has the asset instance code */
   setCspmAssetInstanceLocation: AssetInstanceLocationResponse;
+  /** Updates the securityBenchmarks held in the observations table */
+  setCspmObservationSecurityBenchmarkRecommendations?: Maybe<GombocError>;
+  /** Trigger a scan for IAC repositories for a given integration */
+  startRepositoryLinking: StartRepositoryLinkingOuput;
   /** Toggle adopt individual security benchmark recommendations */
   toggleAdoptSecurityBenchmarkRecommendations?: Maybe<GombocError>;
   /** Toggle adopt all recommendations from a benchmark version */
   toggleAdoptSecurityBenchmarkVersion?: Maybe<GombocError>;
-  /** Unlinks the asset instance location */
+  /** Unlinks the asset instance location, based on the observation id */
   unlinkCspmAssetInstanceLocation?: Maybe<GombocError>;
+  /**
+   * Triggers workflow to update branch reports for an organization. The request
+   * must originate from an internal service and will use the account from the input.
+   */
+  updateBranchReports: UpdateBranchReportsOutput;
   /** *Internal use only* */
   updatePullRequestStatus?: Maybe<GombocError>;
 };
@@ -697,16 +782,20 @@ export type MutationCreateGitLabIntegrationArgs = {
   input: CreateGitLabIntegrationInput;
 };
 
+export type MutationCreatePresenceBasedCustomRuleArgs = {
+  input: CreatePresenceBasedCustomRuleInput;
+};
+
 export type MutationCreateProjectArgs = {
   projectName: Scalars['String']['input'];
 };
 
-export type MutationCreateScalarCustomRuleArgs = {
-  input: CreateScalarCustomRuleInput;
-};
-
 export type MutationCreateTicketArgs = {
   input: CreateTicketInput;
+};
+
+export type MutationCreateValueBasedCustomRuleArgs = {
+  input: CreateValueBasedCustomRuleInput;
 };
 
 export type MutationDeleteCspmIntegrationArgs = {
@@ -731,10 +820,6 @@ export type MutationDeleteScmIntegrationArgs = {
 
 export type MutationDeleteTicketArgs = {
   input: DeleteTicketInput;
-};
-
-export type MutationDiscoverIacRepositoriesArgs = {
-  input: DiscoverIacRepositoriesInput;
 };
 
 export type MutationLinkRepositoriesArgs = {
@@ -777,6 +862,14 @@ export type MutationSetCspmAssetInstanceLocationArgs = {
   input: SetAssetInstanceLocationInput;
 };
 
+export type MutationSetCspmObservationSecurityBenchmarkRecommendationsArgs = {
+  input: SetCspmObservationSecurityBenchmarkRecommendationsInput;
+};
+
+export type MutationStartRepositoryLinkingArgs = {
+  input: RepositoryLinkingInput;
+};
+
 export type MutationToggleAdoptSecurityBenchmarkRecommendationsArgs = {
   input: ToggleAdoptSecurityBenchmarkRecommendationsInput;
 };
@@ -787,6 +880,10 @@ export type MutationToggleAdoptSecurityBenchmarkVersionArgs = {
 
 export type MutationUnlinkCspmAssetInstanceLocationArgs = {
   id: Scalars['ID']['input'];
+};
+
+export type MutationUpdateBranchReportsArgs = {
+  input: UpdateBranchReportsInput;
 };
 
 export type MutationUpdatePullRequestStatusArgs = {
@@ -923,6 +1020,8 @@ export type PolicyObservation = {
   capabilityTitle?: Maybe<Scalars['String']['output']>;
   /** The IaC resource that was observed */
   cloudResource: CloudResource;
+  /** Not present for older policy observations */
+  codeResource?: Maybe<CodeResource>;
   codeResourceInstance: CodeResourceInstance;
   /**
    * The framework control description, if one
@@ -1002,6 +1101,11 @@ export type Position = {
   /** @deprecated Use type CodePosition */
   line: Scalars['Int']['output'];
 };
+
+export enum PresenceBasedRule {
+  ImplementsIfAbsent = 'IMPLEMENTS_IF_ABSENT',
+  ImplementsIfPresent = 'IMPLEMENTS_IF_PRESENT',
+}
 
 export type Project = {
   __typename: 'Project';
@@ -1102,6 +1206,7 @@ export type Query = {
   customRule: CustomRule;
   /** Gets paginated list of custom rules for an account */
   customRules: CustomRulesResponse;
+  groupedFixes: GroupedFixesResponse;
   individualFixes: IndividualFixesResponse;
   /** Returns a single linked repository by its ID, or an error if not found */
   link: LinkResponse;
@@ -1121,8 +1226,8 @@ export type Query = {
   scanRequest: ScanRequestResponse;
   /** Returns a single Scan Result by its ID, or an error if not found */
   scanResult: ScanResultResponse;
-  /** Returns a few posible scan targets for a cloud resource */
-  searchScanTargets: Array<ScanTarget>;
+  /** Returns a few posible scan targets */
+  searchScanTargets: SearchScanTargetsPage;
   securityBenchmark?: Maybe<SecurityBenchmark>;
   securityBenchmarkRecommendation?: Maybe<SecurityBenchmarkRecommendationResponse>;
   securityBenchmarkVersion?: Maybe<SecurityBenchmarkVersion>;
@@ -1178,6 +1283,10 @@ export type QueryCustomRulesArgs = {
   input: CustomRulesInput;
 };
 
+export type QueryGroupedFixesArgs = {
+  input: GroupedFixesInput;
+};
+
 export type QueryIndividualFixesArgs = {
   input: IndividualFixesInput;
 };
@@ -1215,7 +1324,7 @@ export type QueryScanResultArgs = {
 };
 
 export type QuerySearchScanTargetsArgs = {
-  cloudResourceId: Scalars['ID']['input'];
+  input: SearchScanTargetsInput;
 };
 
 export type QuerySecurityBenchmarkArgs = {
@@ -1275,34 +1384,19 @@ export type RemediationFix = {
   oldLine: Array<Scalars['String']['output']>;
 };
 
+export type RepositoryLinkingInput = {
+  integrationId: Scalars['ID']['input'];
+};
+
 /** Places from where scan requests can originate */
 export enum RequestOrigin {
   Community = 'COMMUNITY',
   CspmService = 'CSPM_SERVICE',
   Portal = 'PORTAL',
+  ScmPullRequest = 'SCM_PULL_REQUEST',
+  ScmSchedule = 'SCM_SCHEDULE',
   Workflow = 'WORKFLOW',
 }
-
-/** Custom policy, points to a target attribute or property */
-export type ScalarRule = {
-  __typename: 'ScalarRule';
-  /** the comment that will show up in a PR when a remediation is found */
-  comment: Scalars['String']['output'];
-  createdAt: Scalars['String']['output'];
-  /** custom description of the custom rule provided by the user */
-  description: Scalars['String']['output'];
-  /** standard iac tool variable */
-  iacTool: InfrastructureTool;
-  id: Scalars['ID']['output'];
-  /** this is a string exposing what the actual rule is implementing, */
-  internalDescription: Scalars['String']['output'];
-  target: ScalarRuleTarget;
-  /** title of the custom rule */
-  title: Scalars['String']['output'];
-};
-
-/** The target of a custom policy, can be either terraform or cloudformation */
-export type ScalarRuleTarget = CfnProperty | TfAttribute;
 
 export type Scan = {
   __typename: 'Scan';
@@ -1560,10 +1654,15 @@ export type ScanTarget = {
   __typename: 'ScanTarget';
   /** The repository branch */
   branch: Scalars['String']['output'];
+  /** The confidence that this is a matching scan target */
+  confidence: Scalars['Float']['output'];
+  id: Scalars['ID']['output'];
   /** Maps to a repository */
   link?: Maybe<Link>;
   /** The scenario path: a directory or a filepath */
   path: Scalars['String']['output'];
+  /** Policy observation attached to this scan target */
+  policyObservation: PolicyObservation;
 };
 
 export type ScanTargetInput = {
@@ -1603,6 +1702,7 @@ export type ScmIntegrationResponse = GombocError | ScmIntegration;
 
 export type ScmRepoOwner = {
   __typename: 'ScmRepoOwner';
+  avatarUrl: Scalars['String']['output'];
   children: ScmRepoOwnersPage;
   htmlUrl: Scalars['String']['output'];
   name: Scalars['String']['output'];
@@ -1651,6 +1751,7 @@ export type ScmRepository = {
   branches: Array<ScmBranch>;
   htmlUrl: Scalars['String']['output'];
   id: Scalars['ID']['output'];
+  isPublic: Scalars['Boolean']['output'];
   link?: Maybe<Link>;
   name: Scalars['String']['output'];
   owner: ScmRepoOwner;
@@ -1667,6 +1768,16 @@ export enum ScmType {
   Github = 'GITHUB',
   Gitlab = 'GITLAB',
 }
+
+export type SearchScanTargetsInput = {
+  cspmObservationId: Scalars['ID']['input'];
+};
+
+export type SearchScanTargetsPage = {
+  __typename: 'SearchScanTargetsPage';
+  /** A ranked list of the scan target based on the confidence */
+  results: Array<ScanTarget>;
+};
 
 export type SecurityBenchmark = {
   __typename: 'SecurityBenchmark';
@@ -1727,10 +1838,16 @@ export type SecurityFrameworkVersion = {
 
 export type SetAssetInstanceLocationInput = {
   branch: Scalars['String']['input'];
-  cloudAssetId: Scalars['String']['input'];
+  cloudAssetId: Scalars['ID']['input'];
   linkedRepositoryId: Scalars['String']['input'];
   observationId: Scalars['ID']['input'];
   path: Scalars['String']['input'];
+  securityBenchmarkRecommendationIds: Array<Scalars['ID']['input']>;
+};
+
+export type SetCspmObservationSecurityBenchmarkRecommendationsInput = {
+  cspmObservationId: Scalars['ID']['input'];
+  securityBenchmarkRecommendationIds: Array<Scalars['ID']['input']>;
 };
 
 export enum Severity {
@@ -1741,6 +1858,8 @@ export enum Severity {
   Medium = 'MEDIUM',
   Unknown = 'UNKNOWN',
 }
+
+export type StartRepositoryLinkingOuput = GombocError | WorkflowResponse;
 
 export type TfAttribute = {
   __typename: 'TfAttribute';
@@ -1820,9 +1939,23 @@ export type UnreachableRepository = {
   id: Scalars['ID']['output'];
 };
 
+export type UpdateBranchReportsInput = {
+  accountId: Scalars['ID']['input'];
+};
+
+export type UpdateBranchReportsOutput = GombocError | WorkflowResponse;
+
+export enum ValueBasedRule {
+  ImplementsIfEqualTo = 'IMPLEMENTS_IF_EQUAL_TO',
+  ImplementsIfNotEqualTo = 'IMPLEMENTS_IF_NOT_EQUAL_TO',
+  ImplementsIfNotRegexMatches = 'IMPLEMENTS_IF_NOT_REGEX_MATCHES',
+  ImplementsIfRegexMatches = 'IMPLEMENTS_IF_REGEX_MATCHES',
+}
+
 export type WorkflowResponse = {
   __typename: 'WorkflowResponse';
   id: Scalars['ID']['output'];
+  name: Scalars['String']['output'];
 };
 
 export type TestOrganizationQueryVariables = Exact<{ [key: string]: never }>;
@@ -1859,7 +1992,8 @@ export type SecurityBenchmarksQuery = {
 };
 
 export type IndividualFixesQueryVariables = Exact<{
-  input: IndividualFixesInput;
+  individualFixesInput: IndividualFixesInput;
+  groupedFixesInput: GroupedFixesInput;
 }>;
 
 export type IndividualFixesQuery = {
@@ -1917,6 +2051,33 @@ export type IndividualFixesQuery = {
               };
             };
           };
+        }>;
+      };
+  groupedFixes:
+    | {
+        __typename: 'GombocError';
+        code?: GombocErrorCode | null;
+        message: string;
+      }
+    | {
+        __typename: 'GroupedFixesSuccess';
+        remediatedFiles: Array<{
+          __typename: 'GroupedRemediatedFile';
+          path: string;
+          content: string;
+          comments: Array<{
+            __typename: 'GroupRemediatedFileComment';
+            position: {
+              __typename: 'CodePosition';
+              line: number;
+              column: number;
+            };
+            benchmarkRecommendation: {
+              __typename: 'SecurityBenchmarkRecommendation';
+              id: string;
+              name: string;
+            };
+          }>;
         }>;
       };
 };
@@ -2042,13 +2203,27 @@ export const IndividualFixesDocument = {
           kind: 'VariableDefinition',
           variable: {
             kind: 'Variable',
-            name: { kind: 'Name', value: 'input' },
+            name: { kind: 'Name', value: 'individualFixesInput' },
           },
           type: {
             kind: 'NonNullType',
             type: {
               kind: 'NamedType',
               name: { kind: 'Name', value: 'IndividualFixesInput' },
+            },
+          },
+        },
+        {
+          kind: 'VariableDefinition',
+          variable: {
+            kind: 'Variable',
+            name: { kind: 'Name', value: 'groupedFixesInput' },
+          },
+          type: {
+            kind: 'NonNullType',
+            type: {
+              kind: 'NamedType',
+              name: { kind: 'Name', value: 'GroupedFixesInput' },
             },
           },
         },
@@ -2065,7 +2240,7 @@ export const IndividualFixesDocument = {
                 name: { kind: 'Name', value: 'input' },
                 value: {
                   kind: 'Variable',
-                  name: { kind: 'Name', value: 'input' },
+                  name: { kind: 'Name', value: 'individualFixesInput' },
                 },
               },
             ],
@@ -2294,6 +2469,120 @@ export const IndividualFixesDocument = {
                                               },
                                             ],
                                           },
+                                        },
+                                      ],
+                                    },
+                                  },
+                                ],
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'groupedFixes' },
+            arguments: [
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'input' },
+                value: {
+                  kind: 'Variable',
+                  name: { kind: 'Name', value: 'groupedFixesInput' },
+                },
+              },
+            ],
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                {
+                  kind: 'InlineFragment',
+                  typeCondition: {
+                    kind: 'NamedType',
+                    name: { kind: 'Name', value: 'GombocError' },
+                  },
+                  selectionSet: {
+                    kind: 'SelectionSet',
+                    selections: [
+                      { kind: 'Field', name: { kind: 'Name', value: 'code' } },
+                      {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'message' },
+                      },
+                    ],
+                  },
+                },
+                {
+                  kind: 'InlineFragment',
+                  typeCondition: {
+                    kind: 'NamedType',
+                    name: { kind: 'Name', value: 'GroupedFixesSuccess' },
+                  },
+                  selectionSet: {
+                    kind: 'SelectionSet',
+                    selections: [
+                      {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'remediatedFiles' },
+                        selectionSet: {
+                          kind: 'SelectionSet',
+                          selections: [
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'path' },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'content' },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'comments' },
+                              selectionSet: {
+                                kind: 'SelectionSet',
+                                selections: [
+                                  {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'position' },
+                                    selectionSet: {
+                                      kind: 'SelectionSet',
+                                      selections: [
+                                        {
+                                          kind: 'Field',
+                                          name: { kind: 'Name', value: 'line' },
+                                        },
+                                        {
+                                          kind: 'Field',
+                                          name: {
+                                            kind: 'Name',
+                                            value: 'column',
+                                          },
+                                        },
+                                      ],
+                                    },
+                                  },
+                                  {
+                                    kind: 'Field',
+                                    name: {
+                                      kind: 'Name',
+                                      value: 'benchmarkRecommendation',
+                                    },
+                                    selectionSet: {
+                                      kind: 'SelectionSet',
+                                      selections: [
+                                        {
+                                          kind: 'Field',
+                                          name: { kind: 'Name', value: 'id' },
+                                        },
+                                        {
+                                          kind: 'Field',
+                                          name: { kind: 'Name', value: 'name' },
                                         },
                                       ],
                                     },
