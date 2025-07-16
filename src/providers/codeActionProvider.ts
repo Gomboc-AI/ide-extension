@@ -1,23 +1,12 @@
 import * as vscode from 'vscode';
-import { GombocDiagnostic } from './gombocDiagnostic';
-import { RemediationComment } from '../api/__generated__/graphql';
-import { IndividualFixesQueryRemediation } from '../api/client';
+import {
+  IndividualFixGombocDiagnostic,
+  GroupedFixGombocDiagnostic,
+} from './gombocDiagnostic';
 export class CodeActionProvider implements vscode.CodeActionProvider {
-  private results;
-  private readonly diagnosticCollection: vscode.DiagnosticCollection;
   public static readonly providedCodeActionKinds = [
     vscode.CodeActionKind.QuickFix,
   ];
-  private readonly fixableResults = [];
-
-  constructor(
-    results: IndividualFixesQueryRemediation[],
-    diagnosticCollection: vscode.DiagnosticCollection,
-  ) {
-    this.results = results;
-    this.diagnosticCollection = diagnosticCollection;
-  }
-
   // required function fo the codeActionProvider. This is what does the action
   provideCodeActions(
     document: vscode.TextDocument,
@@ -25,56 +14,76 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
     context: vscode.CodeActionContext,
     token: vscode.CancellationToken,
   ): vscode.CodeAction[] {
-    // goes through all the diagnostics and applies the code changes
-    const diagnostics = context.diagnostics.filter(isGombocDiagnostic);
-    return diagnostics.map((diagnostic: GombocDiagnostic) =>
-      this.createCommandCodeAction(diagnostic),
+    if (context.diagnostics.length === 0) {
+      return [];
+    }
+
+    const diagnostics = context.diagnostics.filter(
+      diagnostic =>
+        this._isGombocGroupedFixDiagnostic(diagnostic) ||
+        this._isGombocIndividualFixDiagnostic(diagnostic),
     );
-    // when ready for the apply all, add it here
+
+    return diagnostics.reduce((acc, cur) => {
+      if (this._isGombocGroupedFixDiagnostic(cur)) {
+        return [...acc, this._createGroupedFixCommandCodeAction(cur)];
+      } else if (this._isGombocIndividualFixDiagnostic(cur)) {
+        return [...acc, this._createIndividualFixCommandCodeAction(cur)];
+      }
+      return acc;
+    }, [] as vscode.CodeAction[]);
   }
 
-  // Create individual quick fix
-  private createCommandCodeAction(
-    diagnostic: GombocDiagnostic,
+  private _isGombocGroupedFixDiagnostic(
+    diagnostic: vscode.Diagnostic,
+  ): diagnostic is GroupedFixGombocDiagnostic {
+    return diagnostic.hasOwnProperty('groupedFixGombocResult');
+  }
+
+  private _isGombocIndividualFixDiagnostic(
+    diagnostic: vscode.Diagnostic,
+  ): diagnostic is IndividualFixGombocDiagnostic {
+    return diagnostic.hasOwnProperty('individualFixGombocResult');
+  }
+
+  private _createIndividualFixCommandCodeAction(
+    diagnostic: IndividualFixGombocDiagnostic,
   ): vscode.CodeAction {
     const { quickFixMessage } = diagnostic;
 
-    const gombocDiagnostic: GombocDiagnostic = diagnostic;
     const action = new vscode.CodeAction(
       quickFixMessage,
       vscode.CodeActionKind.QuickFix,
     );
     action.command = {
-      command: 'gomboc-results.applyRemediation',
+      command: 'gomboc-results.applyIndividualRemediation',
       title: 'Gomboc fix',
       tooltip: 'This will apply Gomboc fix for the vulnerability',
-      arguments: [[gombocDiagnostic.gombocResult]],
+      arguments: [[diagnostic.individualFixGombocResult]],
+    };
+    action.diagnostics = [diagnostic];
+    return action;
+  }
+
+  private _createGroupedFixCommandCodeAction(
+    diagnostic: GroupedFixGombocDiagnostic,
+  ): vscode.CodeAction {
+    const { quickFixMessage } = diagnostic;
+
+    const action = new vscode.CodeAction(
+      quickFixMessage,
+      vscode.CodeActionKind.QuickFix,
+    );
+    action.command = {
+      command: 'gomboc-results.applyGroupedRemediation',
+      title: 'Gomboc fix',
+      tooltip: 'This will apply all available fixes',
+      arguments: [[diagnostic.groupedFixGombocResult]],
     };
     action.diagnostics = [diagnostic];
     action.isPreferred = true;
     return action;
   }
-
-  // create a quick fix for the entire file
-  // private createFixFileCodeAction(
-  //   diagnostic: vscode.Diagnostic,
-  // ): vscode.CodeAction[] {
-  //   const action = new vscode.CodeAction(
-  //     'File : Apply all available fixes',
-  //     vscode.CodeActionKind.QuickFix,
-  //   );
-
-  //   action.command = {
-  //     command: 'gomboc-results.applyRemediation',
-  //     title: 'Gomboc fix',
-  //     tooltip: 'This will apply Gomboc fix for the vulnerability',
-  //     arguments: [this.results],
-  //   };
-
-  //   action.diagnostics = [diagnostic];
-  //   action.isPreferred = true;
-  //   return [action];
-  // }
 
   async getFileFromPath(
     filePath: string,
@@ -84,10 +93,4 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
     const editor = await vscode.window.showTextDocument(document);
     return { file: document.fileName, editor };
   }
-}
-
-function isGombocDiagnostic(
-  diagnostic: vscode.Diagnostic,
-): diagnostic is GombocDiagnostic {
-  return (diagnostic as GombocDiagnostic).gombocResult !== undefined;
 }
