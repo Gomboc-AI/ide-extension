@@ -1,23 +1,19 @@
 import * as vscode from 'vscode';
 import { testApiKeyCommand } from './commands/testApiKey';
 import { scanFileCommand } from './commands/scanFile';
-import { showFrameworksCommand } from './commands/showFrameworks';
+import { showBenchmarksCommand } from './commands/showFrameworks';
 import { CustomerApiClient } from './api/client';
 import logger from './utils/logger';
 import { ScanResultsProvider } from './providers/scanResultsProvider';
+import { CodeActionProvider } from './providers/codeActionProvider';
 
 export async function activate(context: vscode.ExtensionContext) {
   logger.info('VSCode extension activated .... ');
   const apiClient = new CustomerApiClient();
-
   // diagnostics initialization
   const diagnosticCollection =
     vscode.languages.createDiagnosticCollection('Gomboc-Results');
-  const scanResults = new ScanResultsProvider(
-    context,
-    diagnosticCollection,
-    [],
-  );
+  const scanResults = ScanResultsProvider.init(context, diagnosticCollection);
 
   scanResults.registerApplyRemediation();
 
@@ -31,8 +27,8 @@ export async function activate(context: vscode.ExtensionContext) {
       handler: () => scanFileCommand(context, apiClient, scanResults),
     },
     {
-      name: 'gomboc-vscode-extension.showFrameworks',
-      handler: () => showFrameworksCommand(context, apiClient),
+      name: 'gomboc-vscode-extension.showBenchmarks',
+      handler: () => showBenchmarksCommand(context, apiClient),
     },
   ];
 
@@ -50,6 +46,14 @@ export async function activate(context: vscode.ExtensionContext) {
     onSave,
     onEdit,
     onConfigChange(disposables, commands),
+    vscode.languages.registerCodeActionsProvider(
+      [
+        { language: 'terraform', scheme: 'file' },
+        { language: 'json', scheme: 'file' },
+        { language: 'yaml', scheme: 'file' },
+      ],
+      new CodeActionProvider(),
+    ),
   );
 }
 

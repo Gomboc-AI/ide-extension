@@ -1,175 +1,273 @@
 import * as vscode from 'vscode';
-import { FixType, RemediationComment } from '../api/__generated__/graphql';
-import { GombocDiagnostic } from './gombocDiagnostic';
-import { CodeActionProvider } from './codeActionProvider';
+import {
+  IndividualFixGombocDiagnostic,
+  GroupedFixGombocDiagnostic,
+} from './gombocDiagnostic';
+import {
+  Fixes,
+  GroupedFixesRemediation,
+  IndividualFixesQuerySuccess,
+  IndividualFixesRemediation,
+} from '../api/client';
+import { FixType } from '../api/__generated__/graphql';
+
+type IndividualFix = IndividualFixesRemediation['fixes'][number] &
+  Pick<
+    Pick<IndividualFixesQuerySuccess, 'remediations'>['remediations'][number],
+    'benchmarkRecommendation'
+  >;
 
 export class ScanResultsProvider {
-  public codeActionDisposable: vscode.Disposable | undefined;
-  constructor(
+  public static codeActionDisposable: vscode.Disposable | undefined;
+  private static scanResultsProviderInstance: ScanResultsProvider | null = null;
+  private individualRemediations: IndividualFixesRemediation[];
+  private groupedRemediations: GroupedFixesRemediation[];
+
+  private constructor(
     private context: vscode.ExtensionContext,
     private diagnosticCollection: vscode.DiagnosticCollection,
-    private results: RemediationComment[],
   ) {
-    this.results = [];
+    this.individualRemediations = [];
+    this.groupedRemediations = [];
+  }
+
+  static init(
+    context: vscode.ExtensionContext,
+    diagnosticCollection: vscode.DiagnosticCollection,
+  ) {
+    if (this.codeActionDisposable !== undefined) {
+      this.codeActionDisposable.dispose();
+    }
+    if (this.scanResultsProviderInstance === null) {
+      this.scanResultsProviderInstance = new ScanResultsProvider(
+        context,
+        diagnosticCollection,
+      );
+    }
+    return this.scanResultsProviderInstance;
   }
 
   // registers the command so that it can be called
   public registerApplyRemediation() {
     this.context.subscriptions.push(
       vscode.commands.registerCommand(
-        'gomboc-results.applyRemediation',
+        'gomboc-results.applyIndividualRemediation',
         fixedResults => {
-          this.applyRemediation(fixedResults);
+          this.applyIndividualRemediation(fixedResults);
+        },
+      ),
+    );
+    this.context.subscriptions.push(
+      vscode.commands.registerCommand(
+        'gomboc-results.applyGroupedRemediation',
+        fixedResults => {
+          this.applyGroupedRemediation(fixedResults);
         },
       ),
     );
   }
 
-  public generateComments(comments: RemediationComment[]) {
-    this.results = comments;
+  public generateComments(remediations: Fixes) {
+    this.individualRemediations = remediations.individualFixes;
+    this.groupedRemediations = remediations.groupedFixes;
   }
 
   // uses the scan response to generate a diagnostic for the diagnostic collection
   createDiagnostic() {
     // clears the diagnostics and quick fixes
     this.diagnosticCollection.clear();
-    if (this.codeActionDisposable) {
-      this.codeActionDisposable.dispose();
+    if (ScanResultsProvider.codeActionDisposable) {
+      ScanResultsProvider.codeActionDisposable.dispose();
     }
-    const existingResourcePolicyFixes: Record<
+
+    // the key represents the file path to the file that needs remediation
+    const existingResourceBenchmarkFixes: Record<
       string,
-      Record<string, string[]>
+      IndividualFixesRemediation[]
     > = {};
+    const existingGroupedFixes: Record<string, GroupedFixesRemediation> = {};
     let diagnosticTotal = 0;
 
-    for (const result of this.results) {
-      const uniqueResourceName = `${result.logicalResource.type}.${result.logicalResource.name}`;
-      if (!existingResourcePolicyFixes[uniqueResourceName]) {
-        existingResourcePolicyFixes[uniqueResourceName] = {};
+    for (const remediation of this.individualRemediations) {
+      const filepath =
+        remediation.codeObservation.codeResourceInstance.filepath;
+      const existingData = existingResourceBenchmarkFixes[filepath];
+      if (!existingData) {
+        existingResourceBenchmarkFixes[filepath] = [remediation];
+      } else {
+        existingResourceBenchmarkFixes[filepath] = [
+          remediation,
+          ...existingData,
+        ];
       }
-      // each result is one remediation
-      const uri = vscode.Uri.parse(result.fileName);
-      const diagnostic: GombocDiagnostic[] = [];
-      // Currently, there is an edge case where a single resource
-      // may have multiple separate fixes to resolve the
-      // to avoid confusion for the customer, we'll only show one of these fixes
-      // sometimes will be multiple diagnostics on a single file
-      const curDiag = this.diagnosticCollection.get(uri) as GombocDiagnostic[];
-      for (const fix of result.fixes) {
-        if (
-          existingResourcePolicyFixes[uniqueResourceName][fix.position.line]
-        ) {
-          if (
-            existingResourcePolicyFixes[uniqueResourceName][
-              fix.position.line
-            ].includes(result.policyStatement.id)
-          ) {
-            continue;
-          } else {
-            existingResourcePolicyFixes[uniqueResourceName][fix.position.line] =
-              [
-                ...existingResourcePolicyFixes[uniqueResourceName][
-                  fix.position.line
-                ],
-                result.policyStatement.id,
-              ];
-          }
-          continue;
-        } else {
-          existingResourcePolicyFixes[uniqueResourceName][fix.position.line] =
-            [];
-        }
-        let startPosition = new vscode.Position(
-          fix.position.line - 1,
-          fix.position.column,
-        );
-        let endPosition = new vscode.Position(fix.position.line - 1, 999);
+    }
+    // Ensures that each file only has one grouped remediation
+    for (const remediation of this.groupedRemediations) {
+      const filepath = remediation.path;
+      existingGroupedFixes[filepath] = remediation;
+    }
 
-        diagnostic.push({
-          message: `Fix for ${result.logicalResource.type} to enforce apply recommendation ${result.policyStatement.payload.capability.title}`,
-          gombocResult: result,
-          quickFixMessage: `Enforce ${result.policyStatement.payload.capability.title} for ${result.logicalResource.type}`,
+    for (const filepath in existingResourceBenchmarkFixes) {
+      const uri = vscode.Uri.parse(filepath);
+      const currentRemediation = existingResourceBenchmarkFixes[filepath];
+      const curDiag: Array<
+        IndividualFixGombocDiagnostic | GroupedFixGombocDiagnostic
+      > = [];
+      const uniqueLines = new Set<number>();
+      for (const remediation of currentRemediation) {
+        let startLine = remediation.codeObservation.codeResourceInstance.line;
+        let containsAddFixType = false;
+        for (const fix of remediation.fixes) {
+          if (fix.fixType === FixType.Add) {
+            containsAddFixType = true;
+            break;
+          }
+        }
+        if (!containsAddFixType && remediation.fixes.length > 0) {
+          startLine = remediation.fixes[0].codePosition.line;
+        }
+        const startPosition = new vscode.Position(startLine - 1, 0);
+        uniqueLines.add(startLine);
+        const endPosition = new vscode.Position(startLine - 1, 999);
+
+        diagnosticTotal++;
+        curDiag.push({
+          message: `Fix for ${remediation.codeObservation.codeResourceInstance.type} to enforce apply recommendation ${remediation.benchmarkRecommendation.name}`,
+          individualFixGombocResult: remediation,
+          quickFixMessage: `Enforce ${remediation.benchmarkRecommendation.name} for ${remediation.codeObservation.codeResourceInstance.type}`,
           range: new vscode.Range(startPosition, endPosition),
           severity: vscode.DiagnosticSeverity.Error,
           source: 'Gomboc ',
         });
       }
-      this.diagnosticCollection.set(uri, curDiag.concat(diagnostic));
-      diagnosticTotal += diagnostic.length;
+      for (const line of uniqueLines) {
+        const startPosition = new vscode.Position(line - 1, 0);
+        const endPosition = new vscode.Position(line - 1, 999);
+        curDiag.push({
+          message: 'Apply all fixes',
+          groupedFixGombocResult: existingGroupedFixes[filepath],
+          quickFixMessage: 'Apply all fixes',
+          range: new vscode.Range(startPosition, endPosition),
+          severity: vscode.DiagnosticSeverity.Error,
+          source: 'Gomboc',
+        });
+      }
+      this.diagnosticCollection.set(uri, curDiag);
     }
 
     vscode.window.showInformationMessage(
       `We completed a scan of your IaC and found ${diagnosticTotal} fixes to comply with your organization's selected benchmarks.`,
     );
-
-    this.addQuickFixes();
-  }
-
-  // Registers the code action providers so that they show up under each diagnostic
-  async addQuickFixes() {
-    if (this.codeActionDisposable) {
-      this.codeActionDisposable.dispose;
-    }
-    const file = await this.getCurrentFile();
-    this.codeActionDisposable = vscode.languages.registerCodeActionsProvider(
-      {
-        language: file.editor.document.languageId,
-        scheme: file.editor.document.uri.scheme,
-      },
-      new CodeActionProvider(this.results, this.diagnosticCollection),
-    );
   }
 
   // Uses the scan result + diagnostic in order to apply a fix
-  async applyRemediation(fixedResults: RemediationComment[]) {
+  async applyIndividualRemediation(remediations: IndividualFixesRemediation[]) {
     const edit = new vscode.WorkspaceEdit();
-    for (const result of fixedResults) {
-      // the filepath might point to a different file
-      const file = vscode.Uri.file(result.fileName);
-      let offset = 0;
-      // Fixes are assumed to be in order.
-      // With VScode, the edits are made without the previous fix, so an offset is needed
-      for (const fix of result.fixes) {
-        const fixPosition = fix.position.line - 1 - offset;
-        let startPosition = new vscode.Position(fixPosition, 0);
-        offset = offset + fix.lineOffset;
-        let endPosition = new vscode.Position(fix.position.line - 1, 999);
+    const allFixes: IndividualFix[] = remediations.reduce((acc, curr) => {
+      const currentFixes: IndividualFix[] = curr.fixes.map(fix => ({
+        ...fix,
+        benchmarkRecommendation: curr.benchmarkRecommendation,
+      }));
 
-        const range = new vscode.Range(startPosition, endPosition);
-        if (fix.fixType === 'ADD') {
-          edit.insert(
-            file,
-            startPosition,
-            `${' '.repeat(fix.position.column)}${fix.newValue}` + '\n',
-          );
-        } else if (fix.fixType === 'UPDATE') {
-          edit.replace(file, range, fix.newValue);
-        } else {
-          // delete but delete type doesn't exist yet for us
-          edit.delete(file, range);
-        }
+      return [...acc, ...currentFixes];
+    }, [] as IndividualFix[]);
+
+    for (const fix of allFixes) {
+      const fixPosition = fix.codePosition.line - 1;
+      let startPosition = new vscode.Position(fixPosition, 0);
+      let endPosition = new vscode.Position(fix.codePosition.line - 1, 999);
+      const file = vscode.Uri.file(fix.filepath);
+
+      const range = new vscode.Range(startPosition, endPosition);
+      const newValue = fix.newLine.join('\n');
+      const addedLineComment = `# Applied this change to enforce ${fix.benchmarkRecommendation.name}`;
+      if (fix.fixType === 'ADD') {
+        edit.insert(
+          file,
+          startPosition,
+          `${' '.repeat(fix.codePosition.column)}${newValue} ${addedLineComment}` +
+            '\n',
+        );
+      } else if (fix.fixType === 'UPDATE') {
+        edit.replace(file, range, `${newValue} ${addedLineComment}`);
+      } else {
+        // delete but delete type doesn't exist yet for us
+        edit.replace(
+          file,
+          range,
+          `Removed this line to enforce ${fix.benchmarkRecommendation.name}`,
+        );
       }
     }
     const success = await vscode.workspace.applyEdit(edit);
 
+    // once we apply a remediation we have to dispose and clear everything and re-run
+    this.diagnosticCollection.clear();
+    if (ScanResultsProvider.codeActionDisposable) {
+      ScanResultsProvider.codeActionDisposable.dispose();
+    }
     if (success) {
       const textEditor = vscode.window.activeTextEditor;
       if (textEditor) {
         await vscode.window.activeTextEditor?.document.save();
 
-        // once we apply a remediation we have to dispose and clear everything and re-run
-        this.diagnosticCollection.clear();
-        if (this.codeActionDisposable) {
-          this.codeActionDisposable.dispose();
-        }
         vscode.commands.executeCommand('gomboc-vscode-extension.scanFile');
         return;
       }
     }
-    // once we apply a remediation we have to dispose and clear everything and re-run
-    this.diagnosticCollection.clear();
-    if (this.codeActionDisposable) {
-      this.codeActionDisposable.dispose();
+  }
+  async applyGroupedRemediation(remediations: GroupedFixesRemediation[]) {
+    const fixEdit = new vscode.WorkspaceEdit();
+    const commentEdit = new vscode.WorkspaceEdit();
+    for (const remediation of remediations) {
+      const file = vscode.Uri.file(remediation.path);
+      const document = await vscode.workspace.openTextDocument(file);
+      const decodedContent = Buffer.from(
+        remediation.content,
+        'base64',
+      ).toString('binary');
+      const fullRange = new vscode.Range(
+        document.positionAt(0),
+        document.positionAt(document.getText().length),
+      );
+
+      fixEdit.replace(document.uri, fullRange, decodedContent);
+      const remediationSuccess = await vscode.workspace.applyEdit(fixEdit);
+
+      if (!remediationSuccess) {
+        throw new Error('Unable to apply any fixes due to an unexpected error');
+      }
+
+      for (const comment of remediation.comments) {
+        const commentLine = comment.position.line;
+        const existingLine = document.lineAt(commentLine - 1);
+        const insertPosition = new vscode.Position(
+          commentLine - 1,
+          existingLine.text.length,
+        );
+        commentEdit.insert(
+          document.uri,
+          insertPosition,
+          `# Applied this change to enforce ${comment.benchmarkRecommendation.name}`,
+        );
+      }
+      const commentSuccess = await vscode.workspace.applyEdit(commentEdit);
+
+      if (!commentSuccess) {
+        throw new Error(
+          'We have applied the remediations, however an unexpected error prevented us from applying the comments on the changes',
+        );
+      }
+
+      const textEditor = vscode.window.activeTextEditor;
+      if (textEditor) {
+        await vscode.window.activeTextEditor?.document.save();
+      }
+      // once we apply a remediation we have to dispose and clear everything and re-run
+      this.diagnosticCollection.clear();
+      if (ScanResultsProvider.codeActionDisposable) {
+        ScanResultsProvider.codeActionDisposable.dispose();
+      }
     }
   }
 

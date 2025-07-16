@@ -30,202 +30,27 @@ export type Scalars = {
   JSON: { input: any; output: any };
 };
 
-/** A Scan Result that originated from a Scan Request */
-export type ActionResult = {
-  __typename?: 'ActionResult';
-  /** The related repository branch name */
-  branch?: Maybe<Scalars['String']['output']>;
-  /** A general state of the scan result */
-  condition?: Maybe<ActionResultCondition>;
-  createdAt: Scalars['String']['output'];
-  /** The related repository directory */
-  directory: Scalars['String']['output'];
-  /** The mode in which the scan was requested */
-  effect: Effect;
+export type AssetInstanceLocation = {
+  __typename: 'AssetInstanceLocation';
+  /** The scenario path: a directory or a filepath */
+  branch: Scalars['String']['output'];
   id: Scalars['ID']['output'];
-  /** The related infrastructure tool */
-  infrastructureTool: InfrastructureTool;
-  /** The linked repository the scan result relates to, if still available */
-  link?: Maybe<Link>;
-  /**
-   * The list of observations in this scan result
-   * @deprecated use policyObservations -- paginated
-   */
-  observations: Array<PolicyObservation>;
-  /** Returns the total number of observations in this scan result */
-  observationsCount: Scalars['Int']['output'];
-  /** Returns a page of alerts from Orca */
-  orcaAlerts: OrcaAlertsPage;
-  /** The organization ID the scan result is related to */
-  organizationId: Scalars['ID']['output'];
-  /** The name of the SCM Provider owner of the related repository */
-  ownerName: Scalars['String']['output'];
-  /** Returns the number of observations that were already compliant */
-  passedCount: Scalars['Int']['output'];
-  /** A page of policy observations in this scan result */
-  policyObservations: PolicyObservationsPage;
-  /** The project the scan result relates to, if still available */
-  project?: Maybe<Project>;
-  /** Project name snapshot in case it was deleted */
-  projectName: Scalars['String']['output'];
-  /** The Pull Request, if one was created */
-  pullRequest?: Maybe<PullRequest>;
-  /** Returns the number of observations in violation that were remediated */
-  remediationsCount: Scalars['Int']['output'];
-  /** The ID of the related repository */
-  repositoryId: Scalars['ID']['output'];
-  /** The name of the related repository */
-  repositoryName: Scalars['String']['output'];
-  /** Indicates where the request came from */
-  requestOrigin: RequestOrigin;
-  /** @deprecated internal use only */
-  scanId: Scalars['ID']['output'];
-  /** The parent scan request ID */
-  scanRequestId: Scalars['ID']['output'];
-  /** A markdown formatted summary of the scan result */
-  summary: Scalars['String']['output'];
-  /** Returns any tickets linked to this scan result */
-  tickets: TicketPage;
-  /** Returns the number of observations in violation */
-  violationsCount: Scalars['Int']['output'];
+  /** maps to a repository */
+  link: Link;
+  /** the repository branch */
+  path: Scalars['String']['output'];
 };
 
-/** A Scan Result that originated from a Scan Request */
-export type ActionResultObservationsArgs = {
-  exclude?: InputMaybe<Array<Disposition>>;
-  page?: InputMaybe<Scalars['Int']['input']>;
-  size?: InputMaybe<Scalars['Int']['input']>;
-};
+export type AssetInstanceLocationResponse = AssetInstanceLocation | GombocError;
 
-/** A Scan Result that originated from a Scan Request */
-export type ActionResultOrcaAlertsArgs = {
-  page?: InputMaybe<Scalars['Int']['input']>;
-  perPage?: InputMaybe<Scalars['Int']['input']>;
-};
-
-/** A Scan Result that originated from a Scan Request */
-export type ActionResultPolicyObservationsArgs = {
-  exclude?: InputMaybe<Array<Disposition>>;
-  page?: InputMaybe<Scalars['Int']['input']>;
-  size?: InputMaybe<Scalars['Int']['input']>;
-};
-
-/** A Scan Result that originated from a Scan Request */
-export type ActionResultTicketsArgs = {
-  page?: InputMaybe<Scalars['Int']['input']>;
-  size?: InputMaybe<Scalars['Int']['input']>;
-};
-
-export enum ActionResultCondition {
-  AllFixed = 'ALL_FIXED',
-  Compliant = 'COMPLIANT',
-  NoneFixed = 'NONE_FIXED',
-  SomeFixed = 'SOME_FIXED',
-}
-
-export type ActionResultPage = {
-  __typename?: 'ActionResultPage';
-  page: Scalars['Int']['output'];
-  results: Array<ActionResult>;
-  size: Scalars['Int']['output'];
-  totalCount: Scalars['Int']['output'];
-};
-
-export type ActionResultResponse = ActionResult | GombocError;
-
-export type AdoptFrameworkControlsIntoOrganizationInput = {
-  policyStatements: Array<CreateMustImplementPolicyStatementInput>;
-  resetPolicy: Scalars['Boolean']['input'];
-};
-
-export type AdoptFrameworkControlsIntoOrganizationResponse =
-  | GombocError
-  | Policy;
-
-export type AdoptedPolicy = {
-  __typename?: 'AdoptedPolicy';
-  recommendations: Array<AdoptedSecurityBenchmarkRecommendation>;
-};
-
-export type AdoptedSecurityBenchmarkRecommendation = {
-  __typename?: 'AdoptedSecurityBenchmarkRecommendation';
-  createdAt: Scalars['String']['output'];
-  createdBy: Scalars['String']['output'];
-  id: Scalars['ID']['output'];
-  recommendation: SecurityBenchmarkRecommendation;
-};
-
-export type AppliedMustImplementPolicyStatement = {
-  __typename?: 'AppliedMustImplementPolicyStatement';
-  capability: Capability;
-};
-
-export type AppliedPolicyStatement = {
-  __typename?: 'AppliedPolicyStatement';
-  description: Scalars['String']['output'];
-  framework: Scalars['String']['output'];
-  id: Scalars['ID']['output'];
-  identifier: Scalars['String']['output'];
-  observations: Array<PolicyObservation>;
-  payload: AppliedPolicyStatementPayloadType;
-  source: StatementSource;
-};
-
-export type AppliedPolicyStatementPayloadType =
-  AppliedMustImplementPolicyStatement;
-
-export type AutoRemediateCfnFileComments = {
-  __typename?: 'AutoRemediateCfnFileComments';
-  commentMarkdown: Scalars['String']['output'];
-  /** @deprecated No longer supported */
-  commentPlain?: Maybe<Scalars['String']['output']>;
-  line: Scalars['Int']['output'];
-};
-
-export type AutoRemediateCfnFileSuccess = {
-  __typename?: 'AutoRemediateCfnFileSuccess';
-  appliedPolicyStatements: Array<AppliedPolicyStatement>;
-  file: AutoRemediatedCfnFile;
-  generalCommentMarkdown: Scalars['String']['output'];
-  /** @deprecated No longer supported */
-  generalCommentPlain?: Maybe<Scalars['String']['output']>;
-};
-
-export type AutoRemediateCfnInvalidFileError = {
-  __typename?: 'AutoRemediateCfnInvalidFileError';
-  filepath: Scalars['String']['output'];
-  message: Scalars['String']['output'];
-};
-
-export type AutoRemediateTfHclFileComments = {
-  __typename?: 'AutoRemediateTfHCLFileComments';
-  commentMarkdown: Scalars['String']['output'];
-  /** @deprecated No longer supported */
-  commentPlain?: Maybe<Scalars['String']['output']>;
-  line: Scalars['Int']['output'];
-};
-
-export type AutoRemediateTfHclFilesSuccess = {
-  __typename?: 'AutoRemediateTfHCLFilesSuccess';
-  appliedPolicyStatements: Array<AppliedPolicyStatement>;
-  files: Array<AutoRemediatedTfHclFile>;
-  generalCommentMarkdown: Scalars['String']['output'];
-  /** @deprecated No longer supported */
-  generalCommentPlain?: Maybe<Scalars['String']['output']>;
-};
-
-export type AutoRemediatedCfnFile = {
-  __typename?: 'AutoRemediatedCfnFile';
-  fileComments: Array<AutoRemediateCfnFileComments>;
-  filepath: Scalars['String']['output'];
-  newContent: Scalars['String']['output'];
-};
-
-export type AutoRemediatedTfHclFile = {
-  __typename?: 'AutoRemediatedTfHCLFile';
-  fileComments: Array<AutoRemediateTfHclFileComments>;
-  filepath: Scalars['String']['output'];
-  newContent: Scalars['String']['output'];
+export type AssetType = {
+  __typename: 'AssetType';
+  /** The name of the cloud provider (AWS, GCP, Azure) */
+  cloudProviderName: Scalars['String']['output'];
+  /** This is the internal mapping of what a cloud resource is, originally was in cfn */
+  gombocCloudResourceId: Scalars['ID']['output'];
+  /** This is the type of the resource as defined by the observation provider */
+  providerType: Scalars['String']['output'];
 };
 
 export enum BitBucketApiVersion {
@@ -241,29 +66,63 @@ export type BulkLinkScanRemoteInput = {
   linkIds: Array<Scalars['ID']['input']>;
 };
 
-export type BulkLinkScanRemoteTfHcl2Input = {
-  linkIds: Array<Scalars['ID']['input']>;
-};
-
 export type Capability = {
-  __typename?: 'Capability';
+  __typename: 'Capability';
   id: Scalars['ID']['output'];
   title: Scalars['String']['output'];
+};
+
+export type CfnAttribute = {
+  __typename: 'CfnAttribute';
+  description?: Maybe<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
+};
+
+export type CfnProperty = {
+  __typename: 'CfnProperty';
+  customRules: Array<CustomRule>;
+  description?: Maybe<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
+  slug: Scalars['String']['output'];
+  subproperties: Array<CfnSubProperty>;
+};
+
+export type CfnResource = {
+  __typename: 'CfnResource';
+  attributes: Array<CfnAttribute>;
+  codeResource?: Maybe<CodeResource>;
+  description?: Maybe<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
+  properties: Array<CfnProperty>;
+};
+
+export type CfnResourcePage = {
+  __typename: 'CfnResourcePage';
+  page: Scalars['Int']['output'];
+  results: Array<CfnResource>;
+  size: Scalars['Int']['output'];
+  total: Scalars['Int']['output'];
+};
+
+export type CfnResourcePageInput = {
+  page?: InputMaybe<Scalars['Int']['input']>;
+  search?: InputMaybe<Scalars['String']['input']>;
+  size?: InputMaybe<Scalars['Int']['input']>;
+};
+
+export type CfnSubProperty = {
+  __typename: 'CfnSubProperty';
+  description?: Maybe<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
+  properties: Array<CfnProperty>;
 };
 
 export type CloudResource = {
-  __typename?: 'CloudResource';
+  __typename: 'CloudResource';
+  documentationUrl?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
   provider: CloudResourceProvider;
   title: Scalars['String']['output'];
-};
-
-export type CloudResourcePage = {
-  __typename?: 'CloudResourcePage';
-  page: Scalars['Int']['output'];
-  results: Array<CloudResource>;
-  size: Scalars['Int']['output'];
-  total: Scalars['Int']['output'];
 };
 
 export enum CloudResourceProvider {
@@ -272,16 +131,42 @@ export enum CloudResourceProvider {
   Gcp = 'GCP',
 }
 
+export type CodeObservation = {
+  __typename: 'CodeObservation';
+  codeResourceInstance: CodeResourceInstance;
+  disposition: Disposition;
+};
+
+export type CodePosition = {
+  __typename: 'CodePosition';
+  column: Scalars['Int']['output'];
+  line: Scalars['Int']['output'];
+};
+
 export type CodeResource = {
-  __typename?: 'CodeResource';
-  cloudResource: CloudResource;
+  __typename: 'CodeResource';
+  cloudResource?: Maybe<CloudResource>;
+  configOptions: ConfigOptionPage;
   documentationUrl?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
   infrastructureTool: InfrastructureTool;
 };
 
+export type CodeResourceConfigOptionsArgs = {
+  input: PageInput;
+};
+
+export type CodeResourceInstance = {
+  __typename: 'CodeResourceInstance';
+  codeResource: CodeResource;
+  filepath: Scalars['String']['output'];
+  line: Scalars['Int']['output'];
+  name: Scalars['String']['output'];
+  type: Scalars['String']['output'];
+};
+
 export type CodeResourcePage = {
-  __typename?: 'CodeResourcePage';
+  __typename: 'CodeResourcePage';
   page: Scalars['Int']['output'];
   results: Array<CodeResource>;
   size: Scalars['Int']['output'];
@@ -289,12 +174,23 @@ export type CodeResourcePage = {
 };
 
 export type ConfigOption = {
-  __typename?: 'ConfigOption';
+  __typename: 'ConfigOption';
   capability: Capability;
+  /** @deprecated This is moved inside of the CodeResource object. DEV-2330 */
   cloudResource?: Maybe<CloudResource>;
+  codeResource: CodeResource;
   id: Scalars['ID']['output'];
   ontologicalSubgraph: OntologicalSubgraph;
+  /** @deprecated this is equivalent to the nodeLabel:codeResourceId */
   resourceKey: Scalars['String']['output'];
+};
+
+export type ConfigOptionPage = {
+  __typename: 'ConfigOptionPage';
+  page: Scalars['Int']['output'];
+  results: Array<ConfigOption>;
+  size: Scalars['Int']['output'];
+  total: Scalars['Int']['output'];
 };
 
 export type CreateAzdoIntegrationInput = {
@@ -303,13 +199,6 @@ export type CreateAzdoIntegrationInput = {
 };
 
 export type CreateAzdoIntegrationOutput = GombocError | ScmIntegration;
-
-export type CreateAzdoProviderInput = {
-  organization: Scalars['String']['input'];
-  personalAccessToken: Scalars['String']['input'];
-};
-
-export type CreateAzdoProviderOutput = GitProvider | GombocError;
 
 export type CreateBitBucketIntegrationInput = {
   accessToken: Scalars['String']['input'];
@@ -320,37 +209,33 @@ export type CreateBitBucketIntegrationInput = {
 
 export type CreateBitBucketIntegrationOutput = GombocError | ScmIntegration;
 
-export type CreateBitBucketProviderInput = {
-  accessToken: Scalars['String']['input'];
-  apiVersion: BitBucketApiVersion;
-  gombocAccessToken: Scalars['String']['input'];
-  workspaceSlug: Scalars['String']['input'];
+export type CreateCspmIntegrationOutput =
+  | CreateCspmIntegrationResponse
+  | GombocError;
+
+export type CreateCspmIntegrationResponse = {
+  __typename: 'CreateCspmIntegrationResponse';
+  apiKey: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  integration: CspmIntegration;
 };
 
-export type CreateBitBucketProviderOutput = GitProvider | GombocError;
-
 export type CreateCustomIntegrationInput = {
-  cloudResourceProviderId?: InputMaybe<Scalars['String']['input']>;
+  cloudResourceProviderName: Scalars['String']['input'];
   description?: InputMaybe<Scalars['String']['input']>;
-  integrationToken: Scalars['String']['input'];
   metadata?: InputMaybe<Scalars['JSON']['input']>;
   name: Scalars['String']['input'];
-  observationProviderId: Scalars['String']['input'];
+  notificationPassthrough?: InputMaybe<NotificationPassthrough>;
+  observationProviderName: Scalars['String']['input'];
 };
 
 export type CreateGitHubIntegrationInput = {
+  app?: InputMaybe<GitHubApp>;
   code: Scalars['String']['input'];
   installationId: Scalars['ID']['input'];
 };
 
 export type CreateGitHubIntegrationResponse = GombocError | ScmIntegration;
-
-export type CreateGitHubProviderInput = {
-  code: Scalars['String']['input'];
-  installationId: Scalars['ID']['input'];
-};
-
-export type CreateGitHubProviderResponse = GitProvider | GombocError;
 
 export type CreateGitLabIntegrationInput = {
   apiUrl: Scalars['String']['input'];
@@ -360,73 +245,195 @@ export type CreateGitLabIntegrationInput = {
 
 export type CreateGitLabIntegrationOutput = GombocError | ScmIntegration;
 
-export type CreateGitLabProviderInput = {
-  apiUrl: Scalars['String']['input'];
-  apiVersion: GitLabApiVersion;
-  groupAccessToken: Scalars['String']['input'];
-};
-
-export type CreateGitLabProviderOutput = GitProvider | GombocError;
-
-export type CreateLinkInput = {
-  gitProviderId: Scalars['ID']['input'];
-  projectId: Scalars['ID']['input'];
-  repositoryId: Scalars['ID']['input'];
-};
-
-export type CreateMustImplementPolicyStatementInput = {
-  capabilityId: Scalars['ID']['input'];
-  description?: InputMaybe<Scalars['String']['input']>;
-  framework?: InputMaybe<Scalars['String']['input']>;
-  identifier?: InputMaybe<Scalars['String']['input']>;
-};
-
 export type CreateOrcaIntegrationInput = {
   gombocToken: Scalars['String']['input'];
   name: Scalars['String']['input'];
-  orcaApiToken: Scalars['String']['input'];
   orcaRegion: OrcaRegion;
+  orcaToken: Scalars['String']['input'];
 };
 
-export type CreatePolicyStatementResponse = GombocError | SetPolicyStatement;
+export type CreatePresenceBasedCustomRuleInput = {
+  comment: Scalars['String']['input'];
+  description: Scalars['String']['input'];
+  /** The type of rule being applied to the value as CFN sees it: IMPLEMENTS_IF_PRESENT, IMPLEMENTS_IF_ABSENT */
+  ruleType: PresenceBasedRule;
+  targetName: Scalars['String']['input'];
+  /** The type of target that the rule is targeting, tf or cfn */
+  targetType: CustomRuleTargetType;
+  title: Scalars['String']['input'];
+};
 
 export type CreateProjectResponse = GombocError | Project;
 
-/**
- * You must pass one of actionResultId or scanResultId.
- * scanResultId will be given priority if both are passed.
- */
 export type CreateTicketInput = {
   externalUrl: Scalars['String']['input'];
-  scanResultId?: InputMaybe<Scalars['ID']['input']>;
+  scanResultId: Scalars['ID']['input'];
 };
 
 export type CreateTicketOutput = GombocError | Ticket;
 
-export type CustomIntegration = {
-  __typename?: 'CustomIntegration';
-  cloudResourceProviderId?: Maybe<Scalars['String']['output']>;
+export type CreateValueBasedCustomRuleInput = {
+  comment: Scalars['String']['input'];
+  description: Scalars['String']['input'];
+  /** The type of rule being applied to the value as CFN sees it: IMPLEMENTS_IF_EQUAL_TO, IMPLEMENTS_IF_NOT_EQUAL_TO, IMPLEMENTS_IF_REGEX_MATCHES, IMPLEMENTS_IF_NOT_REGEX_MATCHES */
+  ruleType: ValueBasedRule;
+  /** The underlying type of value of the custom rule: BOOL, STRING, NUMBER */
+  scalarType: CustomRuleScalarType;
+  targetName: Scalars['String']['input'];
+  /** The type of target that the rule is targeting, tf or cfn */
+  targetType: CustomRuleTargetType;
+  title: Scalars['String']['input'];
+  /** expects a base64 encoded string */
+  value: Scalars['String']['input'];
+  /** the type of rule that is being created: SCALAR, OTHER */
+  valueType: CustomRuleValueType;
+};
+
+export type CreateWizIntegrationInput = {
+  gombocToken: Scalars['String']['input'];
+  name: Scalars['String']['input'];
+  wizApiUrl: Scalars['String']['input'];
+  wizAuthUrl: Scalars['String']['input'];
+  wizClientId: Scalars['ID']['input'];
+  wizClientSecret: Scalars['String']['input'];
+};
+
+export type CspmIntegration = {
+  __typename: 'CspmIntegration';
+  /** If applicable, this will be the associated cloud provider (AWS, GCP) */
+  cloudResourceProviderName?: Maybe<Scalars['String']['output']>;
   createdAt: Scalars['String']['output'];
-  description?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
+  /** The api token given to the user upon creating an integration that they will put in their webhook */
   integrationToken: Scalars['String']['output'];
   metadata?: Maybe<Scalars['JSON']['output']>;
   name: Scalars['String']['output'];
-  observationProviderId: Scalars['String']['output'];
-  organizationId?: Maybe<Scalars['String']['output']>;
-  updatedAt: Scalars['String']['output'];
+  /** this will be "ORCA" if it's orca, WIZ if wiz, and anything else means it's custom */
+  observationProviderName: IntegrationType;
+  organizationId: Scalars['String']['output'];
 };
 
-export type DeleteGitProviderInput = {
-  gitProviderId: Scalars['ID']['input'];
+export type CspmObservation = {
+  __typename: 'CspmObservation';
+  /** The cloud account id if it exists, otherwise an empty string */
+  cloudAccountId: Scalars['String']['output'];
+  /** The specific unique id of the cloud asset i.e 'vm_215151194724_i-09b8a8f38e1ccebff"' */
+  cloudAssetId: Scalars['ID']['output'];
+  /** The name of the associated cloud asset type */
+  cloudAssetTypeName: Scalars['String']['output'];
+  /** The name of the cloud provider (AWS, GCP, Azure) */
+  cloudProviderName: Scalars['String']['output'];
+  /** The definition of the resource as told by us */
+  cloudResource: AssetType;
+  /** location of the asset instance if there is one, and it can be reached */
+  codeResource?: Maybe<AssetInstanceLocation>;
+  id: Scalars['ID']['output'];
+  /** Reference to the latest scan request if it exists */
+  latestScanRequest?: Maybe<ScanRequest>;
+  /** Name of the cspm provider issuing the observation (WIZ, ORCA, ...) */
+  observationProviderName: IntegrationType;
+  /** Groups all the source types into one object (name, description, id) */
+  observationSource: CspmObservationSource;
+  /** The array of security benchmarks */
+  securityBenchmarkRecommendations: Array<SecurityBenchmarkRecommendation>;
+  /** The type of security alert (defaults to "unknown"). */
+  securityType: Scalars['String']['output'];
+  /** The severity of the alert (defaults to "info"). */
+  severity: Severity;
+  timestamp: Scalars['String']['output'];
 };
 
-export type DeleteOrcaIntegrationInput = {
-  integrationId: Scalars['ID']['input'];
+export type CspmObservationOutput = CspmObservation | GombocError;
+
+export type CspmObservationSource = {
+  __typename: 'CspmObservationSource';
+  /** A short HTML‑encoded description of the finding. */
+  description?: Maybe<Scalars['String']['output']>;
+  /** The name or unique ID of the alert, shown to the user. */
+  id: Scalars['ID']['output'];
+  /** A short name to differentiate the finding */
+  name: Scalars['String']['output'];
+  /** The direct URL to the alert. */
+  url?: Maybe<Scalars['String']['output']>;
 };
 
-export type DeletePolicyStatementsInput = {
-  policyStatementIds: Array<Scalars['ID']['input']>;
+export type CspmObservationsInput = {
+  canBeScanned?: InputMaybe<Scalars['Boolean']['input']>;
+  cloudProviderName?: InputMaybe<Scalars['String']['input']>;
+  observationProviderName?: InputMaybe<Scalars['String']['input']>;
+  page?: InputMaybe<Scalars['Int']['input']>;
+  severity?: InputMaybe<Severity>;
+  size?: InputMaybe<Scalars['Int']['input']>;
+  sourceName?: InputMaybe<Scalars['String']['input']>;
+  status?: InputMaybe<Scalars['String']['input']>;
+};
+
+export type CspmObservationsPage = {
+  __typename: 'CspmObservationsPage';
+  page: Scalars['Int']['output'];
+  results: Array<CspmObservation>;
+  size: Scalars['Int']['output'];
+  total: Scalars['Int']['output'];
+};
+
+/** Custom policy, points to a target attribute or property */
+export type CustomRule = {
+  __typename: 'CustomRule';
+  /** the comment that will show up in a PR when a remediation is found */
+  comment: Scalars['String']['output'];
+  createdAt: Scalars['String']['output'];
+  /** custom description of the custom rule provided by the user */
+  description: Scalars['String']['output'];
+  /** standard iac tool variable */
+  iacTool: InfrastructureTool;
+  id: Scalars['ID']['output'];
+  /** this is a string exposing what the actual rule is implementing, */
+  internalDescription: Scalars['String']['output'];
+  target: CustomRuleTarget;
+  /** title of the custom rule */
+  title: Scalars['String']['output'];
+};
+
+export enum CustomRuleScalarType {
+  Bool = 'BOOL',
+  Integer = 'INTEGER',
+  String = 'STRING',
+}
+
+/** The target of a custom policy, can be either terraform or cloudformation */
+export type CustomRuleTarget = CfnProperty | TfAttribute;
+
+export enum CustomRuleTargetType {
+  CfnProperty = 'CFN_PROPERTY',
+  TfAttribute = 'TF_ATTRIBUTE',
+}
+
+export enum CustomRuleValueType {
+  Other = 'OTHER',
+  Scalar = 'SCALAR',
+}
+
+/** @deprecated - please use presencebased or valuebased custom rule */
+export type CustomRulesInput = {
+  order?: InputMaybe<Scalars['String']['input']>;
+  page?: InputMaybe<Scalars['Int']['input']>;
+  resourceType?: InputMaybe<Scalars['String']['input']>;
+  ruleType?: InputMaybe<Scalars['String']['input']>;
+  size?: InputMaybe<Scalars['Int']['input']>;
+};
+
+export type CustomRulesPage = {
+  __typename: 'CustomRulesPage';
+  page: Scalars['Int']['output'];
+  results: Array<CustomRule>;
+  size: Scalars['Int']['output'];
+  totalCount: Scalars['Int']['output'];
+};
+
+export type CustomRulesResponse = CustomRulesPage | GombocError;
+
+export type DeleteCustomRulesInput = {
+  ids: Array<Scalars['ID']['input']>;
 };
 
 export type DeleteScmIntegrationInput = {
@@ -443,10 +450,11 @@ export enum Disposition {
   CannotRemediate = 'CANNOT_REMEDIATE',
   InsufficientInfoToRemediate = 'INSUFFICIENT_INFO_TO_REMEDIATE',
   NotApplicable = 'NOT_APPLICABLE',
+  RequiresUserInput = 'REQUIRES_USER_INPUT',
 }
 
 export type Edge = {
-  __typename?: 'Edge';
+  __typename: 'Edge';
   label: Scalars['String']['output'];
   source: Node;
   target: Node;
@@ -459,16 +467,10 @@ export enum Effect {
 }
 
 export type FailedScan = {
-  __typename?: 'FailedScan';
+  __typename: 'FailedScan';
   createdAt: Scalars['String']['output'];
   createdBy: Scalars['String']['output'];
   id: Scalars['ID']['output'];
-  message: Scalars['String']['output'];
-};
-
-export type Failure = {
-  __typename?: 'Failure';
-  code?: Maybe<Scalars['String']['output']>;
   message: Scalars['String']['output'];
 };
 
@@ -476,6 +478,11 @@ export enum FixType {
   Add = 'ADD',
   Delete = 'DELETE',
   Update = 'UPDATE',
+}
+
+export enum GitHubApp {
+  Community = 'COMMUNITY',
+  Enterprise = 'ENTERPRISE',
 }
 
 export enum GitLabApiVersion {
@@ -489,77 +496,8 @@ export type GitMetaDataInput = {
   remote?: InputMaybe<Scalars['String']['input']>;
 };
 
-/**
- * Represents an integration to an SCM provider **owner** entity, such as:
- * - A GitHub **organization**
- * - A GitLab **group**
- * - A Bitbucket **workspace**
- * - An Azure DevOps **organization**
- */
-export type GitProvider = {
-  __typename?: 'GitProvider';
-  createdAt: Scalars['String']['output'];
-  /** Returns the email of the user who integrated the SCM provider */
-  createdBy: Scalars['String']['output'];
-  /** A URL to the SCM provider integration page */
-  externalUrl?: Maybe<Scalars['String']['output']>;
-  id: Scalars['ID']['output'];
-  /** The name of the integration to be displayed */
-  name?: Maybe<Scalars['String']['output']>;
-  parentScope?: Maybe<Scalars['String']['output']>;
-  providerName: ProviderName;
-  /**
-   * All the repositories this integration has access to
-   * @deprecated Use repositories page instead
-   */
-  repositories: Array<Repository>;
-  repositoriesPage: RepositoriesPage;
-  scope?: Maybe<Scalars['String']['output']>;
-  /** In the context of SCM providers like GL, groups can have subGroups */
-  subGitProviders: SubGitProviderPage;
-};
-
-/**
- * Represents an integration to an SCM provider **owner** entity, such as:
- * - A GitHub **organization**
- * - A GitLab **group**
- * - A Bitbucket **workspace**
- * - An Azure DevOps **organization**
- */
-export type GitProviderRepositoriesArgs = {
-  selection?: InputMaybe<RepositorySelection>;
-};
-
-/**
- * Represents an integration to an SCM provider **owner** entity, such as:
- * - A GitHub **organization**
- * - A GitLab **group**
- * - A Bitbucket **workspace**
- * - An Azure DevOps **organization**
- */
-export type GitProviderRepositoriesPageArgs = {
-  page?: InputMaybe<Scalars['Int']['input']>;
-  scope?: InputMaybe<Scalars['String']['input']>;
-  size?: InputMaybe<Scalars['Int']['input']>;
-};
-
-/**
- * Represents an integration to an SCM provider **owner** entity, such as:
- * - A GitHub **organization**
- * - A GitLab **group**
- * - A Bitbucket **workspace**
- * - An Azure DevOps **organization**
- */
-export type GitProviderSubGitProvidersArgs = {
-  page?: InputMaybe<Scalars['Int']['input']>;
-  scope?: InputMaybe<Scalars['String']['input']>;
-  size?: InputMaybe<Scalars['Int']['input']>;
-};
-
-export type GitProviderResponse = GitProvider | GombocError;
-
 export type GombocError = {
-  __typename?: 'GombocError';
+  __typename: 'GombocError';
   code?: Maybe<GombocErrorCode>;
   message: Scalars['String']['output'];
 };
@@ -572,9 +510,53 @@ export enum GombocErrorCode {
   Unauthorized = 'UNAUTHORIZED',
 }
 
+export type GroupRemediatedFileComment = {
+  __typename: 'GroupRemediatedFileComment';
+  benchmarkRecommendation: SecurityBenchmarkRecommendation;
+  position: CodePosition;
+};
+
+export type GroupedFixesInput = {
+  fileContents: Array<IacScanContent>;
+  iacTool: InfrastructureTool;
+};
+
+export type GroupedFixesResponse = GombocError | GroupedFixesSuccess;
+
+export type GroupedFixesSuccess = {
+  __typename: 'GroupedFixesSuccess';
+  remediatedFiles: Array<GroupedRemediatedFile>;
+};
+
+export type GroupedRemediatedFile = {
+  __typename: 'GroupedRemediatedFile';
+  comments: Array<GroupRemediatedFileComment>;
+  content: Scalars['String']['output'];
+  path: Scalars['String']['output'];
+};
+
 export type IacScanContent = {
   fileContent: Scalars['String']['input'];
   filePath: Scalars['String']['input'];
+};
+
+export type IndividualFixesInput = {
+  fileContents: Array<IacScanContent>;
+  iacTool: InfrastructureTool;
+};
+
+export type IndividualFixesResponse = GombocError | IndividualFixesSuccess;
+
+export type IndividualFixesSuccess = {
+  __typename: 'IndividualFixesSuccess';
+  remediations: Array<IndividualRemediation>;
+};
+
+export type IndividualRemediation = {
+  __typename: 'IndividualRemediation';
+  benchmarkRecommendation: SecurityBenchmarkRecommendation;
+  codeObservation: CodeObservation;
+  fixes: Array<RemediationFix>;
 };
 
 export enum InfrastructureTool {
@@ -582,48 +564,15 @@ export enum InfrastructureTool {
   Terraform = 'TERRAFORM',
 }
 
-export type InheritedAutoRemediateCfnFileResponse =
-  | AutoRemediateCfnFileSuccess
-  | AutoRemediateCfnInvalidFileError;
-
-export type InheritedAutoRemediateTfHclFilesResponse =
-  AutoRemediateTfHclFilesSuccess;
-
-export type InheritedPolicyStatementPayloadMustImplementType = {
-  capabilityId: Scalars['String']['input'];
-  id: Scalars['ID']['input'];
-  metadata: InputStatementMetadata;
-};
-
-export type InputFile = {
-  content: Scalars['String']['input'];
-  filepath: Scalars['String']['input'];
-};
-
-export type InputStatementMetadata = {
-  createdAt: Scalars['String']['input'];
-  createdBy: Scalars['String']['input'];
-  description: Scalars['String']['input'];
-  framework: Scalars['String']['input'];
-  identifier: Scalars['String']['input'];
-  source: StatementSource;
-};
-
-export enum IntegrationName {
-  Azdo = 'AZDO',
-  Bitbucket = 'BITBUCKET',
-  Github = 'GITHUB',
-  Gitlab = 'GITLAB',
-}
-
-export enum IntegrationParty {
+export enum IntegrationType {
   Custom = 'CUSTOM',
+  Customgomboc = 'CUSTOMGOMBOC',
   Orca = 'ORCA',
   Wiz = 'WIZ',
 }
 
 export type LineFix = {
-  __typename?: 'LineFix';
+  __typename: 'LineFix';
   fixType: FixType;
   issueType: Scalars['String']['output'];
   lineOffset: Scalars['Int']['output'];
@@ -633,12 +582,7 @@ export type LineFix = {
 };
 
 export type Link = {
-  __typename?: 'Link';
-  /**
-   * Returns a page of Scan Results related to this linked repository
-   * @deprecated use scanResults
-   */
-  actionResults: ActionResultPage;
+  __typename: 'Link';
   createdAt: Scalars['String']['output'];
   /** Returns the email of the user who linked the repository */
   createdBy: Scalars['String']['output'];
@@ -647,19 +591,20 @@ export type Link = {
   lastScanRequest?: Maybe<ScanRequest>;
   /** Returns the project the repository is linked to */
   project: Project;
-  /** Returns the name of the SCM Provider */
-  providerName: ProviderName;
-  /** Returns the repository itself */
-  repository: LinkedRepository;
+  /** Open Pull Requests from remediations */
+  pullRequests: PullRequestPage;
   /** Returns a page of Scan Results related to this linked repository */
   scanResults: ScanResultPage;
+  /** Returns the repository itself */
+  scmRepository: LinkedScmRepository;
+  /** Returns the name of the SCM Provider */
+  scmType: ScmType;
   /** Returns a URL-friendly slug for the linked repository */
   slug: Scalars['ID']['output'];
 };
 
-export type LinkActionResultsArgs = {
-  page?: InputMaybe<Scalars['Int']['input']>;
-  size?: InputMaybe<Scalars['Int']['input']>;
+export type LinkPullRequestsArgs = {
+  input: LinkPullRequestsInput;
 };
 
 export type LinkScanResultsArgs = {
@@ -667,18 +612,18 @@ export type LinkScanResultsArgs = {
   size?: InputMaybe<Scalars['Int']['input']>;
 };
 
+export type LinkPullRequestsInput = {
+  page?: InputMaybe<Scalars['Int']['input']>;
+  size?: InputMaybe<Scalars['Int']['input']>;
+};
+
 export type LinkRepositoriesInput = {
-  integrations?: InputMaybe<Array<LinkRepositoriesIntegrationInput>>;
+  integrations: Array<LinkRepositoriesIntegrationInput>;
   projectId: Scalars['ID']['input'];
 };
 
 export type LinkRepositoriesIntegrationInput = {
   scmIntegrationId: Scalars['ID']['input'];
-  selectedRepositoryIds?: InputMaybe<Array<Scalars['ID']['input']>>;
-};
-
-export type LinkRepositoriesProviderInput = {
-  gitProviderId: Scalars['ID']['input'];
   selectedRepositoryIds?: InputMaybe<Array<Scalars['ID']['input']>>;
 };
 
@@ -696,73 +641,24 @@ export type LinkScanRemoteInput = {
   workingDirectory?: InputMaybe<Scalars['String']['input']>;
 };
 
-export type LinkScanRemoteTfHcl2Input = {
-  branchName?: InputMaybe<Scalars['String']['input']>;
-  effect: Effect;
-  linkId: Scalars['ID']['input'];
-  pullRequestTitle?: InputMaybe<Scalars['String']['input']>;
-  recurse?: InputMaybe<Scalars['Boolean']['input']>;
-  workingDirectory?: InputMaybe<Scalars['String']['input']>;
-};
-
-export type LinkedRepository = Repository | UnreachableRepository;
+export type LinkedScmRepository = ScmRepository | UnreachableRepository;
 
 export type LinksPage = {
-  __typename?: 'LinksPage';
+  __typename: 'LinksPage';
   /** Use this to get the next page */
   lastKey?: Maybe<Scalars['ID']['output']>;
   links: Array<Link>;
 };
 
 export type LogicalResource = {
-  __typename?: 'LogicalResource';
+  __typename: 'LogicalResource';
+  /** @deprecated This has been relocated into codeResource. DEV-2330 */
   cloudResource?: Maybe<CloudResource>;
+  codeResource?: Maybe<CodeResource>;
   filepath: Scalars['String']['output'];
   line: Scalars['Int']['output'];
   name: Scalars['String']['output'];
   type: Scalars['String']['output'];
-};
-
-export type ManualRemediateCfnResponse = Failure | ManualRemediationSuccessCfn;
-
-export type ManualRemediateTfHclResponse =
-  | Failure
-  | ManualRemediationTfHclSuccess;
-
-export type ManualRemediationCfn = {
-  __typename?: 'ManualRemediationCfn';
-  documentationLink?: Maybe<Scalars['String']['output']>;
-  fixes: Array<RemediationFixCfn>;
-  logicalResource: LogicalResource;
-  policyStatement?: Maybe<AppliedPolicyStatement>;
-};
-
-export type ManualRemediationPolicyStatement = {
-  __typename?: 'ManualRemediationPolicyStatement';
-  description: Scalars['String']['output'];
-  framework: Scalars['String']['output'];
-  id: Scalars['ID']['output'];
-  identifier: Scalars['String']['output'];
-  payload: AppliedPolicyStatementPayloadType;
-  source: StatementSource;
-};
-
-export type ManualRemediationSuccessCfn = {
-  __typename?: 'ManualRemediationSuccessCfn';
-  fileName: Scalars['String']['output'];
-  remediations: Array<ManualRemediationCfn>;
-};
-
-export type ManualRemediationTfHcl = {
-  __typename?: 'ManualRemediationTfHcl';
-  fixes: Array<RemediationFixTfHcl>;
-  policyObservation: PolicyObservation;
-  policyStatement: ManualRemediationPolicyStatement;
-};
-
-export type ManualRemediationTfHclSuccess = {
-  __typename?: 'ManualRemediationTfHclSuccess';
-  remediations: Array<ManualRemediationTfHcl>;
 };
 
 export type MetaDataInput = {
@@ -771,54 +667,38 @@ export type MetaDataInput = {
 };
 
 export type Mutation = {
-  __typename?: 'Mutation';
+  __typename: 'Mutation';
   /**
-   * Adopt all policy statements from a security framework
-   * @deprecated No longer supported
+   * Adopt all security benchmarkversions and all of their recommendations -> on initial creation of account
+   * during onboarding wizard
    */
-  adoptFrameworkControlsIntoOrganization: AdoptFrameworkControlsIntoOrganizationResponse;
+  adoptAllSecurityBenchmarkRecommendations?: Maybe<GombocError>;
   /** Scans all linked repositories */
   bulkAllLinkScanRemote: ScanRequestResponseType;
   /** Call scans on a number of linked repository with default settings */
   bulkLinkScanRemote: ScanRequestResponseType;
   createAzdoIntegration: CreateAzdoIntegrationOutput;
-  /** @deprecated use createAzdoIntegration */
-  createAzdoProvider: CreateAzdoProviderOutput;
   createBitBucketIntegration: CreateBitBucketIntegrationOutput;
-  /** @deprecated use createBitBucketIntegration */
-  createBitBucketProvider: CreateBitBucketProviderOutput;
-  createCustomIntegration: Scalars['String']['output'];
+  createCspmCustomIntegration: CreateCspmIntegrationOutput;
+  /** Follow this pattern for adding more cspms, we want them to all return the same type but intake different ones */
+  createCspmOrcaIntegration: CreateCspmIntegrationOutput;
+  createCspmWizIntegration: CreateCspmIntegrationOutput;
   createGitHubIntegration: CreateGitHubIntegrationResponse;
-  /** @deprecated use createGitHubIntegration */
-  createGitHubProvider: CreateGitHubProviderResponse;
   createGitLabIntegration: CreateGitLabIntegrationOutput;
-  /** @deprecated use createGitLabIntegration */
-  createGitLabProvider: CreateGitLabProviderOutput;
-  /**
-   * Create a custom policy statement
-   * @deprecated No longer supported
-   */
-  createMustImplementOrganizationPolicyStatement: CreatePolicyStatementResponse;
-  createOrcaIntegration: OrcaIntegrationResponse;
+  /** Creates a presence based scalar custom rule */
+  createPresenceBasedCustomRule?: Maybe<GombocError>;
   /** Create a new Gomboc project */
   createProject: CreateProjectResponse;
   /** Link a Ticket to a Scan Result */
   createTicket: CreateTicketOutput;
-  deleteCustomIntegration: Scalars['Boolean']['output'];
-  /**
-   * Remove an SCM provider integration
-   * @deprecated use deleteScmIntegration
-   */
-  deleteGitProvider?: Maybe<GombocError>;
+  /** Creates a value based scalar custom rule */
+  createValueBasedCustomRule?: Maybe<GombocError>;
+  /** deletes any of the cspm integrations based on the id */
+  deleteCspmIntegration?: Maybe<GombocError>;
+  /** deletes a batch of custom rules */
+  deleteCustomRules?: Maybe<GombocError>;
   /** Unlink a repository from a project */
   deleteLink?: Maybe<GombocError>;
-  /** Remove a CPSM Integration */
-  deleteOrcaIntegration?: Maybe<GombocError>;
-  /**
-   * Delete policy statements in bulk
-   * @deprecated No longer supported
-   */
-  deletePolicyStatements?: Maybe<GombocError>;
   /** Delete a Gomboc project */
   deleteProject?: Maybe<GombocError>;
   /** Remove an SCM integration */
@@ -830,34 +710,40 @@ export type Mutation = {
   /** Call a scan on a linked repository */
   linkScanRemote: ScanRequestResponseType;
   /** *Internal use only* */
+  onGitHubMetaEvent?: Maybe<GombocError>;
+  /** *Internal use only* */
+  onGitHubPullRequestEvent?: Maybe<GombocError>;
+  /** *Internal use only* */
   putSetupCompleted?: Maybe<GombocError>;
-  /** @deprecated No longer supported */
-  resetOrganizationPolicy?: Maybe<GombocError>;
-  /** Call a scan from Orca */
-  scanFromOrca: ScanRequestResponseType;
+  /**
+   * A generalized scan request that has less options then the
+   * normal one from the normal scan request modal
+   */
+  scanFromCspm: ScanRequestResponseType;
   /** Scan single file or scenario, sent from vscode */
   scanLocalScenario: ScanLocalScenarioOutput;
   scanOnPullRequest: ScanRequestResponseType;
+  /** *Internal use only* */
   scanOnSchedule: ScanRequestResponseType;
-  /**
-   * *Internal use only*
-   * @deprecated Use scanOnSchedule or scanOnPullRequest instead
-   */
-  scanRemote: Scalars['ID']['output'];
-  /** @deprecated No longer in use */
-  sendSupportRequest: Scalars['Boolean']['output'];
-  /** Set the scan target */
-  setScanTarget?: Maybe<GombocError>;
+  /** Sets the location of the code that has the asset instance code */
+  setCspmAssetInstanceLocation: AssetInstanceLocationResponse;
+  /** Updates the securityBenchmarks held in the observations table */
+  setCspmObservationSecurityBenchmarkRecommendations?: Maybe<GombocError>;
+  /** Trigger a scan for IAC repositories for a given integration */
+  startRepositoryLinking: StartRepositoryLinkingOuput;
   /** Toggle adopt individual security benchmark recommendations */
   toggleAdoptSecurityBenchmarkRecommendations?: Maybe<GombocError>;
   /** Toggle adopt all recommendations from a benchmark version */
   toggleAdoptSecurityBenchmarkVersion?: Maybe<GombocError>;
+  /** Unlinks the asset instance location, based on the observation id */
+  unlinkCspmAssetInstanceLocation?: Maybe<GombocError>;
+  /**
+   * Triggers workflow to update branch reports for an organization. The request
+   * must originate from an internal service and will use the account from the input.
+   */
+  updateBranchReports: UpdateBranchReportsOutput;
   /** *Internal use only* */
   updatePullRequestStatus?: Maybe<GombocError>;
-};
-
-export type MutationAdoptFrameworkControlsIntoOrganizationArgs = {
-  input: AdoptFrameworkControlsIntoOrganizationInput;
 };
 
 export type MutationBulkAllLinkScanRemoteArgs = {
@@ -872,44 +758,32 @@ export type MutationCreateAzdoIntegrationArgs = {
   input: CreateAzdoIntegrationInput;
 };
 
-export type MutationCreateAzdoProviderArgs = {
-  input: CreateAzdoProviderInput;
-};
-
 export type MutationCreateBitBucketIntegrationArgs = {
   input: CreateBitBucketIntegrationInput;
 };
 
-export type MutationCreateBitBucketProviderArgs = {
-  input: CreateBitBucketProviderInput;
+export type MutationCreateCspmCustomIntegrationArgs = {
+  input: CreateCustomIntegrationInput;
 };
 
-export type MutationCreateCustomIntegrationArgs = {
-  input: CreateCustomIntegrationInput;
+export type MutationCreateCspmOrcaIntegrationArgs = {
+  input: CreateOrcaIntegrationInput;
+};
+
+export type MutationCreateCspmWizIntegrationArgs = {
+  input: CreateWizIntegrationInput;
 };
 
 export type MutationCreateGitHubIntegrationArgs = {
   input: CreateGitHubIntegrationInput;
 };
 
-export type MutationCreateGitHubProviderArgs = {
-  input: CreateGitHubProviderInput;
-};
-
 export type MutationCreateGitLabIntegrationArgs = {
   input: CreateGitLabIntegrationInput;
 };
 
-export type MutationCreateGitLabProviderArgs = {
-  input: CreateGitLabProviderInput;
-};
-
-export type MutationCreateMustImplementOrganizationPolicyStatementArgs = {
-  input: CreateMustImplementPolicyStatementInput;
-};
-
-export type MutationCreateOrcaIntegrationArgs = {
-  input: CreateOrcaIntegrationInput;
+export type MutationCreatePresenceBasedCustomRuleArgs = {
+  input: CreatePresenceBasedCustomRuleInput;
 };
 
 export type MutationCreateProjectArgs = {
@@ -920,24 +794,20 @@ export type MutationCreateTicketArgs = {
   input: CreateTicketInput;
 };
 
-export type MutationDeleteCustomIntegrationArgs = {
+export type MutationCreateValueBasedCustomRuleArgs = {
+  input: CreateValueBasedCustomRuleInput;
+};
+
+export type MutationDeleteCspmIntegrationArgs = {
   id: Scalars['ID']['input'];
 };
 
-export type MutationDeleteGitProviderArgs = {
-  input: DeleteGitProviderInput;
+export type MutationDeleteCustomRulesArgs = {
+  input: DeleteCustomRulesInput;
 };
 
 export type MutationDeleteLinkArgs = {
   linkId: Scalars['ID']['input'];
-};
-
-export type MutationDeleteOrcaIntegrationArgs = {
-  input: DeleteOrcaIntegrationInput;
-};
-
-export type MutationDeletePolicyStatementsArgs = {
-  input: DeletePolicyStatementsInput;
 };
 
 export type MutationDeleteProjectArgs = {
@@ -960,12 +830,20 @@ export type MutationLinkScanRemoteArgs = {
   input: LinkScanRemoteInput;
 };
 
+export type MutationOnGitHubMetaEventArgs = {
+  input: OnGitHubMetaEventInput;
+};
+
+export type MutationOnGitHubPullRequestEventArgs = {
+  input: OnGitHubPullRequestEventInput;
+};
+
 export type MutationPutSetupCompletedArgs = {
   input: PutSetupCompletedInput;
 };
 
-export type MutationScanFromOrcaArgs = {
-  input: ScanFromOrcaInput;
+export type MutationScanFromCspmArgs = {
+  input: ScanFromCspmInput;
 };
 
 export type MutationScanLocalScenarioArgs = {
@@ -980,16 +858,16 @@ export type MutationScanOnScheduleArgs = {
   input: ScanOnScheduleInput;
 };
 
-export type MutationScanRemoteArgs = {
-  input: ScanRemoteInput;
+export type MutationSetCspmAssetInstanceLocationArgs = {
+  input: SetAssetInstanceLocationInput;
 };
 
-export type MutationSendSupportRequestArgs = {
-  input: SendSupportRequestInput;
+export type MutationSetCspmObservationSecurityBenchmarkRecommendationsArgs = {
+  input: SetCspmObservationSecurityBenchmarkRecommendationsInput;
 };
 
-export type MutationSetScanTargetArgs = {
-  input: SetScanTargetInput;
+export type MutationStartRepositoryLinkingArgs = {
+  input: RepositoryLinkingInput;
 };
 
 export type MutationToggleAdoptSecurityBenchmarkRecommendationsArgs = {
@@ -1000,17 +878,30 @@ export type MutationToggleAdoptSecurityBenchmarkVersionArgs = {
   input: ToggleAdoptSecurityBenchmarkVersionInput;
 };
 
+export type MutationUnlinkCspmAssetInstanceLocationArgs = {
+  id: Scalars['ID']['input'];
+};
+
+export type MutationUpdateBranchReportsArgs = {
+  input: UpdateBranchReportsInput;
+};
+
 export type MutationUpdatePullRequestStatusArgs = {
-  providerName: ProviderName;
   pullRequestNumber: Scalars['String']['input'];
   pullRequestStatus: PullRequestStatus;
   repositoryId: Scalars['String']['input'];
+  scmType: ScmType;
 };
 
 export type Node = {
-  __typename?: 'Node';
+  __typename: 'Node';
   id: Scalars['ID']['output'];
   label: Scalars['String']['output'];
+};
+
+export type NotificationPassthrough = {
+  auth: Scalars['JSON']['input'];
+  url: Scalars['String']['input'];
 };
 
 export type OsMetaDataInput = {
@@ -1020,100 +911,42 @@ export type OsMetaDataInput = {
   userName?: InputMaybe<Scalars['String']['input']>;
 };
 
+export type OnGitHubMetaEventInput = {
+  app: GitHubApp;
+  installationId: Scalars['ID']['input'];
+};
+
+export type OnGitHubPullRequestEventInput = {
+  app: GitHubApp;
+  installationId: Scalars['ID']['input'];
+  pullRequestEvent: PullRequestEvent;
+  pullRequestNumber: Scalars['String']['input'];
+  repositoryId: Scalars['String']['input'];
+};
+
 export type OntologicalSubgraph = {
-  __typename?: 'OntologicalSubgraph';
+  __typename: 'OntologicalSubgraph';
   edges: Array<Edge>;
   nodes: Array<Node>;
 };
 
-export type OrcaAlert = {
-  __typename?: 'OrcaAlert';
-  /** @deprecated use scanResults */
-  actionResults: ActionResultPage;
-  assetName: Scalars['String']['output'];
-  assetType?: Maybe<Scalars['String']['output']>;
-  cloudResource?: Maybe<CloudResource>;
-  createdAt: Scalars['String']['output'];
-  description?: Maybe<Scalars['String']['output']>;
-  id: Scalars['ID']['output'];
-  lastScanRequest?: Maybe<ScanRequest>;
-  orcaScore: Scalars['Float']['output'];
-  scanResults: ScanResultPage;
-  scanTarget?: Maybe<ScanTarget>;
-  status: Scalars['String']['output'];
-  title: Scalars['String']['output'];
-};
-
-export type OrcaAlertActionResultsArgs = {
-  page?: InputMaybe<Scalars['Int']['input']>;
-  size?: InputMaybe<Scalars['Int']['input']>;
-};
-
-export type OrcaAlertScanResultsArgs = {
-  page?: InputMaybe<Scalars['Int']['input']>;
-  size?: InputMaybe<Scalars['Int']['input']>;
-};
-
-export type OrcaAlertResponse = GombocError | OrcaAlert;
-
-export type OrcaAlertScanPageResponse = GombocError | ScanPage;
-
-export type OrcaAlertsPage = {
-  __typename?: 'OrcaAlertsPage';
-  alerts: Array<OrcaAlert>;
-  page: Scalars['Int']['output'];
-  pageSize: Scalars['Int']['output'];
-  totalItems: Scalars['Int']['output'];
-  totalPages: Scalars['Int']['output'];
-};
-
-/** Represents an integration to a CSPM provider */
-export type OrcaIntegration = {
-  __typename?: 'OrcaIntegration';
-  /** Alerts for a given CSPM integration */
-  alertsPage: OrcaAlertsPage;
-  apiKey: Scalars['String']['output'];
-  createdAt: Scalars['String']['output'];
-  id: Scalars['ID']['output'];
-  integrationParty: IntegrationParty;
-  name: Scalars['String']['output'];
-};
-
-/** Represents an integration to a CSPM provider */
-export type OrcaIntegrationAlertsPageArgs = {
-  page?: InputMaybe<Scalars['Int']['input']>;
-  perPage?: InputMaybe<Scalars['Int']['input']>;
-};
-
-export type OrcaIntegrationResponse = GombocError | OrcaIntegration;
-
 export enum OrcaRegion {
-  Australia = 'Australia',
-  Brazil = 'Brazil',
-  Europe = 'Europe',
-  India = 'India',
-  Israel = 'Israel',
+  Australia = 'AUSTRALIA',
+  Brazil = 'BRAZIL',
+  Europe = 'EUROPE',
+  India = 'INDIA',
+  Israel = 'ISRAEL',
   Us = 'US',
 }
 
 /** A customer organization as represented in the system */
 export type Organization = {
-  __typename?: 'Organization';
+  __typename: 'Organization';
   /**
-   * Returns one SCM integration by its ID, or an error if not found
-   * @deprecated use scmIntegrations
+   * CSPM Integrations associated with the account
+   * @deprecated Use Query.cspmIntegrations instead
    */
-  gitProvider: GitProviderResponse;
-  /**
-   * Returns SCM integrations for this organization
-   * @deprecated use scmIntegrations
-   */
-  gitProviders: Array<GitProvider>;
-  /**
-   * Returns true if the organization has at least one SCM Integration
-   * @deprecated use hasScmIntegrations
-   */
-  hasGitProviders: Scalars['Boolean']['output'];
+  cspmIntegrations: Array<CspmIntegration>;
   /** Returns true if the organization has at least one Linked Repository */
   hasLinks: Scalars['Boolean']['output'];
   /** Returns true if the organization has at least one Policy Statement */
@@ -1124,18 +957,16 @@ export type Organization = {
   hasScmIntegrations: Scalars['Boolean']['output'];
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
-  /** Returns CSPM integrations for this organization */
-  orcaIntegration?: Maybe<OrcaIntegration>;
-  /**
-   * Returns the security policy for this organization
-   * @deprecated use securityBenchmarkRecommendations instead
-   */
-  policy: Policy;
   /** Return one Gomboc project by its slug, or an error if not found */
   project: ProjectResponse;
   /** Returns all Gomboc projects for this organization */
   projects: Array<Project>;
-  /** Returns recent scan requests for this organization */
+  /** Open Pull Requests from remediations */
+  pullRequests: PullRequestPage;
+  /**
+   * Returns recent scan requests for this organization
+   * @deprecated not implemented
+   */
   scans: Array<ScanRequestResponse>;
   /** Returns one SCM integration by its ID, or an error if not found */
   scmIntegration: ScmIntegrationResponse;
@@ -1144,13 +975,13 @@ export type Organization = {
 };
 
 /** A customer organization as represented in the system */
-export type OrganizationGitProviderArgs = {
-  id: Scalars['ID']['input'];
+export type OrganizationProjectArgs = {
+  slug: Scalars['String']['input'];
 };
 
 /** A customer organization as represented in the system */
-export type OrganizationProjectArgs = {
-  slug: Scalars['String']['input'];
+export type OrganizationPullRequestsArgs = {
+  input: OrganizationPullRequestsInput;
 };
 
 /** A customer organization as represented in the system */
@@ -1163,44 +994,67 @@ export type OrganizationScmIntegrationArgs = {
   id: Scalars['ID']['input'];
 };
 
+export type OrganizationPullRequestsInput = {
+  page?: InputMaybe<Scalars['Int']['input']>;
+  size?: InputMaybe<Scalars['Int']['input']>;
+};
+
 export type OrganizationResponse = GombocError | Organization;
 
-export type Policy = {
-  __typename?: 'Policy';
-  statements: Array<SetPolicyStatement>;
+export type PageInput = {
+  page?: InputMaybe<Scalars['Int']['input']>;
+  size?: InputMaybe<Scalars['Int']['input']>;
 };
 
 export type PolicyObservation = {
-  __typename?: 'PolicyObservation';
+  __typename: 'PolicyObservation';
   /**
-   * The parent scan result
-   * @deprecated use scanResult
+   * The policy statement capability ID involved
+   * @deprecated Deprecated in favor of recommendation
    */
-  actionResult: ActionResult;
-  /** The policy statement capability ID involved */
-  capabilityId: Scalars['ID']['output'];
-  /** The policy statement capability Title involved */
-  capabilityTitle: Scalars['String']['output'];
+  capabilityId?: Maybe<Scalars['ID']['output']>;
+  /**
+   * The policy statement capability Title involved
+   * @deprecated Deprecated in favor of recommendation
+   */
+  capabilityTitle?: Maybe<Scalars['String']['output']>;
   /** The IaC resource that was observed */
   cloudResource: CloudResource;
-  /** The framework control description, if one */
-  description: Scalars['String']['output'];
+  /** Not present for older policy observations */
+  codeResource?: Maybe<CodeResource>;
+  codeResourceInstance: CodeResourceInstance;
+  /**
+   * The framework control description, if one
+   * @deprecated No longer in use
+   */
+  description?: Maybe<Scalars['String']['output']>;
   disposition: Disposition;
   /** A link to the IaC resource documentation if available */
   documentationUrl?: Maybe<Scalars['String']['output']>;
   /** The filepath of the IaC resource that was observed */
   filepath: Scalars['String']['output'];
-  /** The framework name the policy statement relates to, if one */
-  framework: Scalars['String']['output'];
+  /**
+   * The framework name the policy statement relates to, if one
+   * @deprecated No longer in use
+   */
+  framework?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
-  /** The framework control identifier, if one */
-  identifier: Scalars['String']['output'];
+  /**
+   * The framework control identifier, if one
+   * @deprecated No longer in use
+   */
+  identifier?: Maybe<Scalars['String']['output']>;
   /** The file line number of the IaC resource that was observed */
   lineNumber: Scalars['Int']['output'];
+  /** @deprecated Changing to CodeResourceInstance */
   logicalResource: LogicalResource;
-  orcaAlertsPage: OrcaAlertsPage;
-  /** The policy statement predicate */
-  predicate: Scalars['String']['output'];
+  /**
+   * The policy statement predicate
+   * @deprecated No longer in use
+   */
+  predicate?: Maybe<Scalars['String']['output']>;
+  /** The related benchmark recommendation (for new observations) */
+  recommendation?: Maybe<SecurityBenchmarkRecommendation>;
   /** The name of the IaC resource instance that was observed */
   resourceName: Scalars['String']['output'];
   /**
@@ -1214,15 +1068,10 @@ export type PolicyObservation = {
   source: Scalars['String']['output'];
 };
 
-export type PolicyObservationOrcaAlertsPageArgs = {
-  page?: InputMaybe<Scalars['Int']['input']>;
-  perPage?: InputMaybe<Scalars['Int']['input']>;
-};
-
 export type PolicyObservationResponse = GombocError | PolicyObservation;
 
 export type PolicyObservationsPage = {
-  __typename?: 'PolicyObservationsPage';
+  __typename: 'PolicyObservationsPage';
   page: Scalars['Int']['output'];
   results: Array<PolicyObservation>;
   size: Scalars['Int']['output'];
@@ -1230,7 +1079,7 @@ export type PolicyObservationsPage = {
 };
 
 export type PolicyStatement = {
-  __typename?: 'PolicyStatement';
+  __typename: 'PolicyStatement';
   description?: Maybe<Scalars['String']['output']>;
   framework?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
@@ -1238,28 +1087,28 @@ export type PolicyStatement = {
   payload: PolicyStatementPayloadType;
 };
 
-export type PolicyStatementPayload = PolicyStatementPayloadMustImplementType;
-
 export type PolicyStatementPayloadMustImplement = {
-  __typename?: 'PolicyStatementPayloadMustImplement';
-  capability: Capability;
-};
-
-export type PolicyStatementPayloadMustImplementType = {
-  __typename?: 'PolicyStatementPayloadMustImplementType';
+  __typename: 'PolicyStatementPayloadMustImplement';
   capability: Capability;
 };
 
 export type PolicyStatementPayloadType = PolicyStatementPayloadMustImplement;
 
 export type Position = {
-  __typename?: 'Position';
+  __typename: 'Position';
+  /** @deprecated Use type CodePosition */
   column: Scalars['Int']['output'];
+  /** @deprecated Use type CodePosition */
   line: Scalars['Int']['output'];
 };
 
+export enum PresenceBasedRule {
+  ImplementsIfAbsent = 'IMPLEMENTS_IF_ABSENT',
+  ImplementsIfPresent = 'IMPLEMENTS_IF_PRESENT',
+}
+
 export type Project = {
-  __typename?: 'Project';
+  __typename: 'Project';
   createdAt: Scalars['String']['output'];
   /** Returns the email of the user who created the project */
   createdBy: Scalars['String']['output'];
@@ -1281,8 +1130,6 @@ export type Project = {
   linksPage: LinksPage;
   /** Returns the name of the project */
   name: Scalars['String']['output'];
-  /** @deprecated No longer supported */
-  policy: Policy;
   /** Returns a URL-friendly slug for the project */
   slug: Scalars['String']['output'];
 };
@@ -1302,20 +1149,31 @@ export type ProjectLinksPageArgs = {
 
 export type ProjectResponse = GombocError | Project;
 
-export enum ProviderName {
-  Azdo = 'AZDO',
-  Bitbucket = 'BITBUCKET',
-  Github = 'GITHUB',
-  Gitlab = 'GITLAB',
-}
-
 export type PullRequest = {
-  __typename?: 'PullRequest';
+  __typename: 'PullRequest';
   externalUrl: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
   identifier: Scalars['String']['output'];
-  providerName: ProviderName;
+  scmType: ScmType;
   status: PullRequestStatus;
 };
+
+export enum PullRequestEvent {
+  Discarded = 'DISCARDED',
+  Merged = 'MERGED',
+  Opened = 'OPENED',
+  Synchronized = 'SYNCHRONIZED',
+}
+
+export type PullRequestPage = {
+  __typename: 'PullRequestPage';
+  page: Scalars['Int']['output'];
+  results: Array<PullRequest>;
+  size: Scalars['Int']['output'];
+  totalCount: Scalars['Int']['output'];
+};
+
+export type PullRequestResponse = GombocError | PullRequest;
 
 export enum PullRequestStatus {
   Closed = 'CLOSED',
@@ -1329,23 +1187,35 @@ export type PutSetupCompletedInput = {
 };
 
 export type Query = {
-  __typename?: 'Query';
-  /**
-   * Returns a single Scan Result by its ID, or an error if not found
-   * @deprecated Use scanResult(id: ID!)
-   */
-  actionResult: ActionResultResponse;
+  __typename: 'Query';
   /** @deprecated No longer supported */
   capabilities: Array<Capability>;
+  cfnProperty?: Maybe<CfnProperty>;
+  cfnResource?: Maybe<CfnResource>;
+  cfnResources: CfnResourcePage;
+  cfnSubProperty?: Maybe<CfnSubProperty>;
   codeResource?: Maybe<CodeResource>;
   codeResources: CodeResourcePage;
+  /** Gets a list of the current cspm integration */
+  cspmIntegrations: Array<CspmIntegration>;
+  /** Gets a single observation based on the observation Id */
+  cspmObservation: CspmObservationOutput;
+  /** Gets observations for a given organization */
+  cspmObservations: CspmObservationsPage;
+  /** Get a single custom rule based on the id */
+  customRule: CustomRule;
+  /** Gets paginated list of custom rules for an account */
+  customRules: CustomRulesResponse;
+  groupedFixes: GroupedFixesResponse;
+  individualFixes: IndividualFixesResponse;
   /** Returns a single linked repository by its ID, or an error if not found */
   link: LinkResponse;
-  orcaAlert: OrcaAlertResponse;
   /** Returns the active organization for the current user */
   organization: OrganizationResponse;
   /** Returns a single policy observation by its ID, or an error if not found */
   policyObservation: PolicyObservationResponse;
+  /** Open Pull Requests from remediations by ID */
+  pullRequest: PullRequestResponse;
   /** Returns a single Scan Log by its ID, or an error if not found */
   scan: ScanResponse;
   /** *Internal use only* */
@@ -1356,23 +1226,34 @@ export type Query = {
   scanRequest: ScanRequestResponse;
   /** Returns a single Scan Result by its ID, or an error if not found */
   scanResult: ScanResultResponse;
-  /** Returns a few posible scan targets for a cloud resource */
-  searchScanTargets: Array<ScanTarget>;
+  /** Returns a few posible scan targets */
+  searchScanTargets: SearchScanTargetsPage;
   securityBenchmark?: Maybe<SecurityBenchmark>;
   securityBenchmarkRecommendation?: Maybe<SecurityBenchmarkRecommendationResponse>;
   securityBenchmarkVersion?: Maybe<SecurityBenchmarkVersion>;
   securityBenchmarks: Array<SecurityBenchmark>;
   securityFramework?: Maybe<SecurityFramework>;
-  /** @deprecated No longer supported */
-  securityFrameworkOld?: Maybe<SecurityFrameworkOld>;
+  securityFrameworkVersion?: Maybe<SecurityFrameworkVersion>;
   securityFrameworks: Array<SecurityFramework>;
-  /** @deprecated No longer supported */
-  securityFrameworksOld: Array<SecurityFrameworkOld>;
-  /** Get a single comment that relates to a number of policy observations */
-  unifiedObservationsComment: Scalars['String']['output'];
+  tfAttribute?: Maybe<TfAttribute>;
+  tfNestedBlock?: Maybe<TfNestedBlock>;
+  tfResource?: Maybe<TfResource>;
+  tfResources: TfResourcePage;
 };
 
-export type QueryActionResultArgs = {
+export type QueryCfnPropertyArgs = {
+  id: Scalars['ID']['input'];
+};
+
+export type QueryCfnResourceArgs = {
+  id: Scalars['ID']['input'];
+};
+
+export type QueryCfnResourcesArgs = {
+  input: CfnResourcePageInput;
+};
+
+export type QueryCfnSubPropertyArgs = {
   id: Scalars['ID']['input'];
 };
 
@@ -1386,15 +1267,39 @@ export type QueryCodeResourcesArgs = {
   pageSize?: InputMaybe<Scalars['Int']['input']>;
 };
 
+export type QueryCspmObservationArgs = {
+  id: Scalars['ID']['input'];
+};
+
+export type QueryCspmObservationsArgs = {
+  input: CspmObservationsInput;
+};
+
+export type QueryCustomRuleArgs = {
+  id: Scalars['ID']['input'];
+};
+
+export type QueryCustomRulesArgs = {
+  input: CustomRulesInput;
+};
+
+export type QueryGroupedFixesArgs = {
+  input: GroupedFixesInput;
+};
+
+export type QueryIndividualFixesArgs = {
+  input: IndividualFixesInput;
+};
+
 export type QueryLinkArgs = {
   id: Scalars['ID']['input'];
 };
 
-export type QueryOrcaAlertArgs = {
+export type QueryPolicyObservationArgs = {
   id: Scalars['ID']['input'];
 };
 
-export type QueryPolicyObservationArgs = {
+export type QueryPullRequestArgs = {
   id: Scalars['ID']['input'];
 };
 
@@ -1419,7 +1324,7 @@ export type QueryScanResultArgs = {
 };
 
 export type QuerySearchScanTargetsArgs = {
-  cloudResourceId: Scalars['ID']['input'];
+  input: SearchScanTargetsInput;
 };
 
 export type QuerySecurityBenchmarkArgs = {
@@ -1438,16 +1343,28 @@ export type QuerySecurityFrameworkArgs = {
   id: Scalars['ID']['input'];
 };
 
-export type QuerySecurityFrameworkOldArgs = {
+export type QuerySecurityFrameworkVersionArgs = {
   id: Scalars['ID']['input'];
 };
 
-export type QueryUnifiedObservationsCommentArgs = {
-  policyObservationIds: Array<Scalars['ID']['input']>;
+export type QueryTfAttributeArgs = {
+  id: Scalars['ID']['input'];
+};
+
+export type QueryTfNestedBlockArgs = {
+  id: Scalars['ID']['input'];
+};
+
+export type QueryTfResourceArgs = {
+  id: Scalars['ID']['input'];
+};
+
+export type QueryTfResourcesArgs = {
+  input: TfResourcePageInput;
 };
 
 export type RemediationComment = {
-  __typename?: 'RemediationComment';
+  __typename: 'RemediationComment';
   /** We should include a category and description of each fix. */
   category?: Maybe<Scalars['String']['output']>;
   fileName: Scalars['String']['output'];
@@ -1457,83 +1374,32 @@ export type RemediationComment = {
   policyStatement: PolicyStatement;
 };
 
-export type RemediationFixCfn = {
-  __typename?: 'RemediationFixCfn';
-  newLine: Array<Scalars['String']['output']>;
-  oldLine: Array<Scalars['String']['output']>;
-  position: Position;
-};
-
-export type RemediationFixTfHcl = {
-  __typename?: 'RemediationFixTfHcl';
+export type RemediationFix = {
+  __typename: 'RemediationFix';
+  codePosition: CodePosition;
   filepath: Scalars['String']['output'];
   fixType: FixType;
   lineOffset: Scalars['Int']['output'];
   newLine: Array<Scalars['String']['output']>;
   oldLine: Array<Scalars['String']['output']>;
-  position: Position;
 };
 
-export type RepositoriesPage = {
-  __typename?: 'RepositoriesPage';
-  page: Scalars['Int']['output'];
-  results: Array<Repository>;
-  size: Scalars['Int']['output'];
+export type RepositoryLinkingInput = {
+  integrationId: Scalars['ID']['input'];
 };
-
-export type Repository = {
-  __typename?: 'Repository';
-  /** The list of branches in the repository */
-  branches: Array<RepositoryBranch>;
-  /** The list of directories in the repository */
-  directoryNames: Array<Scalars['String']['output']>;
-  /** A URL to the SCM provider repository page */
-  externalUrl: Scalars['String']['output'];
-  id: Scalars['ID']['output'];
-  link?: Maybe<Link>;
-  name: Scalars['String']['output'];
-  /** The name of the SCM provider owner */
-  ownerName: Scalars['String']['output'];
-};
-
-export type RepositoryBranchesArgs = {
-  isProtected?: InputMaybe<Scalars['Boolean']['input']>;
-  page?: InputMaybe<Scalars['Int']['input']>;
-  pageSize?: InputMaybe<Scalars['Int']['input']>;
-};
-
-export type RepositoryDirectoryNamesArgs = {
-  branch?: InputMaybe<Scalars['String']['input']>;
-};
-
-export type RepositoryBranch = {
-  __typename?: 'RepositoryBranch';
-  /** Returns additional info on the branch (e.g.  "main", "protected"...) */
-  label?: Maybe<Scalars['String']['output']>;
-  name: Scalars['String']['output'];
-};
-
-export enum RepositorySelection {
-  All = 'ALL',
-  Linked = 'LINKED',
-  Unlinked = 'UNLINKED',
-}
 
 /** Places from where scan requests can originate */
 export enum RequestOrigin {
-  OrcaSecurity = 'ORCA_SECURITY',
+  Community = 'COMMUNITY',
+  CspmService = 'CSPM_SERVICE',
   Portal = 'PORTAL',
+  ScmPullRequest = 'SCM_PULL_REQUEST',
+  ScmSchedule = 'SCM_SCHEDULE',
   Workflow = 'WORKFLOW',
 }
 
-export type ResultingPolicy = {
-  mustImplement: Array<InheritedPolicyStatementPayloadMustImplementType>;
-};
-
 export type Scan = {
-  __typename?: 'Scan';
-  /** @deprecated use scanResult */
-  actionResult?: Maybe<ActionResult>;
+  __typename: 'Scan';
   children: ScanPage;
   createdAt: Scalars['String']['output'];
   createdBy: Scalars['String']['output'];
@@ -1551,7 +1417,7 @@ export type ScanChildrenArgs = {
 };
 
 export type ScanBranch = {
-  __typename?: 'ScanBranch';
+  __typename: 'ScanBranch';
   children: Array<ScanScenarioResponse>;
   childrenCompleted: Scalars['Int']['output'];
   childrenError: Scalars['Int']['output'];
@@ -1565,7 +1431,7 @@ export type ScanBranch = {
 export type ScanBranchResponse = FailedScan | GombocError | ScanBranch;
 
 export type ScanDirectory = {
-  __typename?: 'ScanDirectory';
+  __typename: 'ScanDirectory';
   children: Array<ScanScenarioResponse>;
   childrenCompleted: Scalars['Int']['output'];
   childrenError: Scalars['Int']['output'];
@@ -1578,17 +1444,17 @@ export type ScanDirectory = {
 
 export type ScanDirectoryResponse = FailedScan | GombocError | ScanDirectory;
 
-export type ScanFromOrcaInput = {
-  /** The effect -- defaults to 'SubmitForReview' */
+export type ScanFromCspmInput = {
+  /** the effect --- defaults to 'SubmitForReview' */
   effect?: InputMaybe<Effect>;
-  /** The Orca alert ID -- it must have a scan target or this will fail */
-  orcaAlertId: Scalars['ID']['input'];
+  /** the observation id, the associated alertId */
+  observationId: Scalars['ID']['input'];
   /** The target for the scan */
   scanTarget: ScanTargetInput;
 };
 
 export type ScanLocalScenario = {
-  __typename?: 'ScanLocalScenario';
+  __typename: 'ScanLocalScenario';
   results: Array<RemediationComment>;
 };
 
@@ -1615,27 +1481,15 @@ export type ScanOnScheduleInput = {
 };
 
 export type ScanPage = {
-  __typename?: 'ScanPage';
+  __typename: 'ScanPage';
   page: Scalars['Int']['output'];
   results: Array<Scan>;
   size: Scalars['Int']['output'];
   totalCount: Scalars['Int']['output'];
 };
 
-export type ScanRemoteInput = {
-  effect: Effect;
-  iacTool: InfrastructureTool;
-  pullRequestIdentifier?: InputMaybe<Scalars['String']['input']>;
-  workingDirectories: Array<Scalars['String']['input']>;
-};
-
-export type ScanRemoteTfHcl2Input = {
-  effect: Effect;
-  workingDirectories: Array<Scalars['String']['input']>;
-};
-
 export type ScanRepository = {
-  __typename?: 'ScanRepository';
+  __typename: 'ScanRepository';
   children: Array<ScanBranchResponse>;
   childrenCompleted: Scalars['Int']['output'];
   childrenError: Scalars['Int']['output'];
@@ -1649,9 +1503,7 @@ export type ScanRepository = {
 export type ScanRepositoryResponse = FailedScan | GombocError | ScanRepository;
 
 export type ScanRequest = {
-  __typename?: 'ScanRequest';
-  /** @deprecated use scanResults */
-  actionResults: ActionResultPage;
+  __typename: 'ScanRequest';
   /** @deprecated No longer supported */
   children: Array<ScanRepositoryResponse>;
   childrenCompleted: Scalars['Int']['output'];
@@ -1672,11 +1524,6 @@ export type ScanRequest = {
   scans: ScanPage;
 };
 
-export type ScanRequestActionResultsArgs = {
-  page?: InputMaybe<Scalars['Int']['input']>;
-  size?: InputMaybe<Scalars['Int']['input']>;
-};
-
 export type ScanRequestScanResultsArgs = {
   page?: InputMaybe<Scalars['Int']['input']>;
   size?: InputMaybe<Scalars['Int']['input']>;
@@ -1690,7 +1537,7 @@ export type ScanRequestScansArgs = {
 export type ScanRequestResponse = FailedScan | GombocError | ScanRequest;
 
 export type ScanRequestResponseType = {
-  __typename?: 'ScanRequestResponseType';
+  __typename: 'ScanRequestResponseType';
   errors: Array<Maybe<GombocError>>;
   scanRequestId: Scalars['ID']['output'];
 };
@@ -1699,7 +1546,7 @@ export type ScanResponse = FailedScan | GombocError | Scan;
 
 /** A Scan Result that originated from a Scan Request */
 export type ScanResult = {
-  __typename?: 'ScanResult';
+  __typename: 'ScanResult';
   /** The related repository branch name */
   branch?: Maybe<Scalars['String']['output']>;
   /** A general state of the scan result */
@@ -1721,8 +1568,6 @@ export type ScanResult = {
   observations: Array<PolicyObservation>;
   /** Returns the total number of observations in this scan result */
   observationsCount: Scalars['Int']['output'];
-  /** Returns a page of alerts from Orca */
-  orcaAlerts: OrcaAlertsPage;
   /** The organization ID the scan result is related to */
   organizationId: Scalars['ID']['output'];
   /** The name of the SCM Provider owner of the related repository */
@@ -1765,12 +1610,6 @@ export type ScanResultObservationsArgs = {
 };
 
 /** A Scan Result that originated from a Scan Request */
-export type ScanResultOrcaAlertsArgs = {
-  page?: InputMaybe<Scalars['Int']['input']>;
-  perPage?: InputMaybe<Scalars['Int']['input']>;
-};
-
-/** A Scan Result that originated from a Scan Request */
 export type ScanResultPolicyObservationsArgs = {
   exclude?: InputMaybe<Array<Disposition>>;
   page?: InputMaybe<Scalars['Int']['input']>;
@@ -1791,7 +1630,7 @@ export enum ScanResultCondition {
 }
 
 export type ScanResultPage = {
-  __typename?: 'ScanResultPage';
+  __typename: 'ScanResultPage';
   page: Scalars['Int']['output'];
   results: Array<ScanResult>;
   size: Scalars['Int']['output'];
@@ -1801,7 +1640,7 @@ export type ScanResultPage = {
 export type ScanResultResponse = GombocError | ScanResult;
 
 export type ScanScenario = {
-  __typename?: 'ScanScenario';
+  __typename: 'ScanScenario';
   createdAt: Scalars['String']['output'];
   createdBy: Scalars['String']['output'];
   id: Scalars['ID']['output'];
@@ -1812,13 +1651,18 @@ export type ScanScenario = {
 export type ScanScenarioResponse = FailedScan | GombocError | ScanScenario;
 
 export type ScanTarget = {
-  __typename?: 'ScanTarget';
+  __typename: 'ScanTarget';
   /** The repository branch */
   branch: Scalars['String']['output'];
+  /** The confidence that this is a matching scan target */
+  confidence: Scalars['Float']['output'];
+  id: Scalars['ID']['output'];
   /** Maps to a repository */
   link?: Maybe<Link>;
   /** The scenario path: a directory or a filepath */
   path: Scalars['String']['output'];
+  /** Policy observation attached to this scan target */
+  policyObservation: PolicyObservation;
 };
 
 export type ScanTargetInput = {
@@ -1830,104 +1674,120 @@ export type ScanTargetInput = {
   path: Scalars['String']['input'];
 };
 
-/**
- * Represents an integration to an SCM provider **owner** entity, such as:
- * - A GitHub **organization**
- * - A GitLab **group**
- * - A Bitbucket **workspace**
- * - An Azure DevOps **organization**
- */
+export type ScmBranch = {
+  __typename: 'ScmBranch';
+  /** Returns additional info on the branch (e.g.  "main", "protected"...) */
+  label?: Maybe<Scalars['String']['output']>;
+  name: Scalars['String']['output'];
+};
+
+/** Integrations grant access to SCM repositories */
 export type ScmIntegration = {
-  __typename?: 'ScmIntegration';
+  __typename: 'ScmIntegration';
   createdAt: Scalars['String']['output'];
   /** Returns the email of the user who integrated the SCM provider */
   createdBy: Scalars['String']['output'];
-  /** A URL to the SCM provider integration page */
-  externalUrl?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
-  integrationName: IntegrationName;
-  /** The name of the integration to be displayed */
-  name?: Maybe<Scalars['String']['output']>;
-  parentScope?: Maybe<Scalars['String']['output']>;
-  /** @deprecated Use integrationName */
-  providerName: ProviderName;
-  /**
-   * All the repositories this integration has access to
-   * @deprecated Use repositories page instead
-   */
-  repositories: Array<Repository>;
-  repositoriesPage: RepositoriesPage;
-  scope?: Maybe<Scalars['String']['output']>;
-  /**
-   * In the context of SCM providers like GL, groups can have subGroups
-   * @deprecated Use subScmIntegrationProviders instead
-   */
-  subGitProviders: SubGitProviderPage;
-  /** In the context of SCM providers like GL, groups can have subGroups */
-  subScmIntegrations: SubScmIntegrationPage;
+  /** Use it to access nested repo owners. Might be null if wrong scope or integration expired */
+  repoOwner?: Maybe<ScmRepoOwner>;
+  scmType: ScmType;
 };
 
-/**
- * Represents an integration to an SCM provider **owner** entity, such as:
- * - A GitHub **organization**
- * - A GitLab **group**
- * - A Bitbucket **workspace**
- * - An Azure DevOps **organization**
- */
-export type ScmIntegrationRepositoriesArgs = {
-  selection?: InputMaybe<RepositorySelection>;
-};
-
-/**
- * Represents an integration to an SCM provider **owner** entity, such as:
- * - A GitHub **organization**
- * - A GitLab **group**
- * - A Bitbucket **workspace**
- * - An Azure DevOps **organization**
- */
-export type ScmIntegrationRepositoriesPageArgs = {
-  page?: InputMaybe<Scalars['Int']['input']>;
+/** Integrations grant access to SCM repositories */
+export type ScmIntegrationRepoOwnerArgs = {
   scope?: InputMaybe<Scalars['String']['input']>;
-  size?: InputMaybe<Scalars['Int']['input']>;
-};
-
-/**
- * Represents an integration to an SCM provider **owner** entity, such as:
- * - A GitHub **organization**
- * - A GitLab **group**
- * - A Bitbucket **workspace**
- * - An Azure DevOps **organization**
- */
-export type ScmIntegrationSubGitProvidersArgs = {
-  page?: InputMaybe<Scalars['Int']['input']>;
-  scope?: InputMaybe<Scalars['String']['input']>;
-  size?: InputMaybe<Scalars['Int']['input']>;
-};
-
-/**
- * Represents an integration to an SCM provider **owner** entity, such as:
- * - A GitHub **organization**
- * - A GitLab **group**
- * - A Bitbucket **workspace**
- * - An Azure DevOps **organization**
- */
-export type ScmIntegrationSubScmIntegrationsArgs = {
-  page?: InputMaybe<Scalars['Int']['input']>;
-  scope?: InputMaybe<Scalars['String']['input']>;
-  size?: InputMaybe<Scalars['Int']['input']>;
 };
 
 export type ScmIntegrationResponse = GombocError | ScmIntegration;
 
+export type ScmRepoOwner = {
+  __typename: 'ScmRepoOwner';
+  avatarUrl: Scalars['String']['output'];
+  children: ScmRepoOwnersPage;
+  htmlUrl: Scalars['String']['output'];
+  name: Scalars['String']['output'];
+  parentScope?: Maybe<Scalars['String']['output']>;
+  path: Scalars['String']['output'];
+  repositories: ScmRepositoriesPage;
+  scope: Scalars['String']['output'];
+  searchRepositories: ScmRepositoriesPage;
+  type: Scalars['String']['output'];
+};
+
+export type ScmRepoOwnerChildrenArgs = {
+  page?: InputMaybe<Scalars['Int']['input']>;
+  size?: InputMaybe<Scalars['Int']['input']>;
+};
+
+export type ScmRepoOwnerRepositoriesArgs = {
+  page?: InputMaybe<Scalars['Int']['input']>;
+  size?: InputMaybe<Scalars['Int']['input']>;
+};
+
+export type ScmRepoOwnerSearchRepositoriesArgs = {
+  page?: InputMaybe<Scalars['Int']['input']>;
+  search: Scalars['String']['input'];
+  size?: InputMaybe<Scalars['Int']['input']>;
+};
+
+export type ScmRepoOwnersPage = {
+  __typename: 'ScmRepoOwnersPage';
+  page: Scalars['Int']['output'];
+  results: Array<ScmRepoOwner>;
+  size: Scalars['Int']['output'];
+  total?: Maybe<Scalars['Int']['output']>;
+};
+
+export type ScmRepositoriesPage = {
+  __typename: 'ScmRepositoriesPage';
+  page: Scalars['Int']['output'];
+  results: Array<ScmRepository>;
+  size: Scalars['Int']['output'];
+  total?: Maybe<Scalars['Int']['output']>;
+};
+
+export type ScmRepository = {
+  __typename: 'ScmRepository';
+  branches: Array<ScmBranch>;
+  htmlUrl: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  isPublic: Scalars['Boolean']['output'];
+  link?: Maybe<Link>;
+  name: Scalars['String']['output'];
+  owner: ScmRepoOwner;
+};
+
+export type ScmRepositoryBranchesArgs = {
+  page?: InputMaybe<Scalars['Int']['input']>;
+  size?: InputMaybe<Scalars['Int']['input']>;
+};
+
+export enum ScmType {
+  Azdo = 'AZDO',
+  Bitbucket = 'BITBUCKET',
+  Github = 'GITHUB',
+  Gitlab = 'GITLAB',
+}
+
+export type SearchScanTargetsInput = {
+  cspmObservationId: Scalars['ID']['input'];
+};
+
+export type SearchScanTargetsPage = {
+  __typename: 'SearchScanTargetsPage';
+  /** A ranked list of the scan target based on the confidence */
+  results: Array<ScanTarget>;
+};
+
 export type SecurityBenchmark = {
-  __typename?: 'SecurityBenchmark';
+  __typename: 'SecurityBenchmark';
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
   versions: Array<SecurityBenchmarkVersion>;
 };
 
 export type SecurityBenchmarkRecommendation = {
-  __typename?: 'SecurityBenchmarkRecommendation';
+  __typename: 'SecurityBenchmarkRecommendation';
   benchmarkVersion: SecurityBenchmarkVersion;
   controls: Array<SecurityFrameworkControl>;
   description?: Maybe<Scalars['String']['output']>;
@@ -1942,7 +1802,7 @@ export type SecurityBenchmarkRecommendationResponse =
   | SecurityBenchmarkRecommendation;
 
 export type SecurityBenchmarkVersion = {
-  __typename?: 'SecurityBenchmarkVersion';
+  __typename: 'SecurityBenchmarkVersion';
   benchmark: SecurityBenchmark;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
@@ -1950,145 +1810,104 @@ export type SecurityBenchmarkVersion = {
 };
 
 export type SecurityFramework = {
-  __typename?: 'SecurityFramework';
+  __typename: 'SecurityFramework';
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
   versions: Array<SecurityFrameworkVersion>;
 };
 
 export type SecurityFrameworkControl = {
-  __typename?: 'SecurityFrameworkControl';
+  __typename: 'SecurityFrameworkControl';
   description: Scalars['String']['output'];
   framework: SecurityFrameworkVersion;
   id: Scalars['ID']['output'];
   identifier: Scalars['String']['output'];
-  recommendations: Array<SecurityBenchmarkRecommendation>;
-  statements: Array<PolicyStatement>;
-};
-
-export type SecurityFrameworkOld = {
-  __typename?: 'SecurityFrameworkOld';
-  controls: Array<SecurityFrameworkControl>;
-  id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
-  tag?: Maybe<Scalars['String']['output']>;
+  recommendations: Array<SecurityBenchmarkRecommendation>;
 };
 
 export type SecurityFrameworkVersion = {
-  __typename?: 'SecurityFrameworkVersion';
+  __typename: 'SecurityFrameworkVersion';
   benchmarks: Array<SecurityBenchmarkVersion>;
   controls: Array<SecurityFrameworkControl>;
+  framework: SecurityFramework;
   id: Scalars['ID']['output'];
   name: Scalars['String']['output'];
   releasedAt?: Maybe<Scalars['String']['output']>;
 };
 
-export type SendSupportRequestInput = {
-  location: Scalars['String']['input'];
-  message: Scalars['String']['input'];
+export type SetAssetInstanceLocationInput = {
+  branch: Scalars['String']['input'];
+  cloudAssetId: Scalars['ID']['input'];
+  linkedRepositoryId: Scalars['String']['input'];
+  observationId: Scalars['ID']['input'];
+  path: Scalars['String']['input'];
+  securityBenchmarkRecommendationIds: Array<Scalars['ID']['input']>;
 };
 
-export type SetPolicyStatement = {
-  __typename?: 'SetPolicyStatement';
-  createdAt: Scalars['String']['output'];
-  /** Returns the email of the user who added the policy statement */
-  createdBy: Scalars['String']['output'];
-  description?: Maybe<Scalars['String']['output']>;
-  framework?: Maybe<Scalars['String']['output']>;
-  id: Scalars['ID']['output'];
-  identifier?: Maybe<Scalars['String']['output']>;
-  payload: PolicyStatementPayload;
+export type SetCspmObservationSecurityBenchmarkRecommendationsInput = {
+  cspmObservationId: Scalars['ID']['input'];
+  securityBenchmarkRecommendationIds: Array<Scalars['ID']['input']>;
 };
 
-export type SetScanTargetInput = {
-  /** The alert to be updated */
-  orcaAlertId: Scalars['ID']['input'];
-  /** The scan target to be set */
-  scanTarget: ScanTargetInput;
-};
-
-export enum StatementSource {
-  Organization = 'ORGANIZATION',
-  Project = 'PROJECT',
+export enum Severity {
+  Critical = 'CRITICAL',
+  High = 'HIGH',
+  Info = 'INFO',
+  Low = 'LOW',
+  Medium = 'MEDIUM',
+  Unknown = 'UNKNOWN',
 }
 
-export type SubGitProvider = {
-  __typename?: 'SubGitProvider';
+export type StartRepositoryLinkingOuput = GombocError | WorkflowResponse;
+
+export type TfAttribute = {
+  __typename: 'TfAttribute';
+  computed?: Maybe<Scalars['Boolean']['output']>;
+  customRules: Array<CustomRule>;
+  deprecated?: Maybe<Scalars['Boolean']['output']>;
+  description?: Maybe<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
   name?: Maybe<Scalars['String']['output']>;
-  parentScope?: Maybe<Scalars['String']['output']>;
-  providerName: ProviderName;
-  repositoriesPage: RepositoriesPage;
-  scope?: Maybe<Scalars['String']['output']>;
-  subGitProviders: SubGitProviderPage;
+  required?: Maybe<Scalars['Boolean']['output']>;
+  sensitive?: Maybe<Scalars['Boolean']['output']>;
+  slug: Scalars['String']['output'];
+  type?: Maybe<Scalars['String']['output']>;
 };
 
-export type SubGitProviderRepositoriesPageArgs = {
-  page?: InputMaybe<Scalars['Int']['input']>;
-  scope?: InputMaybe<Scalars['String']['input']>;
-  size?: InputMaybe<Scalars['Int']['input']>;
-};
-
-export type SubGitProviderSubGitProvidersArgs = {
-  page?: InputMaybe<Scalars['Int']['input']>;
-  scope?: InputMaybe<Scalars['String']['input']>;
-  size?: InputMaybe<Scalars['Int']['input']>;
-};
-
-export type SubGitProviderPage = {
-  __typename?: 'SubGitProviderPage';
-  page: Scalars['Int']['output'];
-  results: Array<SubGitProvider>;
-  size: Scalars['Int']['output'];
-};
-
-export type SubScmIntegration = {
-  __typename?: 'SubScmIntegration';
+export type TfNestedBlock = {
+  __typename: 'TfNestedBlock';
+  attributes: Array<TfAttribute>;
   id: Scalars['ID']['output'];
-  integrationName: IntegrationName;
+  nestedBlocks: Array<TfNestedBlock>;
+};
+
+export type TfResource = {
+  __typename: 'TfResource';
+  attributes: Array<TfAttribute>;
+  codeResource?: Maybe<CodeResource>;
+  description?: Maybe<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
   name?: Maybe<Scalars['String']['output']>;
-  parentScope?: Maybe<Scalars['String']['output']>;
-  /** @deprecated use integrationName */
-  providerName: ProviderName;
-  repositoriesPage: RepositoriesPage;
-  scope?: Maybe<Scalars['String']['output']>;
-  /** @deprecated use subScmIntegrations */
-  subGitProviders: SubGitProviderPage;
-  subScmIntegrations: SubGitProviderPage;
+  nestedBlocks: Array<TfNestedBlock>;
 };
 
-export type SubScmIntegrationRepositoriesPageArgs = {
-  page?: InputMaybe<Scalars['Int']['input']>;
-  scope?: InputMaybe<Scalars['String']['input']>;
-  size?: InputMaybe<Scalars['Int']['input']>;
-};
-
-export type SubScmIntegrationSubGitProvidersArgs = {
-  page?: InputMaybe<Scalars['Int']['input']>;
-  scope?: InputMaybe<Scalars['String']['input']>;
-  size?: InputMaybe<Scalars['Int']['input']>;
-};
-
-export type SubScmIntegrationSubScmIntegrationsArgs = {
-  page?: InputMaybe<Scalars['Int']['input']>;
-  scope?: InputMaybe<Scalars['String']['input']>;
-  size?: InputMaybe<Scalars['Int']['input']>;
-};
-
-export type SubScmIntegrationPage = {
-  __typename?: 'SubScmIntegrationPage';
+export type TfResourcePage = {
+  __typename: 'TfResourcePage';
   page: Scalars['Int']['output'];
-  results: Array<SubScmIntegration>;
+  results: Array<TfResource>;
   size: Scalars['Int']['output'];
+  total: Scalars['Int']['output'];
 };
 
-export type Success = {
-  __typename?: 'Success';
-  message: Scalars['String']['output'];
+export type TfResourcePageInput = {
+  page?: InputMaybe<Scalars['Int']['input']>;
+  search?: InputMaybe<Scalars['String']['input']>;
+  size?: InputMaybe<Scalars['Int']['input']>;
 };
 
 export type Ticket = {
-  __typename?: 'Ticket';
+  __typename: 'Ticket';
   createdAt: Scalars['String']['output'];
   /** Returns the email of the user who linked the ticket */
   createdBy: Scalars['String']['output'];
@@ -2098,7 +1917,7 @@ export type Ticket = {
 };
 
 export type TicketPage = {
-  __typename?: 'TicketPage';
+  __typename: 'TicketPage';
   page: Scalars['Int']['output'];
   results: Array<Ticket>;
   totalCount: Scalars['Int']['output'];
@@ -2116,119 +1935,148 @@ export type ToggleAdoptSecurityBenchmarkVersionInput = {
 
 /** Represents a repository that was either deleted or is unreachable due to service or integration issues */
 export type UnreachableRepository = {
-  __typename?: 'UnreachableRepository';
+  __typename: 'UnreachableRepository';
   id: Scalars['ID']['output'];
 };
 
-export type UpdateCustomIntegrationInput = {
-  cloudResourceProviderId?: InputMaybe<Scalars['String']['input']>;
-  description?: InputMaybe<Scalars['String']['input']>;
-  integrationToken?: InputMaybe<Scalars['String']['input']>;
-  metadata?: InputMaybe<Scalars['JSON']['input']>;
-  name?: InputMaybe<Scalars['String']['input']>;
-  observationProviderId?: InputMaybe<Scalars['String']['input']>;
+export type UpdateBranchReportsInput = {
+  accountId: Scalars['ID']['input'];
 };
 
-/** A customer user with access to the system */
-export type User = {
-  __typename?: 'User';
-  email: Scalars['String']['output'];
+export type UpdateBranchReportsOutput = GombocError | WorkflowResponse;
+
+export enum ValueBasedRule {
+  ImplementsIfEqualTo = 'IMPLEMENTS_IF_EQUAL_TO',
+  ImplementsIfNotEqualTo = 'IMPLEMENTS_IF_NOT_EQUAL_TO',
+  ImplementsIfNotRegexMatches = 'IMPLEMENTS_IF_NOT_REGEX_MATCHES',
+  ImplementsIfRegexMatches = 'IMPLEMENTS_IF_REGEX_MATCHES',
+}
+
+export type WorkflowResponse = {
+  __typename: 'WorkflowResponse';
   id: Scalars['ID']['output'];
-  /** All the organizations the user is a member of (usually just one) */
-  organizations: Array<Organization>;
-  pictureUrl: Scalars['String']['output'];
-  username: Scalars['String']['output'];
+  name: Scalars['String']['output'];
 };
 
 export type TestOrganizationQueryVariables = Exact<{ [key: string]: never }>;
 
 export type TestOrganizationQuery = {
-  __typename?: 'Query';
+  __typename: 'Query';
   organization:
-    | { __typename?: 'GombocError' }
-    | { __typename?: 'Organization'; id: string };
+    | { __typename: 'GombocError' }
+    | { __typename: 'Organization'; id: string };
 };
 
-export type GetSecurityFrameworksQueryVariables = Exact<{
-  [key: string]: never;
-}>;
+export type SecurityBenchmarksQueryVariables = Exact<{ [key: string]: never }>;
 
-export type GetSecurityFrameworksQuery = {
-  __typename?: 'Query';
-  organization:
-    | { __typename?: 'GombocError' }
-    | {
-        __typename?: 'Organization';
+export type SecurityBenchmarksQuery = {
+  __typename: 'Query';
+  securityBenchmarks: Array<{
+    __typename: 'SecurityBenchmark';
+    id: string;
+    name: string;
+    versions: Array<{
+      __typename: 'SecurityBenchmarkVersion';
+      id: string;
+      name: string;
+      recommendations: Array<{
+        __typename: 'SecurityBenchmarkRecommendation';
         id: string;
+        identifier: string;
         name: string;
-        policy: {
-          __typename?: 'Policy';
-          statements: Array<{
-            __typename?: 'SetPolicyStatement';
-            id: string;
-            framework?: string | null;
-            description?: string | null;
-            identifier?: string | null;
-            createdBy: string;
-            createdAt: string;
-            payload: {
-              __typename?: 'PolicyStatementPayloadMustImplementType';
-              capability: {
-                __typename?: 'Capability';
-                id: string;
-                title: string;
-              };
-            };
-          }>;
-        };
-      };
+        description?: string | null;
+        isAdopted: boolean;
+      }>;
+    }>;
+  }>;
 };
 
-export type ScanLocalScenarioMutationVariables = Exact<{
-  input: ScanLocalScenarioInput;
+export type IndividualFixesQueryVariables = Exact<{
+  individualFixesInput: IndividualFixesInput;
+  groupedFixesInput: GroupedFixesInput;
 }>;
 
-export type ScanLocalScenarioMutation = {
-  __typename?: 'Mutation';
-  scanLocalScenario:
-    | { __typename?: 'GombocError' }
+export type IndividualFixesQuery = {
+  __typename: 'Query';
+  individualFixes:
     | {
-        __typename?: 'ScanLocalScenario';
-        results: Array<{
-          __typename?: 'RemediationComment';
-          category?: string | null;
-          iacTool: InfrastructureTool;
-          fileName: string;
-          logicalResource: {
-            __typename?: 'LogicalResource';
-            line: number;
-            name: string;
-            filepath: string;
-            type: string;
-          };
-          policyStatement: {
-            __typename?: 'PolicyStatement';
+        __typename: 'GombocError';
+        code?: GombocErrorCode | null;
+        message: string;
+      }
+    | {
+        __typename: 'IndividualFixesSuccess';
+        remediations: Array<{
+          __typename: 'IndividualRemediation';
+          benchmarkRecommendation: {
+            __typename: 'SecurityBenchmarkRecommendation';
             id: string;
-            framework?: string | null;
-            identifier?: string | null;
+            identifier: string;
+            name: string;
             description?: string | null;
-            payload: {
-              __typename?: 'PolicyStatementPayloadMustImplement';
-              capability: {
-                __typename?: 'Capability';
-                id: string;
-                title: string;
-              };
-            };
           };
           fixes: Array<{
-            __typename?: 'LineFix';
-            oldValue: string;
-            newValue: string;
-            issueType: string;
+            __typename: 'RemediationFix';
+            filepath: string;
+            oldLine: Array<string>;
+            newLine: Array<string>;
             lineOffset: number;
             fixType: FixType;
-            position: { __typename?: 'Position'; column: number; line: number };
+            codePosition: {
+              __typename: 'CodePosition';
+              line: number;
+              column: number;
+            };
+          }>;
+          codeObservation: {
+            __typename: 'CodeObservation';
+            codeResourceInstance: {
+              __typename: 'CodeResourceInstance';
+              name: string;
+              type: string;
+              filepath: string;
+              line: number;
+              codeResource: {
+                __typename: 'CodeResource';
+                id: string;
+                infrastructureTool: InfrastructureTool;
+                documentationUrl?: string | null;
+                cloudResource?: {
+                  __typename: 'CloudResource';
+                  id: string;
+                  provider: CloudResourceProvider;
+                  title: string;
+                  documentationUrl?: string | null;
+                } | null;
+              };
+            };
+          };
+        }>;
+      };
+  groupedFixes:
+    | {
+        __typename: 'GombocError';
+        code?: GombocErrorCode | null;
+        message: string;
+      }
+    | {
+        __typename: 'GroupedFixesSuccess';
+        remediatedFiles: Array<{
+          __typename: 'GroupedRemediatedFile';
+          path: string;
+          content: string;
+          comments: Array<{
+            __typename: 'GroupRemediatedFileComment';
+            position: {
+              __typename: 'CodePosition';
+              line: number;
+              column: number;
+            };
+            benchmarkRecommendation: {
+              __typename: 'SecurityBenchmarkRecommendation';
+              id: string;
+              name: string;
+            };
           }>;
         }>;
       };
@@ -2274,28 +2122,27 @@ export const TestOrganizationDocument = {
   TestOrganizationQuery,
   TestOrganizationQueryVariables
 >;
-export const GetSecurityFrameworksDocument = {
+export const SecurityBenchmarksDocument = {
   kind: 'Document',
   definitions: [
     {
       kind: 'OperationDefinition',
       operation: 'query',
-      name: { kind: 'Name', value: 'getSecurityFrameworks' },
+      name: { kind: 'Name', value: 'securityBenchmarks' },
       selectionSet: {
         kind: 'SelectionSet',
         selections: [
           {
             kind: 'Field',
-            name: { kind: 'Name', value: 'organization' },
+            name: { kind: 'Name', value: 'securityBenchmarks' },
             selectionSet: {
               kind: 'SelectionSet',
               selections: [
+                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'name' } },
                 {
-                  kind: 'InlineFragment',
-                  typeCondition: {
-                    kind: 'NamedType',
-                    name: { kind: 'Name', value: 'Organization' },
-                  },
+                  kind: 'Field',
+                  name: { kind: 'Name', value: 'versions' },
                   selectionSet: {
                     kind: 'SelectionSet',
                     selections: [
@@ -2303,96 +2150,29 @@ export const GetSecurityFrameworksDocument = {
                       { kind: 'Field', name: { kind: 'Name', value: 'name' } },
                       {
                         kind: 'Field',
-                        name: { kind: 'Name', value: 'policy' },
+                        name: { kind: 'Name', value: 'recommendations' },
                         selectionSet: {
                           kind: 'SelectionSet',
                           selections: [
                             {
                               kind: 'Field',
-                              name: { kind: 'Name', value: 'statements' },
-                              selectionSet: {
-                                kind: 'SelectionSet',
-                                selections: [
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'id' },
-                                  },
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'payload' },
-                                    selectionSet: {
-                                      kind: 'SelectionSet',
-                                      selections: [
-                                        {
-                                          kind: 'InlineFragment',
-                                          typeCondition: {
-                                            kind: 'NamedType',
-                                            name: {
-                                              kind: 'Name',
-                                              value:
-                                                'PolicyStatementPayloadMustImplementType',
-                                            },
-                                          },
-                                          selectionSet: {
-                                            kind: 'SelectionSet',
-                                            selections: [
-                                              {
-                                                kind: 'Field',
-                                                name: {
-                                                  kind: 'Name',
-                                                  value: 'capability',
-                                                },
-                                                selectionSet: {
-                                                  kind: 'SelectionSet',
-                                                  selections: [
-                                                    {
-                                                      kind: 'Field',
-                                                      name: {
-                                                        kind: 'Name',
-                                                        value: 'id',
-                                                      },
-                                                    },
-                                                    {
-                                                      kind: 'Field',
-                                                      name: {
-                                                        kind: 'Name',
-                                                        value: 'title',
-                                                      },
-                                                    },
-                                                  ],
-                                                },
-                                              },
-                                            ],
-                                          },
-                                        },
-                                      ],
-                                    },
-                                  },
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'framework' },
-                                  },
-                                  {
-                                    kind: 'Field',
-                                    name: {
-                                      kind: 'Name',
-                                      value: 'description',
-                                    },
-                                  },
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'identifier' },
-                                  },
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'createdBy' },
-                                  },
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'createdAt' },
-                                  },
-                                ],
-                              },
+                              name: { kind: 'Name', value: 'id' },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'identifier' },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'name' },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'description' },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'isAdopted' },
                             },
                           ],
                         },
@@ -2408,28 +2188,42 @@ export const GetSecurityFrameworksDocument = {
     },
   ],
 } as unknown as DocumentNode<
-  GetSecurityFrameworksQuery,
-  GetSecurityFrameworksQueryVariables
+  SecurityBenchmarksQuery,
+  SecurityBenchmarksQueryVariables
 >;
-export const ScanLocalScenarioDocument = {
+export const IndividualFixesDocument = {
   kind: 'Document',
   definitions: [
     {
       kind: 'OperationDefinition',
-      operation: 'mutation',
-      name: { kind: 'Name', value: 'scanLocalScenario' },
+      operation: 'query',
+      name: { kind: 'Name', value: 'individualFixes' },
       variableDefinitions: [
         {
           kind: 'VariableDefinition',
           variable: {
             kind: 'Variable',
-            name: { kind: 'Name', value: 'input' },
+            name: { kind: 'Name', value: 'individualFixesInput' },
           },
           type: {
             kind: 'NonNullType',
             type: {
               kind: 'NamedType',
-              name: { kind: 'Name', value: 'ScanLocalScenarioInput' },
+              name: { kind: 'Name', value: 'IndividualFixesInput' },
+            },
+          },
+        },
+        {
+          kind: 'VariableDefinition',
+          variable: {
+            kind: 'Variable',
+            name: { kind: 'Name', value: 'groupedFixesInput' },
+          },
+          type: {
+            kind: 'NonNullType',
+            type: {
+              kind: 'NamedType',
+              name: { kind: 'Name', value: 'GroupedFixesInput' },
             },
           },
         },
@@ -2439,14 +2233,14 @@ export const ScanLocalScenarioDocument = {
         selections: [
           {
             kind: 'Field',
-            name: { kind: 'Name', value: 'scanLocalScenario' },
+            name: { kind: 'Name', value: 'individualFixes' },
             arguments: [
               {
                 kind: 'Argument',
                 name: { kind: 'Name', value: 'input' },
                 value: {
                   kind: 'Variable',
-                  name: { kind: 'Name', value: 'input' },
+                  name: { kind: 'Name', value: 'individualFixesInput' },
                 },
               },
             ],
@@ -2457,57 +2251,40 @@ export const ScanLocalScenarioDocument = {
                   kind: 'InlineFragment',
                   typeCondition: {
                     kind: 'NamedType',
-                    name: { kind: 'Name', value: 'ScanLocalScenario' },
+                    name: { kind: 'Name', value: 'GombocError' },
+                  },
+                  selectionSet: {
+                    kind: 'SelectionSet',
+                    selections: [
+                      { kind: 'Field', name: { kind: 'Name', value: 'code' } },
+                      {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'message' },
+                      },
+                    ],
+                  },
+                },
+                {
+                  kind: 'InlineFragment',
+                  typeCondition: {
+                    kind: 'NamedType',
+                    name: { kind: 'Name', value: 'IndividualFixesSuccess' },
                   },
                   selectionSet: {
                     kind: 'SelectionSet',
                     selections: [
                       {
                         kind: 'Field',
-                        name: { kind: 'Name', value: 'results' },
+                        name: { kind: 'Name', value: 'remediations' },
                         selectionSet: {
                           kind: 'SelectionSet',
                           selections: [
                             {
                               kind: 'Field',
-                              name: { kind: 'Name', value: 'category' },
-                            },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'iacTool' },
-                            },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'fileName' },
-                            },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'logicalResource' },
-                              selectionSet: {
-                                kind: 'SelectionSet',
-                                selections: [
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'line' },
-                                  },
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'name' },
-                                  },
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'filepath' },
-                                  },
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'type' },
-                                  },
-                                ],
+                              name: {
+                                kind: 'Name',
+                                value: 'benchmarkRecommendation',
                               },
-                            },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'policyStatement' },
                               selectionSet: {
                                 kind: 'SelectionSet',
                                 selections: [
@@ -2517,62 +2294,11 @@ export const ScanLocalScenarioDocument = {
                                   },
                                   {
                                     kind: 'Field',
-                                    name: { kind: 'Name', value: 'payload' },
-                                    selectionSet: {
-                                      kind: 'SelectionSet',
-                                      selections: [
-                                        {
-                                          kind: 'InlineFragment',
-                                          typeCondition: {
-                                            kind: 'NamedType',
-                                            name: {
-                                              kind: 'Name',
-                                              value:
-                                                'PolicyStatementPayloadMustImplement',
-                                            },
-                                          },
-                                          selectionSet: {
-                                            kind: 'SelectionSet',
-                                            selections: [
-                                              {
-                                                kind: 'Field',
-                                                name: {
-                                                  kind: 'Name',
-                                                  value: 'capability',
-                                                },
-                                                selectionSet: {
-                                                  kind: 'SelectionSet',
-                                                  selections: [
-                                                    {
-                                                      kind: 'Field',
-                                                      name: {
-                                                        kind: 'Name',
-                                                        value: 'id',
-                                                      },
-                                                    },
-                                                    {
-                                                      kind: 'Field',
-                                                      name: {
-                                                        kind: 'Name',
-                                                        value: 'title',
-                                                      },
-                                                    },
-                                                  ],
-                                                },
-                                              },
-                                            ],
-                                          },
-                                        },
-                                      ],
-                                    },
-                                  },
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'framework' },
-                                  },
-                                  {
-                                    kind: 'Field',
                                     name: { kind: 'Name', value: 'identifier' },
+                                  },
+                                  {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'name' },
                                   },
                                   {
                                     kind: 'Field',
@@ -2592,15 +2318,38 @@ export const ScanLocalScenarioDocument = {
                                 selections: [
                                   {
                                     kind: 'Field',
-                                    name: { kind: 'Name', value: 'oldValue' },
+                                    name: { kind: 'Name', value: 'filepath' },
                                   },
                                   {
                                     kind: 'Field',
-                                    name: { kind: 'Name', value: 'newValue' },
+                                    name: { kind: 'Name', value: 'oldLine' },
                                   },
                                   {
                                     kind: 'Field',
-                                    name: { kind: 'Name', value: 'issueType' },
+                                    name: { kind: 'Name', value: 'newLine' },
+                                  },
+                                  {
+                                    kind: 'Field',
+                                    name: {
+                                      kind: 'Name',
+                                      value: 'codePosition',
+                                    },
+                                    selectionSet: {
+                                      kind: 'SelectionSet',
+                                      selections: [
+                                        {
+                                          kind: 'Field',
+                                          name: { kind: 'Name', value: 'line' },
+                                        },
+                                        {
+                                          kind: 'Field',
+                                          name: {
+                                            kind: 'Name',
+                                            value: 'column',
+                                          },
+                                        },
+                                      ],
+                                    },
                                   },
                                   {
                                     kind: 'Field',
@@ -2610,6 +2359,194 @@ export const ScanLocalScenarioDocument = {
                                     kind: 'Field',
                                     name: { kind: 'Name', value: 'fixType' },
                                   },
+                                ],
+                              },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'codeObservation' },
+                              selectionSet: {
+                                kind: 'SelectionSet',
+                                selections: [
+                                  {
+                                    kind: 'Field',
+                                    name: {
+                                      kind: 'Name',
+                                      value: 'codeResourceInstance',
+                                    },
+                                    selectionSet: {
+                                      kind: 'SelectionSet',
+                                      selections: [
+                                        {
+                                          kind: 'Field',
+                                          name: { kind: 'Name', value: 'name' },
+                                        },
+                                        {
+                                          kind: 'Field',
+                                          name: { kind: 'Name', value: 'type' },
+                                        },
+                                        {
+                                          kind: 'Field',
+                                          name: {
+                                            kind: 'Name',
+                                            value: 'filepath',
+                                          },
+                                        },
+                                        {
+                                          kind: 'Field',
+                                          name: { kind: 'Name', value: 'line' },
+                                        },
+                                        {
+                                          kind: 'Field',
+                                          name: {
+                                            kind: 'Name',
+                                            value: 'codeResource',
+                                          },
+                                          selectionSet: {
+                                            kind: 'SelectionSet',
+                                            selections: [
+                                              {
+                                                kind: 'Field',
+                                                name: {
+                                                  kind: 'Name',
+                                                  value: 'id',
+                                                },
+                                              },
+                                              {
+                                                kind: 'Field',
+                                                name: {
+                                                  kind: 'Name',
+                                                  value: 'infrastructureTool',
+                                                },
+                                              },
+                                              {
+                                                kind: 'Field',
+                                                name: {
+                                                  kind: 'Name',
+                                                  value: 'documentationUrl',
+                                                },
+                                              },
+                                              {
+                                                kind: 'Field',
+                                                name: {
+                                                  kind: 'Name',
+                                                  value: 'cloudResource',
+                                                },
+                                                selectionSet: {
+                                                  kind: 'SelectionSet',
+                                                  selections: [
+                                                    {
+                                                      kind: 'Field',
+                                                      name: {
+                                                        kind: 'Name',
+                                                        value: 'id',
+                                                      },
+                                                    },
+                                                    {
+                                                      kind: 'Field',
+                                                      name: {
+                                                        kind: 'Name',
+                                                        value: 'provider',
+                                                      },
+                                                    },
+                                                    {
+                                                      kind: 'Field',
+                                                      name: {
+                                                        kind: 'Name',
+                                                        value: 'title',
+                                                      },
+                                                    },
+                                                    {
+                                                      kind: 'Field',
+                                                      name: {
+                                                        kind: 'Name',
+                                                        value:
+                                                          'documentationUrl',
+                                                      },
+                                                    },
+                                                  ],
+                                                },
+                                              },
+                                            ],
+                                          },
+                                        },
+                                      ],
+                                    },
+                                  },
+                                ],
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'groupedFixes' },
+            arguments: [
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'input' },
+                value: {
+                  kind: 'Variable',
+                  name: { kind: 'Name', value: 'groupedFixesInput' },
+                },
+              },
+            ],
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                {
+                  kind: 'InlineFragment',
+                  typeCondition: {
+                    kind: 'NamedType',
+                    name: { kind: 'Name', value: 'GombocError' },
+                  },
+                  selectionSet: {
+                    kind: 'SelectionSet',
+                    selections: [
+                      { kind: 'Field', name: { kind: 'Name', value: 'code' } },
+                      {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'message' },
+                      },
+                    ],
+                  },
+                },
+                {
+                  kind: 'InlineFragment',
+                  typeCondition: {
+                    kind: 'NamedType',
+                    name: { kind: 'Name', value: 'GroupedFixesSuccess' },
+                  },
+                  selectionSet: {
+                    kind: 'SelectionSet',
+                    selections: [
+                      {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'remediatedFiles' },
+                        selectionSet: {
+                          kind: 'SelectionSet',
+                          selections: [
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'path' },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'content' },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'comments' },
+                              selectionSet: {
+                                kind: 'SelectionSet',
+                                selections: [
                                   {
                                     kind: 'Field',
                                     name: { kind: 'Name', value: 'position' },
@@ -2618,14 +2555,34 @@ export const ScanLocalScenarioDocument = {
                                       selections: [
                                         {
                                           kind: 'Field',
+                                          name: { kind: 'Name', value: 'line' },
+                                        },
+                                        {
+                                          kind: 'Field',
                                           name: {
                                             kind: 'Name',
                                             value: 'column',
                                           },
                                         },
+                                      ],
+                                    },
+                                  },
+                                  {
+                                    kind: 'Field',
+                                    name: {
+                                      kind: 'Name',
+                                      value: 'benchmarkRecommendation',
+                                    },
+                                    selectionSet: {
+                                      kind: 'SelectionSet',
+                                      selections: [
                                         {
                                           kind: 'Field',
-                                          name: { kind: 'Name', value: 'line' },
+                                          name: { kind: 'Name', value: 'id' },
+                                        },
+                                        {
+                                          kind: 'Field',
+                                          name: { kind: 'Name', value: 'name' },
                                         },
                                       ],
                                     },
@@ -2647,6 +2604,6 @@ export const ScanLocalScenarioDocument = {
     },
   ],
 } as unknown as DocumentNode<
-  ScanLocalScenarioMutation,
-  ScanLocalScenarioMutationVariables
+  IndividualFixesQuery,
+  IndividualFixesQueryVariables
 >;

@@ -1,29 +1,41 @@
 // Webview panel setup/communication
 
-import { Policy, SetPolicyStatement } from '../api/__generated__/graphql';
+import { SecurityBenchmarkQueryBenchmarkArray } from '../api/client';
 
 /**
  * Takes in a set of policy statements and turns them into html to display
  */
-export function getHTMLForStatments(
-  policy: Policy,
-  statements: SetPolicyStatement[],
-  id: string,
-  name: string,
+export function getHTMLForBenchmarks(
+  benchmarks: SecurityBenchmarkQueryBenchmarkArray,
 ) {
   // Create simple list of plicy statements
 
-  const statementsList = statements
-    .map((statement: any) => {
-      const capability = statement.payload?.capability;
-
+  const statementsList = benchmarks
+    .map(benchmark => {
+      const versions = benchmark.versions.map(version => {
+        const recommendations = version.recommendations.map(recommendation => {
+          return `
+          <li>
+            <p>Recommendation: ${recommendation.name}</p>
+            </li>
+        `;
+        });
+        return `
+        <li>
+            <p>Version: ${version.name}</p>
+            <ul>
+            ${recommendations.join('')}
+            </ul>
+            </li>
+        `;
+      });
       return `
-      <li>
-        <p>All resources must enable</p> 
-        <strong>Framework:</strong> ${statement.framework}<br>
-        <Strong>Title:</strong> ${capability.title} <br>
-      </li>
-    `;
+          <li>
+            <p>Benchmark: ${benchmark.name}</p> 
+            <ul>
+              ${versions.join('')}
+            </ul>
+          `;
     })
     .join('');
 
@@ -37,11 +49,7 @@ export function getHTMLForStatments(
         </style>
       </head>
       <body>
-        <h1>Organization Data</h1>
-        <p><strong>ID:</strong> ${id}</p>
-        <p><strong>Name:</strong> ${name}</p>
-
-        <h2>Policy Statements</h2>
+        <h1>Security Benchmarks</h2>
         <ul>
           ${statementsList}
         </ul>

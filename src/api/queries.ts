@@ -1,4 +1,3 @@
-import { GombocError } from './__generated__/graphql';
 // graphql querieos
 // @ts-expect-error
 import { gql } from '@apollo/client';
@@ -15,72 +14,94 @@ export const HEALTH_CHECK = gql`
   }
 `;
 
-export const SECURITY_FRAMEWORKS = gql`
-  query getSecurityFrameworks {
-    organization {
-      ... on Organization {
+export const SECURITY_BENCHMARKS = gql`
+  query securityBenchmarks {
+    securityBenchmarks {
+      id
+      name
+      versions {
         id
         name
-        policy {
-          statements {
-            id
-            payload {
-              ... on PolicyStatementPayloadMustImplementType {
-                capability {
-                  id
-                  title
-                }
-              }
-            }
-            framework
-            description
-            identifier
-            createdBy
-            createdAt
-          }
+        recommendations {
+          id
+          identifier
+          name
+          description
+          isAdopted
         }
       }
     }
   }
 `;
 
-export const SINGLE_SCAN = gql`
-  mutation scanLocalScenario($input: ScanLocalScenarioInput!) {
-    scanLocalScenario(input: $input) {
-      ... on ScanLocalScenario {
-        results {
-          category
-          iacTool
-          fileName
-          logicalResource {
-            line
-            name
-            filepath
-            type
-          }
-          policyStatement {
+export const INDIVIDUAL_FIXES = gql`
+  query individualFixes(
+    $individualFixesInput: IndividualFixesInput!
+    $groupedFixesInput: GroupedFixesInput!
+  ) {
+    individualFixes(input: $individualFixesInput) {
+      ... on GombocError {
+        code
+        message
+      }
+      ... on IndividualFixesSuccess {
+        remediations {
+          benchmarkRecommendation {
             id
-            payload {
-              ... on PolicyStatementPayloadMustImplement {
-                capability {
-                  id
-                  title
-                }
-              }
-            }
-            framework
             identifier
+            name
             description
           }
           fixes {
-            oldValue
-            newValue
-            issueType
+            filepath
+            oldLine
+            newLine
+            codePosition {
+              line
+              column
+            }
             lineOffset
             fixType
-            position {
-              column
+          }
+          codeObservation {
+            codeResourceInstance {
+              name
+              type
+              filepath
               line
+              codeResource {
+                id
+                infrastructureTool
+                documentationUrl
+                cloudResource {
+                  id
+                  provider
+                  title
+                  documentationUrl
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    groupedFixes(input: $groupedFixesInput) {
+      ... on GombocError {
+        code
+        message
+      }
+      ... on GroupedFixesSuccess {
+        remediatedFiles {
+          path
+          content
+          comments {
+            position {
+              line
+              column
+            }
+            benchmarkRecommendation {
+              id
+              name
             }
           }
         }

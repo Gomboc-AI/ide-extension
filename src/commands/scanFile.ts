@@ -2,32 +2,13 @@ import { ScanLocalScenarioInput } from './../api/__generated__/graphql';
 // scans current working file or scenarioimport * as vscode from 'vscode';
 import * as vscode from 'vscode';
 import { CustomerApiClient } from '../api/client';
-import { generateRequestMetadata, getFileType } from '../utils/lib';
+import { getFileType } from '../utils/lib';
 import {
   InfrastructureTool,
   IacScanContent,
 } from '../api/__generated__/graphql';
 import { ScanResultsProvider } from '../providers/scanResultsProvider';
 
-/**
- * Scans a single file and sens to customerapi
- * 
- * needs:
- * fileContent: string | string[]
- * filetype: TERRAFORM | CLOUDFORMATION
- * git info: {
- *  external link: string,
- *  branch name: string,
- * }
- * policy statements
- * {
- * input PolicyStatementPayloadMustImplementType {
-  id: ID!
-  capabilityId: String!
-  metadata: InputStatementMetadata!
-}
- * }
- */
 export async function scanFileCommand(
   context: vscode.ExtensionContext,
   apiClient: CustomerApiClient,
@@ -36,7 +17,6 @@ export async function scanFileCommand(
   // ----- Gather input ------- //
   const editor = vscode.window.activeTextEditor;
   if (!editor) {
-    vscode.window.showErrorMessage('No active editor');
     return;
   }
   const document = editor.document;
@@ -59,21 +39,17 @@ export async function scanFileCommand(
     throw new Error('Current file is not a cloudformation or terraform file');
   }
 
-  const metaData = await generateRequestMetadata();
+  // const metaData = await generateRequestMetadata();
 
   // ----- Send data to customerapi ------ //
   const inputObject: ScanLocalScenarioInput = {
     fileContents,
     iacTool: tool,
-    metaData,
   };
 
-  const scanResponse = await apiClient.singleScanMutation({ inputObject });
+  const scanResponse = await apiClient.getFixes({ inputObject });
 
-  if (scanResponse.__typename !== 'ScanLocalScenario') {
-    throw new Error('gomboc error');
-  }
-  scanResultsProvider.generateComments(scanResponse.results);
+  scanResultsProvider.generateComments(scanResponse);
   scanResultsProvider.createDiagnostic();
 
   // TODO
@@ -92,7 +68,7 @@ async function getTFScenarioFiles(
 
   const contents: IacScanContent[] = [];
   for (const [name, fileType] of entries) {
-    if (fileType === vscode.FileType.File) {
+    if (fileType === vscode.FileType.File && name.endsWith('.tf')) {
       const fileUri = vscode.Uri.joinPath(directoryUri, name);
       const data = await vscode.workspace.fs.readFile(fileUri);
       const contentString = new TextDecoder().decode(data); // cant convert from unit8array to base64 directly
@@ -108,7 +84,7 @@ async function getTFScenarioFiles(
 /**
  * Only care about the current file, just return base64 of it
  */
-function getCFNFile(document: vscode.TextDocument): IacScanContent[] {
+export function getCFNFile(document: vscode.TextDocument): IacScanContent[] {
   return [
     {
       filePath: document.uri.fsPath,
