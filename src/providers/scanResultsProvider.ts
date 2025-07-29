@@ -132,9 +132,9 @@ export class ScanResultsProvider {
 
         diagnosticTotal++;
         curDiag.push({
-          message: `Fix for ${remediation.codeObservation.codeResourceInstance.type} to enforce apply recommendation ${remediation.benchmarkRecommendation.name}`,
+          message: `Fix for ${remediation.codeObservation.codeResourceInstance.type} to enforce apply recommendation ${remediation.benchmarkRecommendation.name} with Gomboc`,
           individualFixGombocResult: remediation,
-          quickFixMessage: `Enforce ${remediation.benchmarkRecommendation.name} for ${remediation.codeObservation.codeResourceInstance.type}`,
+          quickFixMessage: `Fix with Gomboc ${remediation.benchmarkRecommendation.name} for ${remediation.codeObservation.codeResourceInstance.type}`,
           range: new vscode.Range(startPosition, endPosition),
           severity: vscode.DiagnosticSeverity.Error,
           source: 'Gomboc ',
@@ -156,7 +156,7 @@ export class ScanResultsProvider {
     }
 
     vscode.window.showInformationMessage(
-      `We completed a scan of your IaC and found ${diagnosticTotal} fixes to comply with your organization's selected benchmarks.`,
+      `Gomboc found ${diagnosticTotal} fixes`,
     );
   }
 
@@ -180,22 +180,20 @@ export class ScanResultsProvider {
 
       const range = new vscode.Range(startPosition, endPosition);
       const newValue = fix.newLine.join('\n');
-      const addedLineComment = `# Applied this change to enforce ${fix.benchmarkRecommendation.name}`;
       if (fix.fixType === 'ADD') {
         edit.insert(
           file,
           startPosition,
-          `${' '.repeat(fix.codePosition.column)}${newValue} ${addedLineComment}` +
-            '\n',
+          `${' '.repeat(fix.codePosition.column)}${newValue}` + '\n',
         );
       } else if (fix.fixType === 'UPDATE') {
-        edit.replace(file, range, `${newValue} ${addedLineComment}`);
+        edit.replace(file, range, `${newValue}`);
       } else {
         // delete but delete type doesn't exist yet for us
         edit.replace(
           file,
           range,
-          `Removed this line to enforce ${fix.benchmarkRecommendation.name}`,
+          `Removed this line to fix ${fix.benchmarkRecommendation.name} with Gomboc`,
         );
       }
     }
@@ -236,27 +234,6 @@ export class ScanResultsProvider {
 
       if (!remediationSuccess) {
         throw new Error('Unable to apply any fixes due to an unexpected error');
-      }
-
-      for (const comment of remediation.comments) {
-        const commentLine = comment.position.line;
-        const existingLine = document.lineAt(commentLine - 1);
-        const insertPosition = new vscode.Position(
-          commentLine - 1,
-          existingLine.text.length,
-        );
-        commentEdit.insert(
-          document.uri,
-          insertPosition,
-          `# Applied this change to enforce ${comment.benchmarkRecommendation.name}`,
-        );
-      }
-      const commentSuccess = await vscode.workspace.applyEdit(commentEdit);
-
-      if (!commentSuccess) {
-        throw new Error(
-          'We have applied the remediations, however an unexpected error prevented us from applying the comments on the changes',
-        );
       }
 
       const textEditor = vscode.window.activeTextEditor;

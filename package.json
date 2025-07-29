@@ -8,7 +8,7 @@
     "url": "https://github.com/Gomboc-AI/ide-extension"
   },
   "homepage": "https://github.com/Gomboc-AI/ide-extension?tab=readme-ov-file",
-  "version": "0.0.11",
+  "version": "0.0.13",
   "engines": {
     "vscode": "^1.63.0"
   },
@@ -21,7 +21,7 @@
   "activationEvents": [
     "*"
   ],
-  "icon": "Gomboc-Full-Logo.png",
+  "icon": "./static/Gomboc-Full-Logo.png",
   "main": "./dist/extension.js",
   "extensionDependencies": [
     "vscode.git"
@@ -73,7 +73,25 @@
           }
         }
       }
-    ]
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "gombocSidebar",
+          "title": "Gomboc",
+          "icon": "./static/GombocWhiteLogo.png"
+        }
+      ]
+    },
+    "views": {
+      "gombocSidebar": [
+        {
+          "id": "gombocInfoView",
+          "name": "Gomboc info",
+          "type": "webview"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
