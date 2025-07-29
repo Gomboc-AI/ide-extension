@@ -156,7 +156,7 @@ export class ScanResultsProvider {
     }
 
     vscode.window.showInformationMessage(
-      `We completed a scan of your IaC and found ${diagnosticTotal} fixes to comply with your organization's selected benchmarks.`,
+      `Gomboc found ${diagnosticTotal} fixes`,
     );
   }
 
