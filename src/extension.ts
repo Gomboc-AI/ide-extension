@@ -6,6 +6,7 @@ import { CustomerApiClient } from './api/client';
 import logger from './utils/logger';
 import { ScanResultsProvider } from './providers/scanResultsProvider';
 import { CodeActionProvider } from './providers/codeActionProvider';
+import { GombocInfoViewProvider } from './providers/sidebarProvider';
 
 export async function activate(context: vscode.ExtensionContext) {
   logger.info('VSCode extension activated .... ');
@@ -40,9 +41,15 @@ export async function activate(context: vscode.ExtensionContext) {
     diagnosticCollection.clear();
   });
 
+  const sidebarWebview = vscode.window.registerWebviewViewProvider(
+    'gombocInfoView',
+    new GombocInfoViewProvider(context),
+  );
+
   context.subscriptions.push(
     ...disposables,
     diagnosticCollection,
+    sidebarWebview,
     onSave,
     onEdit,
     onConfigChange(disposables, commands),
