@@ -184,8 +184,7 @@ export class ScanResultsProvider {
         edit.insert(
           file,
           startPosition,
-          `${' '.repeat(fix.codePosition.column)}${newValue}` +
-            '\n',
+          `${' '.repeat(fix.codePosition.column)}${newValue}` + '\n',
         );
       } else if (fix.fixType === 'UPDATE') {
         edit.replace(file, range, `${newValue}`);
