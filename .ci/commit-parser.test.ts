@@ -1,5 +1,5 @@
-const { createParserOpts } = require('../.ci/parser.js');
-const { whatBump } = require('../.ci/whatBump.js');
+import { createParserOpts } from './parser.mjs';
+import { whatBump } from './whatBump.mjs';
 
 describe('Commit Parser', () => {
   test('should parse commit with force-release flag', () => {

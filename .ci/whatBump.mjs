@@ -51,4 +51,4 @@ function whatBump(commits) {
   };
 }
 
-module.exports = { whatBump };
+export { whatBump };

@@ -19,7 +19,7 @@ export default {
           { type: 'docs', scope: 'README', release: 'patch' },
           { scope: 'release', release: 'patch' },
           { scope: 'no-release', release: false },
-          { message: '*[force-release]*', release: 'patch' },
+          { scope: 'release', release: 'patch' },
         ],
         parserOpts: createParserOpts(),
       },

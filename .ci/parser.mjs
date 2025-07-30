@@ -13,4 +13,4 @@ function createParserOpts() {
   };
 }
 
-module.exports = { createParserOpts };
+export { createParserOpts };
