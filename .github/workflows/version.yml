@@ -28,8 +28,8 @@ jobs:
         env:
           GH_BRANCH: ${{ github.head_ref }}
         run: |
-          unset GITHUB_ACTIONS
-          unset GITHUB_EVENT_NAME
+          GITHUB_REF=${{ env.GH_BRANCH }}
+          git checkout $GITHUB_REF
 
           npx semantic-release --dry-run --no-ci --branches $GH_BRANCH > output.txt
           echo "releaseNote=$(cat output.txt | base64 -w 0)" >> "$GITHUB_OUTPUT"
