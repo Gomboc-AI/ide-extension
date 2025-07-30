@@ -38,6 +38,5 @@ jobs:
         if: ${{ steps.semantic-release.outputs.releaseNote != '' }}
         with:
             script: |
-              const { generateSummary } = require('./scripts/generate-changelogs.js');
-
-              generateSummary({ context, github });
+              const { generateSummary } = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/index.js`);
+              return generateSummary({ context, github, core });
