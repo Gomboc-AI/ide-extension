@@ -12,6 +12,7 @@ jobs:
       issues: write
       contents: read
       pull-requests: write
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,6 +27,8 @@ jobs:
       - name: Generate release notes
         id: semantic-release
         env:
+          VSCE_PAT: ${{ secrets.VSCE_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_BRANCH: ${{ github.head_ref }}
         run: |
           GITHUB_REF=${{ env.GH_BRANCH }}
