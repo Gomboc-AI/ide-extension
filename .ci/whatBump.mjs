@@ -5,6 +5,7 @@ function whatBump(commits) {
   let forceRelease = false;
 
   commits.forEach(commit => {
+    console.log('Processing commit:', commit.subject);
     // Check for [force-release] flag in commit message
     if (commit.subject && commit.subject.includes('[force-release]')) {
       forceRelease = true;
