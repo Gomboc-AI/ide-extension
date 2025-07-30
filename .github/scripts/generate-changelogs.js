@@ -8,9 +8,10 @@ export default async ({ github, context, core }) => {
     return context.actor;
   }
 
-  const releaseNotesOutput = Buffer.from(process.env.RELEASE_NOTES_OUTPUT, 'base64').toString(
-    'utf-8',
-  );
+  const releaseNotesOutput = Buffer.from(
+    process.env.RELEASE_NOTES_OUTPUT,
+    'base64',
+  ).toString('utf-8');
   core.info(`Semantic release note output: ${releaseNotesOutput}`);
   const lines = releaseNotesOutput.split('\n');
   const releaseNoteIndex = [...lines]

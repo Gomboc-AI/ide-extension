@@ -2,7 +2,8 @@
   ##
 {{~else~}}
   #
-{{~/if}} {{#if @root.linkCompare~}}
+{{~/if}}
+{{#if @root.linkCompare~}}
   [{{version}}](
   {{~#if @root.repository~}}
     {{~#if @root.host}}
@@ -19,7 +20,9 @@
 {{~else}}
   {{~version}}
 {{~/if}}
-{{~#if title}} "{{title}}"
+{{~#if title}}
+  "{{title}}"
 {{~/if}}
-{{~#if date}} ({{date}})
+{{~#if date}}
+  ({{date}})
 {{/if}}

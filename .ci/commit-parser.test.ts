@@ -6,7 +6,7 @@ describe('Commit Parser', () => {
     const parserOpts = createParserOpts();
     const commitMessage = 'fix: update configuration [force-release]';
     const match = commitMessage.match(parserOpts.headerPattern);
-    
+
     expect(match).toBeTruthy();
     expect(match?.[1]).toBeUndefined(); // issue
     expect(match?.[2]).toBe('fix'); // type
@@ -18,7 +18,7 @@ describe('Commit Parser', () => {
     const parserOpts = createParserOpts();
     const commitMessage = 'feat: add new feature';
     const match = commitMessage.match(parserOpts.headerPattern);
-    
+
     expect(match).toBeTruthy();
     expect(match?.[2]).toBe('feat'); // type
     expect(match?.[4]).toBe('add new feature'); // subject
@@ -26,9 +26,10 @@ describe('Commit Parser', () => {
 
   test('should parse commit with scope and force-release flag', () => {
     const parserOpts = createParserOpts();
-    const commitMessage = 'fix(api): resolve authentication issue [force-release]';
+    const commitMessage =
+      'fix(api): resolve authentication issue [force-release]';
     const match = commitMessage.match(parserOpts.headerPattern);
-    
+
     expect(match).toBeTruthy();
     expect(match?.[2]).toBe('fix'); // type
     expect(match?.[3]).toBe('api'); // scope
@@ -42,13 +43,15 @@ describe('WhatBump', () => {
       {
         subject: 'docs: update README [force-release]',
         type: 'docs',
-        notes: []
-      }
+        notes: [],
+      },
     ];
-    
+
     const result = whatBump(commits);
     expect(result.level).toBe(2);
-    expect(result.reason).toBe('Force release triggered by [force-release] flag');
+    expect(result.reason).toBe(
+      'Force release triggered by [force-release] flag',
+    );
   });
 
   test('should not force release when [force-release] flag is not present', () => {
@@ -56,10 +59,10 @@ describe('WhatBump', () => {
       {
         subject: 'docs: update README',
         type: 'docs',
-        notes: []
-      }
+        notes: [],
+      },
     ];
-    
+
     const result = whatBump(commits);
     expect(result.level).toBe(2);
     expect(result.reason).toBe('There are 0 BREAKING CHANGES and 0 features');
@@ -70,12 +73,14 @@ describe('WhatBump', () => {
       {
         subject: 'feat: breaking change [force-release]',
         type: 'feat',
-        notes: [{ title: 'BREAKING CHANGE', text: 'This is a breaking change' }]
-      }
+        notes: [
+          { title: 'BREAKING CHANGE', text: 'This is a breaking change' },
+        ],
+      },
     ];
-    
+
     const result = whatBump(commits);
     expect(result.level).toBe(0); // Breaking change should take precedence
     expect(result.reason).toBe('There is 1 BREAKING CHANGE and 0 features');
   });
-}); 
+});
