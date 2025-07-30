@@ -31,14 +31,13 @@ jobs:
           unset GITHUB_ACTIONS
           unset GITHUB_EVENT_NAME
 
-          npx semantic-release --dry-run --no-ci --plugins @semantic-release/commit-analyzer,@semantic-release/release-notes-generator --branches $GH_BRANCH > output.txt
+          npx semantic-release --dry-run --no-ci --branches $GH_BRANCH > output.txt
           echo "releaseNote=$(cat output.txt | base64 -w 0)" >> "$GITHUB_OUTPUT"
       - name: Report Release Notes
         uses: actions/github-script@v7
         if: ${{ steps.semantic-release.outputs.releaseNote != '' }}
         with:
             script: |
-              const { context, github } = require('@actions/github');
-              const { generateChangelogs } = require('./scripts/generate-changelogs.js');
+              const { generateSummary } = require('./scripts/generate-changelogs.js');
 
-              generateChangelogs({ context, github });
+              generateSummary({ context, github });
