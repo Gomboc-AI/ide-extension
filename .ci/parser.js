@@ -1,9 +1,9 @@
 // Extends the package conventional-changelog/conventional-changelog-angular
 // https://github.com/conventional-changelog/conventional-changelog/blob/master/packages/conventional-changelog-angular/src/parser.js
 
-export function createParserOpts() {
+function createParserOpts() {
     return {
-        headerPattern: /^(?:DEV-([0-9]+) )?(\w*)(?:\((.*)\))?(?:[:-] )?(.*)$/,
+        headerPattern: /^(?:DEV-([0-9]+) )?(\w*)(?:\((.*)\))?(?:[:-] )?(.*?)(?:\s*\[force-release\])?$/,
         headerCorrespondence: [
             'issue',
             'type',
@@ -15,3 +15,5 @@ export function createParserOpts() {
         revertCorrespondence: ['header', 'hash'],
     }
 }
+
+module.exports = { createParserOpts };

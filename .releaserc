@@ -1,7 +1,13 @@
 {
   "branches": [ "main" ],
   "plugins": [
-    "@semantic-release/commit-analyzer",
+    [
+      "@semantic-release/commit-analyzer",
+      {
+        "parserOpts": "./.ci/parser.js",
+        "whatBump": "./.ci/whatBump.js"
+      }
+    ],
     "@semantic-release/release-notes-generator",
     [
       "semantic-release-vsce",
@@ -10,10 +16,10 @@
       }
     ],
     [
-      '@semantic-release/github',
+      "@semantic-release/github",
       {
-        assets: '*.vsix',
-      },
-    ],
+        "assets": "*.vsix"
+      }
+    ]
   ]
 }

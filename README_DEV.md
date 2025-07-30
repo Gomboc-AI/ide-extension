@@ -81,6 +81,12 @@ For Example:
   }
 ```
 
+### Releases
+
+Releases are triggered by CI using [semantic-release](https://semantic-release.gitbook.io/semantic-release).
+Pull requests with commits of type `feat`, `fix` and `perf` will trigger a new release. To avoid a release you
+can add a scope of `no-release` to your commits to tell `semantic-release` to not include the commit.
+
 #### Changelogs
 
 We use [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/) and [semantic-releases](https://semantic-release.gitbook.io/semantic-release/usage/getting-started) to generate changelogs. Commits messages should be structured as follows:
@@ -113,14 +119,33 @@ The following is a list of commonly used types:
 
 Optionally you can run `npm run commit` to pull up a command prompt for generating a conventional commit.
 
-#### Releases
+### How to Force a Release
 
-Releases are triggered by CI using [semantic-release](https://semantic-release.gitbook.io/semantic-release).
-Pull requests with commits of type `feat`, `fix` and `perf` will trigger a new release. To avoid a release you
-can add a scope of `no-release` to your commits to tell `semantic-release` to not include the commit.
+To force a release, add `[force-release]` to the end of your commit message:
+
+```bash
+git commit -m "fix: update some configuration [force-release]"
+```
+
+#### Examples
+
+#### Force a patch release
+```bash
+git commit -m "docs: update README [force-release]"
+```
+
+#### Force a release with conventional commit format
+```bash
+git commit -m "feat: add new feature [force-release]"
+```
+
+#### Force a release with scope
+```bash
+git commit -m "fix(api): resolve authentication issue [force-release]"
+```
 
 
-#### Publishing
+### Publishing
 We are using the `vsce` package in order to publish. For now, this will be done as a manual process. 
 
 1. Install `vsce` globally (make sure you have node installed)
