@@ -12,6 +12,8 @@ export default {
       {
         preset: 'angular',
         releaseRules: [
+          { breaking: true, release: 'major' },
+          { revert: true, release: 'patch' },
           { type: 'feat', release: 'minor' },
           { type: 'fix', release: 'patch' },
           { type: 'perf', release: 'patch' },
