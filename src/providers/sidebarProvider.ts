@@ -1,5 +1,8 @@
 import * as vscode from 'vscode';
 
+/***
+ * A provider for the sidebar component
+ */
 export class GombocInfoViewProvider implements vscode.WebviewViewProvider {
   constructor(private readonly context: vscode.ExtensionContext) {}
 
