@@ -7,5 +7,5 @@ export default async function createPreset() {
     parser: createParserOpts(),
     writer: await createWriterOpts(),
     whatBump
-  }
+  };
 }
