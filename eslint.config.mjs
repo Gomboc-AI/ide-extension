@@ -8,7 +8,7 @@ export default [
       '**/__generated__/**',
       'node_modules/',
       '**/out/**',
-      '.ci/',
+      'ci/',
       '.github/',
     ],
   },
