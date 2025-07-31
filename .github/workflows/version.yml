@@ -41,6 +41,8 @@ jobs:
       - name: Report Release Notes
         uses: actions/github-script@v7
         if: ${{ steps.semantic-release.outputs.releaseNote != '' }}
+        env:
+          RELEASE_NOTES_OUTPUT: ${{ steps.semantic-release.outputs.releaseNote }}
         with:
             script: |
               const { generateSummary } = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/index.js`);
