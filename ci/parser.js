@@ -4,7 +4,7 @@
 export function createParserOpts() {
   return {
     headerPattern:
-      /^(?:DEV-([0-9]+) )?(\w*)(?:\((.*)\))?(?:[:-] )?(.*?)(\s*\[force-release\])?$/,
+      /^(?:DEV-([0-9]+) )?(\w*)(?:\((.*)\))?:(?:[-] )?(.*?)(\s*\[force-release\])?$/,
     headerCorrespondence: ['issue', 'type', 'scope', 'subject', 'forceRelease'],
     noteKeywords: ['BREAKING CHANGE'],
     revertPattern:
