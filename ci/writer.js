@@ -23,6 +23,7 @@ const getWriterOpts = () => ({
     let { type } = commit;
 
     if (commit.forceRelease || commit.scope === 'release') {
+      commit.scope = '';
       type = 'Release';
     } else if (commit.type === 'feat') {
       type = 'Features';
