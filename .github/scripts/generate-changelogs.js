@@ -32,7 +32,7 @@ export default async ({ github, context, core }) => {
   });
 
   const existingComment = comments.data.find(comment =>
-    comment?.body?.startsWith('## Summary'),
+    comment?.body?.startsWith('## Pull Request Summary'),
   );
   if (existingComment) {
     await github.rest.issues.updateComment({
