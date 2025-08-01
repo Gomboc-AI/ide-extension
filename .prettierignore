@@ -9,3 +9,5 @@ out/
 .npmrc
 vscode/
 .husky/
+ci/
+.github/
