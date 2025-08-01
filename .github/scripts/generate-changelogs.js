@@ -8,6 +8,8 @@ export default async ({ github, context, core }) => {
     return context.actor;
   }
 
+  const HEADER = '## Pull Request Summary';
+
   const releaseNotesOutput = Buffer.from(
     process.env.RELEASE_NOTES_OUTPUT,
     'base64',
@@ -18,7 +20,7 @@ export default async ({ github, context, core }) => {
     .reverse()
     .findIndex(line => /^[[0-9:\sAMPM]+\]\s\[semantic-release\].*$/.test(line));
   const releaseNoteLines = lines.slice(lines.length - releaseNoteIndex);
-  const releaseNotes = `## Pull Request Summary\n\n${releaseNoteLines.join('\n')}`;
+  const releaseNotes = `${HEADER}\n\n${releaseNoteLines.join('\n')}`;
 
   if (releaseNoteLines.length === 0) {
     core.info('No commit summary generated.');
@@ -32,8 +34,9 @@ export default async ({ github, context, core }) => {
   });
 
   const existingComment = comments.data.find(comment =>
-    comment?.body?.startsWith('## Pull Request Summary'),
+    comment?.body?.startsWith(HEADER),
   );
+
   if (existingComment) {
     await github.rest.issues.updateComment({
       comment_id: existingComment.id,
