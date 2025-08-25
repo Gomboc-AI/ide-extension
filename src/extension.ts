@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { testApiKeyCommand } from './commands/testApiKey';
 import { scanFileCommand } from './commands/scanFile';
 import { showBenchmarksCommand } from './commands/showFrameworks';
@@ -64,11 +65,19 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 }
 
+export const isRemediableFile = (filePath: string): boolean => {
+  const acceptedFileTypes = ['.tf', '.yaml', '.yml'];
+  const fileExtension = path.extname(filePath);
+  return acceptedFileTypes.includes(fileExtension);
+};
+
 const onSave = vscode.workspace.onDidSaveTextDocument(() => {
   const onSaveSetting = vscode.workspace
     .getConfiguration('gomboc-vscode-extension')
     .get('scanOnFileSave');
-  if (onSaveSetting) {
+  const openedFilepath =
+    vscode.window.activeTextEditor?.document.fileName ?? '';
+  if (onSaveSetting && isRemediableFile(openedFilepath)) {
     vscode.commands.executeCommand('gomboc-vscode-extension.scanFile');
   }
 });
