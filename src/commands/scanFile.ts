@@ -63,6 +63,7 @@ async function getTFScenarioFiles(
 ): Promise<IacScanContent[]> {
   // updating this to use native os path so we can support windows
   // fsPath is the native reading path, and .path is the unix style vscode path
+  // Note, we most likely just want to use fsPath for most purposes 
   const currentFilePath = document.uri.fsPath;
 
   const directoryPath = path.dirname(currentFilePath);
