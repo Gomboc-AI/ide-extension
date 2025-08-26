@@ -91,6 +91,9 @@ export class ScanResultsProvider {
     for (const remediation of this.individualRemediations) {
       const filepath =
         remediation.codeObservation.codeResourceInstance.filepath;
+      if (remediation.fixes.length === 0) {
+        continue;
+      }
       const existingData = existingResourceBenchmarkFixes[filepath];
       if (!existingData) {
         existingResourceBenchmarkFixes[filepath] = [remediation];
