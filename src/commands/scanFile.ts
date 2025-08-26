@@ -1,6 +1,7 @@
 import { ScanLocalScenarioInput } from './../api/__generated__/graphql';
 // scans current working file or scenarioimport * as vscode from 'vscode';
 import * as vscode from 'vscode';
+import * as os from 'os';
 import { CustomerApiClient } from '../api/client';
 import { getFileType } from '../utils/lib';
 import {
@@ -8,6 +9,7 @@ import {
   IacScanContent,
 } from '../api/__generated__/graphql';
 import { ScanResultsProvider } from '../providers/scanResultsProvider';
+import * as path from 'path';
 
 export async function scanFileCommand(
   context: vscode.ExtensionContext,
@@ -59,21 +61,26 @@ export async function scanFileCommand(
 async function getTFScenarioFiles(
   document: vscode.TextDocument,
 ): Promise<IacScanContent[]> {
-  const currentFileUri = document.uri;
-  const directoryUri = currentFileUri.with({
-    path: currentFileUri.path.replace(/\/[^/]*$/, '/'),
-  });
+  // updating this to use native os path so we can support windows
+  // fsPath is the native reading path, and .path is the unix style vscode path
+  const currentFilePath = document.uri.fsPath;
 
-  const entries = await vscode.workspace.fs.readDirectory(directoryUri);
+  const directoryPath = path.dirname(currentFilePath);
+  const entries = await vscode.workspace.fs.readDirectory(
+    vscode.Uri.file(directoryPath),
+  );
 
   const contents: IacScanContent[] = [];
   for (const [name, fileType] of entries) {
     if (fileType === vscode.FileType.File && name.endsWith('.tf')) {
-      const fileUri = vscode.Uri.joinPath(directoryUri, name);
+      const filePath = path.join(directoryPath, name);
+      const fileUri = vscode.Uri.file(filePath);
+
       const data = await vscode.workspace.fs.readFile(fileUri);
-      const contentString = new TextDecoder().decode(data); // cant convert from unit8array to base64 directly
+      const contentString = new TextDecoder().decode(data);
+
       contents.push({
-        filePath: fileUri.fsPath,
+        filePath: filePath, // Use the native OS path directly
         fileContent: btoa(contentString),
       });
     }
