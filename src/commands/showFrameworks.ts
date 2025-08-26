@@ -8,9 +8,9 @@ import { getHTMLForBenchmarks } from '../views/frameworkPanel';
  */
 export async function showBenchmarksCommand(
   context: vscode.ExtensionContext,
-  apiClient: CustomerApiClient,
 ) {
   try {
+    const apiClient = new CustomerApiClient();
     const benchmarks =
       await apiClient.securityAdoptedBenchmarkRecommendations();
 

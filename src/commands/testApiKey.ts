@@ -8,9 +8,9 @@ import { CustomerApiClient } from '../api/client';
  */
 export async function testApiKeyCommand(
   _: vscode.ExtensionContext,
-  apiClient: CustomerApiClient,
 ) {
   try {
+    const apiClient = new CustomerApiClient();
     await apiClient.healthCheck();
     vscode.window.showInformationMessage('API Key test success!');
   } catch (error) {
