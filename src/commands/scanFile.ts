@@ -1,7 +1,6 @@
 import { ScanLocalScenarioInput } from './../api/__generated__/graphql';
 // scans current working file or scenarioimport * as vscode from 'vscode';
 import * as vscode from 'vscode';
-import * as os from 'os';
 import { CustomerApiClient } from '../api/client';
 import { getFileType } from '../utils/lib';
 import {
