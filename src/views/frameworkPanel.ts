@@ -8,35 +8,37 @@ import { SecurityBenchmarkQueryBenchmarkArray } from '../api/client';
 export function getHTMLForBenchmarks(
   benchmarks: SecurityBenchmarkQueryBenchmarkArray,
 ) {
-  // Create simple list of plicy statements
-
+  // Create simple list of policy statements
   const statementsList = benchmarks
-    .map(benchmark => {
-      const versions = benchmark.versions.map(version => {
-        const recommendations = version.recommendations.map(recommendation => {
-          return `
+    .reduce((acc:string[],benchmark) => {
+      const versions = benchmark.versions.reduce((acc:string[], version) => {
+        const recommendations = version.recommendations.reduce((acc:string[], recommendation) => {
+          if (!recommendation.isAdopted){return acc;};
+          return [...acc,`
           <li>
             <p>Recommendation: ${recommendation.name}</p>
             </li>
-        `;
-        });
-        return `
+        `];
+        },[] as string[]);
+        if (recommendations.length ===0){return acc;};
+        return [...acc,`
         <li>
             <p>Version: ${version.name}</p>
             <ul>
             ${recommendations.join('')}
             </ul>
             </li>
-        `;
-      });
-      return `
+        `];
+      },[] as string[]);
+      if (versions.length === 0){return acc;};
+      return [...acc,`
           <li>
             <p>Benchmark: ${benchmark.name}</p> 
             <ul>
               ${versions.join('')}
             </ul>
-          `;
-    })
+          `];
+    },[] as string[])
     .join('');
 
   return `

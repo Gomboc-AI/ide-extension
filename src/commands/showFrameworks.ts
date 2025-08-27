@@ -9,9 +9,6 @@ import { getHTMLForBenchmarks } from '../views/frameworkPanel';
 export async function showBenchmarksCommand(context: vscode.ExtensionContext) {
   try {
     const apiClient = new CustomerApiClient();
-    const benchmarks =
-      await apiClient.securityAdoptedBenchmarkRecommendations();
-
     // if success, display a webview of the data
     const panel = vscode.window.createWebviewPanel(
       'myWebview',
@@ -19,6 +16,21 @@ export async function showBenchmarksCommand(context: vscode.ExtensionContext) {
       vscode.ViewColumn.One,
       {},
     );
+    panel.webview.html = `<html>
+      <head>
+        <meta charset="utf-8" />
+        <style>
+          body { font-family: sans-serif; padding: 1rem; }
+          li { margin-bottom: 1rem; }
+        </style>
+      </head>
+      <body>
+        <h1>Retrieving your adopted security benchmarks...</h2>
+      </body>
+    </html>`;
+    const benchmarks =
+      await apiClient.securityAdoptedBenchmarkRecommendations();
+
     const htmlContent = getHTMLForBenchmarks(benchmarks);
     panel.webview.html = htmlContent;
   } catch (error) {
