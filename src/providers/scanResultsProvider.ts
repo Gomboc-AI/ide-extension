@@ -111,7 +111,7 @@ export class ScanResultsProvider {
     }
 
     for (const filepath in existingResourceBenchmarkFixes) {
-      const uri = vscode.Uri.parse(filepath);
+      const uri = vscode.Uri.file(filepath);
       const currentRemediation = existingResourceBenchmarkFixes[filepath];
       const curDiag: Array<
         IndividualFixGombocDiagnostic | GroupedFixGombocDiagnostic
