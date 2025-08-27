@@ -1,6 +1,5 @@
-import { createParserOpts } from './ci/parser.js';
-import { whatBump } from './ci/whatBump.js';
-import { createWriterOpts } from './ci/writer.js';
+import { createParserOpts } from './ci/parser.mjs';
+import { createWriterOpts } from './ci/writer.mjs';
 
 /**
  * @type {import('semantic-release').GlobalConfig}
@@ -47,17 +46,17 @@ export default {
         },
       },
     ],
-    [
-      'semantic-release-vsce',
-      {
-        packageVsix: true,
-      },
-    ],
-    [
-      '@semantic-release/github',
-      {
-        assets: '*.vsix',
-      },
-    ],
+    // [
+    //   'semantic-release-vsce',
+    //   {
+    //     packageVsix: true,
+    //   },
+    // ],
+    // [
+    //   '@semantic-release/github',
+    //   {
+    //     assets: '*.vsix',
+    //   },
+    // ],
   ],
 };
