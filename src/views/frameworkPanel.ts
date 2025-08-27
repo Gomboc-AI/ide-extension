@@ -10,35 +10,53 @@ export function getHTMLForBenchmarks(
 ) {
   // Create simple list of policy statements
   const statementsList = benchmarks
-    .reduce((acc:string[],benchmark) => {
-      const versions = benchmark.versions.reduce((acc:string[], version) => {
-        const recommendations = version.recommendations.reduce((acc:string[], recommendation) => {
-          if (!recommendation.isAdopted){return acc;};
-          return [...acc,`
+    .reduce((acc: string[], benchmark) => {
+      const versions = benchmark.versions.reduce((acc: string[], version) => {
+        const recommendations = version.recommendations.reduce(
+          (acc: string[], recommendation) => {
+            if (!recommendation.isAdopted) {
+              return acc;
+            }
+            return [
+              ...acc,
+              `
           <li>
             <p>Recommendation: ${recommendation.name}</p>
             </li>
-        `];
-        },[] as string[]);
-        if (recommendations.length ===0){return acc;};
-        return [...acc,`
+        `,
+            ];
+          },
+          [] as string[],
+        );
+        if (recommendations.length === 0) {
+          return acc;
+        }
+        return [
+          ...acc,
+          `
         <li>
             <p>Version: ${version.name}</p>
             <ul>
             ${recommendations.join('')}
             </ul>
             </li>
-        `];
-      },[] as string[]);
-      if (versions.length === 0){return acc;};
-      return [...acc,`
+        `,
+        ];
+      }, [] as string[]);
+      if (versions.length === 0) {
+        return acc;
+      }
+      return [
+        ...acc,
+        `
           <li>
             <p>Benchmark: ${benchmark.name}</p> 
             <ul>
               ${versions.join('')}
             </ul>
-          `];
-    },[] as string[])
+          `,
+      ];
+    }, [] as string[])
     .join('');
 
   return `
