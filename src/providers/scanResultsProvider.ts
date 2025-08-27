@@ -111,7 +111,10 @@ export class ScanResultsProvider {
     }
 
     for (const filepath in existingResourceBenchmarkFixes) {
-      const uri = vscode.Uri.parse(filepath);
+      // note: file at this piont has \ -> will cause issues when we give it to diagnosticCollection
+      // later as vscode expects a uri to have it's unix style / pathing
+      // use Uri.file to get unix style, Uri.parse gets the windows style
+      const uri = vscode.Uri.file(filepath);
       const currentRemediation = existingResourceBenchmarkFixes[filepath];
       const curDiag: Array<
         IndividualFixGombocDiagnostic | GroupedFixGombocDiagnostic
