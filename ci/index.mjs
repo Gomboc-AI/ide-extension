@@ -1,6 +1,6 @@
-import { createParserOpts } from './parser.js';
-import { createWriterOpts } from './writer.js';
-import { whatBump } from './whatBump.js';
+import { createParserOpts } from './parser.mjs';
+import { createWriterOpts } from './writer.mjs';
+import { whatBump } from './whatBump.mjs';
 
 export default async function createPreset() {
   return {
