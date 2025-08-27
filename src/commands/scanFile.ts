@@ -12,9 +12,9 @@ import * as path from 'path';
 
 export async function scanFileCommand(
   context: vscode.ExtensionContext,
-  apiClient: CustomerApiClient,
   scanResultsProvider: ScanResultsProvider,
 ) {
+  const apiClient = new CustomerApiClient();
   // ----- Gather input ------- //
   const editor = vscode.window.activeTextEditor;
   if (!editor) {

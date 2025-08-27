@@ -11,7 +11,6 @@ import { GombocInfoViewProvider } from './providers/sidebarProvider';
 
 export async function activate(context: vscode.ExtensionContext) {
   logger.info('VSCode extension activated .... ');
-  const apiClient = new CustomerApiClient();
   // diagnostics initialization
   const diagnosticCollection =
     vscode.languages.createDiagnosticCollection('Gomboc-Results');
@@ -22,15 +21,15 @@ export async function activate(context: vscode.ExtensionContext) {
   const commands = [
     {
       name: 'gomboc-vscode-extension.testApiKey',
-      handler: () => testApiKeyCommand(context, apiClient),
+      handler: () => testApiKeyCommand(context),
     },
     {
       name: 'gomboc-vscode-extension.scanFile',
-      handler: () => scanFileCommand(context, apiClient, scanResults),
+      handler: () => scanFileCommand(context, scanResults),
     },
     {
       name: 'gomboc-vscode-extension.showBenchmarks',
-      handler: () => showBenchmarksCommand(context, apiClient),
+      handler: () => showBenchmarksCommand(context),
     },
   ];
 
@@ -59,6 +58,7 @@ export async function activate(context: vscode.ExtensionContext) {
         { language: 'terraform', scheme: 'file' },
         { language: 'json', scheme: 'file' },
         { language: 'yaml', scheme: 'file' },
+        { language: 'plaintext', scheme: 'file' },
       ],
       new CodeActionProvider(),
     ),

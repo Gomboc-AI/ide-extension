@@ -6,11 +6,9 @@ import { getHTMLForBenchmarks } from '../views/frameworkPanel';
 /**
  * Opens up a webview displaying all the organizations current security policy
  */
-export async function showBenchmarksCommand(
-  context: vscode.ExtensionContext,
-  apiClient: CustomerApiClient,
-) {
+export async function showBenchmarksCommand(context: vscode.ExtensionContext) {
   try {
+    const apiClient = new CustomerApiClient();
     const benchmarks =
       await apiClient.securityAdoptedBenchmarkRecommendations();
 
