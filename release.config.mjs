@@ -46,17 +46,17 @@ export default {
         },
       },
     ],
-    // [
-    //   'semantic-release-vsce',
-    //   {
-    //     packageVsix: true,
-    //   },
-    // ],
-    // [
-    //   '@semantic-release/github',
-    //   {
-    //     assets: '*.vsix',
-    //   },
-    // ],
+    [
+      'semantic-release-vsce',
+      {
+        packageVsix: true,
+      },
+    ],
+    [
+      '@semantic-release/github',
+      {
+        assets: '*.vsix',
+      },
+    ],
   ],
 };
