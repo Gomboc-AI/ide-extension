@@ -25,7 +25,7 @@ Once you have the API key go to `Settings > Extensions > Gomboc` and drop it in 
 That's all you need!
 
 ### Commands 
-* `Test API Key` - Test your api key connection and make sure that it can hit our server
+* `Test API Key` - Test your API key connection and make sure that it can hit our server
 * `Show organization benchmarks` - Display the security policy that your organization has enabled
 * `Scan current file or scenario` - Perform a scan
 
