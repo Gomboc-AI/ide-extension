@@ -41,6 +41,17 @@ export async function activate(context: vscode.ExtensionContext) {
     diagnosticCollection.clear();
   });
 
+  const onSave = vscode.workspace.onDidSaveTextDocument(() => {
+    const onSaveSetting = vscode.workspace
+      .getConfiguration('gomboc-vscode-extension')
+      .get('scanOnFileSave');
+    const openedFilepath =
+      vscode.window.activeTextEditor?.document.fileName ?? '';
+    if (onSaveSetting && isRemediableFile(openedFilepath)) {
+      vscode.commands.executeCommand('gomboc-vscode-extension.scanFile');
+    }
+  });
+
   const sidebarWebview = vscode.window.registerWebviewViewProvider(
     'gombocInfoView',
     new GombocInfoViewProvider(context),
@@ -70,17 +81,6 @@ export const isRemediableFile = (filePath: string): boolean => {
   const fileExtension = path.extname(filePath);
   return acceptedFileTypes.includes(fileExtension);
 };
-
-const onSave = vscode.workspace.onDidSaveTextDocument(() => {
-  const onSaveSetting = vscode.workspace
-    .getConfiguration('gomboc-vscode-extension')
-    .get('scanOnFileSave');
-  const openedFilepath =
-    vscode.window.activeTextEditor?.document.fileName ?? '';
-  if (onSaveSetting && isRemediableFile(openedFilepath)) {
-    vscode.commands.executeCommand('gomboc-vscode-extension.scanFile');
-  }
-});
 
 const onConfigChange = (
   disposables: vscode.Disposable[],
