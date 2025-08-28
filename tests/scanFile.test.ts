@@ -11,11 +11,13 @@ describe('getCFNFile()', () => {
     // 2) run your helper
     const result = getCFNFile(fakeDoc as any);
 
-    // 3) assert it did the btoa conversion correctly
+    // 3) assert it did the base64 conversion correctly
     expect(result).toEqual([
       {
         filePath: '/workspace/template.json',
-        fileContent: btoa('{"hello":"world"}'),
+        fileContent: Buffer.from('{"hello":"world"}', 'utf8').toString(
+          'base64',
+        ),
       },
     ]);
   });

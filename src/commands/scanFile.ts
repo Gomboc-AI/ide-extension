@@ -81,7 +81,7 @@ async function getTFScenarioFiles(
 
       contents.push({
         filePath: filePath, // Use the native OS path directly
-        fileContent: btoa(contentString),
+        fileContent: Buffer.from(contentString, 'utf8').toString('base64'),
       });
     }
   }
@@ -95,7 +95,7 @@ export function getCFNFile(document: vscode.TextDocument): IacScanContent[] {
   return [
     {
       filePath: document.uri.fsPath,
-      fileContent: btoa(document.getText()),
+      fileContent: Buffer.from(document.getText(), 'utf8').toString('base64'),
     },
   ];
 }
