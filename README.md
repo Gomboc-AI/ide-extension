@@ -1,8 +1,8 @@
 ## Gomboc AI \- Cloud Security for IaC  
-Shift security left and eliminate cloud misconfigurations directly in your VSCode IDE. Build secure infrastructure with real-time fixes, compliance automation, and contextual guidance. Start your [free trial](https://www.gomboc.ai/free-trial) with Gomboc AI today\!
+Whether writing new cloud infrastructure or cleaning up legacy IaC, Gomboc's VS Code Plugin enables real-time, AI-generated code fixes. Start your [free trial](https://app.gomboc.ai/) with Gomboc AI today\!
 
 ## Overview   
-The Gomboc.ai VSCode Plugin transforms how developers handle cloud security in Infrastructure as Code (IaC). By integrating directly into your IDE, it eliminates security bottlenecks, automates compliance, and provides actionable fixes in real time—so you can deploy faster and safer.  
+The Gomboc.ai VSCode Plugin transforms how developers handle cloud issues in Infrastructure as Code (IaC). By integrating directly into your IDE, it eliminates security bottlenecks, automates compliance, and provides actionable fixes in real time, so you can deploy faster and safer.  
 
 ## Key Features
 
@@ -18,7 +18,7 @@ The Gomboc.ai VSCode Plugin transforms how developers handle cloud security in I
   Understand why a security control matters and how to implement it—eliminates hours of research.
 
 ## Getting Started
-To begin using the Gomboc VSCode plugin, you will need to acquire an API key. You can follow the [directions for API key creation](https://docs.gomboc.ai/api#creating-api-credentials) if you have a Gomboc subscription or you can get started with a [free trial](https://www.gomboc.ai/free-trial).
+To begin using the Gomboc VSCode plugin, you will need to acquire an API key. You can follow the [setup steps in our docs](https://docs.gomboc.ai/#id-1.-get-started-in-vs-code).
 
 Once you have the API key go to `Settings > Extensions > Gomboc` and drop it in the `Api Key` field.
 
