@@ -162,11 +162,11 @@ export class CustomerApiClient {
           individualFixes: data.individualFixes.remediations,
           groupedFixes: data.groupedFixes.remediatedFiles,
         };
-      } else if(data.individualFixes.__typename === 'GombocError'){
+      } else if (data.individualFixes.__typename === 'GombocError') {
         throw new Error(data.individualFixes.message);
-      } else if (data.groupedFixes.__typename === 'GombocError'){
+      } else if (data.groupedFixes.__typename === 'GombocError') {
         throw new Error(data.groupedFixes.message);
-      }else {
+      } else {
         throw new Error(
           'Please ensure that you have provided a valid IaC template',
         );
@@ -177,4 +177,3 @@ export class CustomerApiClient {
     }
   }
 }
-
