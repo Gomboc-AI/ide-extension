@@ -162,13 +162,17 @@ export class CustomerApiClient {
           individualFixes: data.individualFixes.remediations,
           groupedFixes: data.groupedFixes.remediatedFiles,
         };
+      } else if (data.individualFixes.__typename === 'GombocError') {
+        throw new Error(data.individualFixes.message);
+      } else if (data.groupedFixes.__typename === 'GombocError') {
+        throw new Error(data.groupedFixes.message);
       } else {
         throw new Error(
-          'Please ensure that you have provided a valid Terraform template',
+          'Please ensure that you have provided a valid IaC template',
         );
       }
     } catch (error) {
-      logger.error('Sending a single file or scenario failed', { error });
+      logger.error('Scanning the scenario failed', { error });
       throw error;
     }
   }
