@@ -67,6 +67,7 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.languages.registerCodeActionsProvider(
       [
         { language: 'terraform', scheme: 'file' },
+        { language: 'tf', scheme: 'file' },
         { language: 'json', scheme: 'file' },
         { language: 'yaml', scheme: 'file' },
         { language: 'plaintext', scheme: 'file' },
