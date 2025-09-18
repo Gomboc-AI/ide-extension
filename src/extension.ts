@@ -41,8 +41,10 @@ export async function activate(context: vscode.ExtensionContext) {
     diagnosticCollection.clear();
   });
 
-  const onSave = vscode.workspace.onDidSaveTextDocument((textDocument) => {
-    if (!textDocument.isDirty){return;}
+  const onSave = vscode.workspace.onDidSaveTextDocument(textDocument => {
+    if (!textDocument.isDirty) {
+      return;
+    }
     const onSaveSetting = vscode.workspace
       .getConfiguration('gomboc-vscode-extension')
       .get('scanOnFileSave');
