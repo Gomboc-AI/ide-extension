@@ -3,11 +3,13 @@ import * as path from 'path';
 import { testApiKeyCommand } from './commands/testApiKey';
 import { scanFileCommand } from './commands/scanFile';
 import { showBenchmarksCommand } from './commands/showFrameworks';
-import { CustomerApiClient } from './api/client';
 import logger from './utils/logger';
 import { ScanResultsProvider } from './providers/scanResultsProvider';
 import { CodeActionProvider } from './providers/codeActionProvider';
 import { GombocInfoViewProvider } from './providers/sidebarProvider';
+
+const previousContentMap = new Map<string, string>();
+
 
 export async function activate(context: vscode.ExtensionContext) {
   logger.info('VSCode extension activated .... ');
@@ -41,10 +43,15 @@ export async function activate(context: vscode.ExtensionContext) {
     diagnosticCollection.clear();
   });
 
-  const onSave = vscode.workspace.onDidSaveTextDocument(textDocument => {
-    if (!textDocument.isDirty) {
+  const onSave = vscode.workspace.onDidSaveTextDocument((document) => {
+    const previousContent = previousContentMap.get(document.uri.toString());
+    const currentContent = document.getText();
+    if (previousContent === currentContent) {
       return;
-    }
+    };
+    previousContentMap.set(document.uri.toString(), currentContent);
+
+
     const onSaveSetting = vscode.workspace
       .getConfiguration('gomboc-vscode-extension')
       .get('scanOnFileSave');
