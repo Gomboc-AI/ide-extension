@@ -10,6 +10,8 @@ import {
   IndividualFixesRemediation,
 } from '../api/client';
 import { FixType } from '../api/__generated__/graphql';
+import { DiagnosticCollectionManager } from '../diagnosticCollectionManager';
+import { getInfrastructureToolFromFileUri } from '../infrastructureTool';
 
 type IndividualFix = IndividualFixesRemediation['fixes'][number] &
   Pick<
@@ -25,7 +27,7 @@ export class ScanResultsProvider {
 
   private constructor(
     private context: vscode.ExtensionContext,
-    private diagnosticCollection: vscode.DiagnosticCollection,
+    private diagnosticCollectionManager: DiagnosticCollectionManager,
   ) {
     this.individualRemediations = [];
     this.groupedRemediations = [];
@@ -33,7 +35,7 @@ export class ScanResultsProvider {
 
   static init(
     context: vscode.ExtensionContext,
-    diagnosticCollection: vscode.DiagnosticCollection,
+    diagnosticCollectionManager: DiagnosticCollectionManager,
   ) {
     if (this.codeActionDisposable !== undefined) {
       this.codeActionDisposable.dispose();
@@ -41,7 +43,7 @@ export class ScanResultsProvider {
     if (this.scanResultsProviderInstance === null) {
       this.scanResultsProviderInstance = new ScanResultsProvider(
         context,
-        diagnosticCollection,
+        diagnosticCollectionManager,
       );
     }
     return this.scanResultsProviderInstance;
@@ -74,12 +76,6 @@ export class ScanResultsProvider {
 
   // uses the scan response to generate a diagnostic for the diagnostic collection
   createDiagnostic() {
-    // clears the diagnostics and quick fixes
-    this.diagnosticCollection.clear();
-    if (ScanResultsProvider.codeActionDisposable) {
-      ScanResultsProvider.codeActionDisposable.dispose();
-    }
-
     // the key represents the file path to the file that needs remediation
     const existingResourceBenchmarkFixes: Record<
       string,
@@ -110,7 +106,7 @@ export class ScanResultsProvider {
       existingGroupedFixes[filepath] = remediation;
     }
 
-    for (const filepath in existingResourceBenchmarkFixes) {
+    for (const filepath in existingResourceBenchmarkFixes) { 
       // note: file at this piont has \ -> will cause issues when we give it to diagnosticCollection
       // later as vscode expects a uri to have it's unix style / pathing
       // use Uri.file to get unix style, Uri.parse gets the windows style
@@ -158,7 +154,7 @@ export class ScanResultsProvider {
           source: 'Gomboc',
         });
       }
-      this.diagnosticCollection.set(uri, curDiag);
+      this.diagnosticCollectionManager.updateDiagnosticCollection(uri, curDiag);
     }
 
     vscode.window.showInformationMessage(
@@ -169,6 +165,7 @@ export class ScanResultsProvider {
   // Uses the scan result + diagnostic in order to apply a fix
   async applyIndividualRemediation(remediations: IndividualFixesRemediation[]) {
     const edit = new vscode.WorkspaceEdit();
+    const updatedFiles= new Set<string>()
     const allFixes: IndividualFix[] = remediations.reduce((acc, curr) => {
       const currentFixes: IndividualFix[] = curr.fixes.map(fix => ({
         ...fix,
@@ -179,6 +176,7 @@ export class ScanResultsProvider {
     }, [] as IndividualFix[]);
 
     for (const fix of allFixes) {
+      updatedFiles.add(fix.filepath)
       const fixPosition = fix.codePosition.line - 1;
       let startPosition = new vscode.Position(fixPosition, 0);
       let endPosition = new vscode.Position(fix.codePosition.line - 1, 999);
@@ -206,7 +204,11 @@ export class ScanResultsProvider {
     const success = await vscode.workspace.applyEdit(edit);
 
     // once we apply a remediation we have to dispose and clear everything and re-run
-    this.diagnosticCollection.clear();
+    for(const file of updatedFiles){
+      const uri = vscode.Uri.file(file);
+      const infrastructureTool = getInfrastructureToolFromFileUri(uri);
+      this.diagnosticCollectionManager.clearDiagnosticCollection(infrastructureTool, uri);
+    }
     if (ScanResultsProvider.codeActionDisposable) {
       ScanResultsProvider.codeActionDisposable.dispose();
     }
@@ -222,9 +224,9 @@ export class ScanResultsProvider {
   }
   async applyGroupedRemediation(remediations: GroupedFixesRemediation[]) {
     const fixEdit = new vscode.WorkspaceEdit();
-    const commentEdit = new vscode.WorkspaceEdit();
     for (const remediation of remediations) {
       const file = vscode.Uri.file(remediation.path);
+      const iac = getInfrastructureToolFromFileUri(file);
       const document = await vscode.workspace.openTextDocument(file);
       const decodedContent = Buffer.from(
         remediation.content,
@@ -247,7 +249,7 @@ export class ScanResultsProvider {
         await vscode.window.activeTextEditor?.document.save();
       }
       // once we apply a remediation we have to dispose and clear everything and re-run
-      this.diagnosticCollection.clear();
+      this.diagnosticCollectionManager.clearDiagnosticCollection(iac, file);
       if (ScanResultsProvider.codeActionDisposable) {
         ScanResultsProvider.codeActionDisposable.dispose();
       }
