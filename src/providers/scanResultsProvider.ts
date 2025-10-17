@@ -106,7 +106,7 @@ export class ScanResultsProvider {
       existingGroupedFixes[filepath] = remediation;
     }
 
-    for (const filepath in existingResourceBenchmarkFixes) { 
+    for (const filepath in existingResourceBenchmarkFixes) {
       // note: file at this piont has \ -> will cause issues when we give it to diagnosticCollection
       // later as vscode expects a uri to have it's unix style / pathing
       // use Uri.file to get unix style, Uri.parse gets the windows style
@@ -165,7 +165,7 @@ export class ScanResultsProvider {
   // Uses the scan result + diagnostic in order to apply a fix
   async applyIndividualRemediation(remediations: IndividualFixesRemediation[]) {
     const edit = new vscode.WorkspaceEdit();
-    const updatedFiles= new Set<string>()
+    const updatedFiles = new Set<string>();
     const allFixes: IndividualFix[] = remediations.reduce((acc, curr) => {
       const currentFixes: IndividualFix[] = curr.fixes.map(fix => ({
         ...fix,
@@ -176,7 +176,7 @@ export class ScanResultsProvider {
     }, [] as IndividualFix[]);
 
     for (const fix of allFixes) {
-      updatedFiles.add(fix.filepath)
+      updatedFiles.add(fix.filepath);
       const fixPosition = fix.codePosition.line - 1;
       let startPosition = new vscode.Position(fixPosition, 0);
       let endPosition = new vscode.Position(fix.codePosition.line - 1, 999);
@@ -204,10 +204,13 @@ export class ScanResultsProvider {
     const success = await vscode.workspace.applyEdit(edit);
 
     // once we apply a remediation we have to dispose and clear everything and re-run
-    for(const file of updatedFiles){
+    for (const file of updatedFiles) {
       const uri = vscode.Uri.file(file);
       const infrastructureTool = getInfrastructureToolFromFileUri(uri);
-      this.diagnosticCollectionManager.clearDiagnosticCollection(infrastructureTool, uri);
+      this.diagnosticCollectionManager.clearDiagnosticCollection(
+        infrastructureTool,
+        uri,
+      );
     }
     if (ScanResultsProvider.codeActionDisposable) {
       ScanResultsProvider.codeActionDisposable.dispose();
