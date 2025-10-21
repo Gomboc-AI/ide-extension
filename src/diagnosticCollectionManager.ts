@@ -38,8 +38,8 @@ export class DiagnosticCollectionManager {
   private clearDirectoryCollection(updatedFileUri: vscode.Uri) {
     const directory = path.dirname(updatedFileUri.path);
     this.diagnosticCollection.forEach(collection => {
-      const splitDirectory = collection.path.split(directory);
-      if (splitDirectory.length === 2) {
+      const [_, ...rest] = collection.path.split(directory);
+      if (rest.length === 1 && rest.join('').split('/').length === 2) {
         this.diagnosticCollection.set(vscode.Uri.file(collection.path), []);
       }
     });
