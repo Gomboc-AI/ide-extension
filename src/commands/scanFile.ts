@@ -31,7 +31,7 @@ export async function scanFileCommand(
 
 async function scanWithOrl(scanResultsProvider: ScanResultsProvider) {
   try {
-    logger.info('🚀 ORL SCAN STARTING - Extension updated!');
+    logger.info('ORL scan starting');
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
       return;
@@ -138,20 +138,17 @@ async function scanWithApiClient(scanResultsProvider: ScanResultsProvider) {
 
   scanResultsProvider.generateComments(scanResponse);
   scanResultsProvider.createDiagnostic();
-
-  // TODO
-  // ----- add a progress bar that possible measures the length of time? ------ //
 }
 
 /**
- * Convert ORL result to IDE extension scan response format
+ * Convert ORL result to IDE response format
  */
 async function convertOrlResultToScanResponse(
   result: any,
   filetype: string,
   currentFilePath: string,
 ): Promise<any> {
-  // Create individual fixes based on actual differences between original and modified files
+  // Create individual fixes based on differences between original and modified files
   const individualFixes: any[] = [];
   const groupedFixes: any[] = [];
 
@@ -301,7 +298,6 @@ function findDifferences(
     modifiedLines: modifiedLines.length,
   });
 
-  // Use a line-by-line comparison with better change detection
   let originalIndex = 0;
   let modifiedIndex = 0;
 
@@ -344,12 +340,12 @@ function findDifferences(
           nextMatch.modifiedIdx,
         );
 
-        // Try to break down large changes into smaller, more meaningful ones
+        // Try to break down large changes into smaller ones
         if (originalDiffLines.length === 0 && modifiedDiffLines.length > 0) {
-          // Pure addition - try to break into individual additions
+          // Pure addition - try to break into individual additions  (future work probably)
           for (let i = 0; i < modifiedDiffLines.length; i++) {
             const line = modifiedDiffLines[i];
-            // Only create separate fixes for lines that look like actual code changes
+            // Only create separate fixes for lines that look like actual changes (no commenting stuff)
             if (
               line.trim() &&
               !line.trim().startsWith('#') &&
@@ -403,7 +399,7 @@ function findDifferences(
           });
         }
 
-        break; // No more content to process
+        break; // No more content
       }
     }
   }
