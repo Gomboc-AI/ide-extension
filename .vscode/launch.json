@@ -10,7 +10,7 @@
       "type": "extensionHost",
       "request": "launch",
       "args": [
-        "/Users/derek/Documents/code/template2",
+        "${workspaceFolder}/test_development/tf_test",
         "--extensionDevelopmentPath=${workspaceFolder}"
       ],
       "outFiles": ["${workspaceFolder}/dist/**/*.js"],
