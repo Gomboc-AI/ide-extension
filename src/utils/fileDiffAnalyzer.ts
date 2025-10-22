@@ -16,11 +16,12 @@ export interface Change {
 
 /**
  * Utility class for analyzing differences between original and modified file content
+ * with improved grouping to avoid syntax issues
  */
 export class FileDiffAnalyzer {
   /**
    * Find differences between original and modified file content
-   * Uses a more granular approach to detect individual changes
+   * Uses intelligent grouping to avoid syntax issues
    */
   static findDifferences(
     originalContent: string,
@@ -77,48 +78,13 @@ export class FileDiffAnalyzer {
             nextMatch.modifiedIdx,
           );
 
-          // Try to break down large changes into smaller ones
-          if (originalDiffLines.length === 0 && modifiedDiffLines.length > 0) {
-            // Pure addition - try to break into individual additions
-            for (let i = 0; i < modifiedDiffLines.length; i++) {
-              const line = modifiedDiffLines[i];
-              // Only create separate fixes for lines that look like actual changes (no commenting stuff)
-              if (
-                line.trim() &&
-                !line.trim().startsWith('#') &&
-                !line.trim().startsWith('//')
-              ) {
-                differences.push({
-                  originalLine: originalIndex + 1,
-                  targetLine: originalIndex + 1,
-                  newLines: [line],
-                  type: 'ADD',
-                });
-              }
-            }
-          } else if (
-            modifiedDiffLines.length === 0 &&
-            originalDiffLines.length > 0
-          ) {
-            // Pure deletion
-            differences.push({
-              originalLine: originalIndex + 1,
-              targetLine: originalIndex + 1,
-              newLines: [],
-              type: 'DELETE',
-            });
-          } else if (
-            originalDiffLines.length > 0 &&
-            modifiedDiffLines.length > 0
-          ) {
-            // Mixed change - try to identify individual changes
-            const changes = this.identifyIndividualChanges(
-              originalDiffLines,
-              modifiedDiffLines,
-              originalIndex + 1,
-            );
-            differences.push(...changes);
-          }
+          // Use intelligent grouping instead of breaking into individual lines
+          const groupedChanges = this.createGroupedChanges(
+            originalDiffLines,
+            modifiedDiffLines,
+            originalIndex + 1,
+          );
+          differences.push(...groupedChanges);
 
           originalIndex = nextMatch.originalIdx;
           modifiedIndex = nextMatch.modifiedIdx;
@@ -155,7 +121,103 @@ export class FileDiffAnalyzer {
   }
 
   /**
+   * Create grouped changes that maintain syntax integrity
+   */
+  private static createGroupedChanges(
+    originalLines: string[],
+    modifiedLines: string[],
+    baseLine: number,
+  ): Difference[] {
+    const changes: Difference[] = [];
+
+    if (originalLines.length === 0 && modifiedLines.length > 0) {
+      // Pure addition - group related lines together
+      const groupedAdditions = this.groupRelatedLines(modifiedLines);
+      
+      for (const group of groupedAdditions) {
+        changes.push({
+          originalLine: baseLine,
+          targetLine: baseLine,
+          newLines: group,
+          type: 'ADD',
+        });
+      }
+    } else if (modifiedLines.length === 0 && originalLines.length > 0) {
+      // Pure deletion
+      changes.push({
+        originalLine: baseLine,
+        targetLine: baseLine,
+        newLines: [],
+        type: 'DELETE',
+      });
+    } else {
+      // Mixed change - treat as replacement
+      changes.push({
+        originalLine: baseLine,
+        targetLine: baseLine,
+        newLines: modifiedLines,
+        type: 'UPDATE',
+      });
+    }
+
+    return changes;
+  }
+
+  /**
+   * Group related lines together to maintain syntax integrity
+   */
+  private static groupRelatedLines(lines: string[]): string[][] {
+    const groups: string[][] = [];
+    let currentGroup: string[] = [];
+    let braceDepth = 0;
+
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      
+      // Skip empty lines and comments
+      if (!trimmedLine || trimmedLine.startsWith('#') || trimmedLine.startsWith('//')) {
+        if (currentGroup.length > 0) {
+          currentGroup.push(line);
+        }
+        continue;
+      }
+
+      // Track brace depth to group related blocks
+      const openBraces = (line.match(/{/g) || []).length;
+      const closeBraces = (line.match(/}/g) || []).length;
+      braceDepth += openBraces - closeBraces;
+
+      currentGroup.push(line);
+
+      // If we've closed all braces and have meaningful content, end the group
+      if (braceDepth === 0 && currentGroup.length > 0) {
+        groups.push([...currentGroup]);
+        currentGroup = [];
+      }
+    }
+
+    // Add any remaining lines as a final group
+    if (currentGroup.length > 0) {
+      groups.push(currentGroup);
+    }
+
+    // If no groups were created, create one group with all lines
+    if (groups.length === 0 && lines.length > 0) {
+      groups.push(lines);
+    }
+
+    logger.info('Grouped related lines', {
+      totalLines: lines.length,
+      groups: groups.length,
+      groupSizes: groups.map(g => g.length),
+    });
+
+    return groups;
+  }
+
+  /**
    * Identify individual changes within a larger diff block
+   * @deprecated - Use createGroupedChanges instead to avoid syntax issues
    */
   static identifyIndividualChanges(
     originalLines: string[],
