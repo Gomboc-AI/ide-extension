@@ -35,7 +35,7 @@ export async function testOrlConnectionCommand(
         if (isConnected) {
           vscode.window
             .showInformationMessage(
-              '✅ ORL connection test successful! Docker and ORL are properly configured.',
+              'ORL connection test successful',
               'Open Settings',
             )
             .then(selection => {
@@ -48,10 +48,7 @@ export async function testOrlConnectionCommand(
             });
         } else {
           vscode.window
-            .showErrorMessage(
-              '❌ ORL connection test failed. Please check your Docker installation and ORL configuration.',
-              'Open Settings',
-            )
+            .showErrorMessage('ORL connection test failed', 'Open Settings')
             .then(selection => {
               if (selection === 'Open Settings') {
                 vscode.commands.executeCommand(
