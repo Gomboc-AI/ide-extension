@@ -151,7 +151,7 @@ export class OrlClient {
   }
 
   /**
-   * Pull rules using ORL's built-in rules pull command
+   * Pull rules
    */
   private async pullRulesUsingOrl(rulesDir: string): Promise<void> {
     const {
@@ -161,7 +161,7 @@ export class OrlClient {
       channel,
     } = this.config;
 
-    // Use ORL's rules pull command instead of duplicating the API logic
+    // reuse ORL's rules pull command
     const pullCommand = `docker run --rm \
       -v '${rulesDir}:/output' \
       -e RULE_SERVICE_TOKEN='${rulesServiceToken}' \
