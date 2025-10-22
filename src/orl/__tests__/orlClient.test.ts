@@ -1,0 +1,76 @@
+import { OrlClient } from '../orl/orlClient';
+
+describe('OrlClient', () => {
+  let orlClient: OrlClient;
+
+  beforeEach(() => {
+    orlClient = new OrlClient({
+      containerImage: 'gomboc/orl:latest',
+      rulesServiceUrl: 'https://rules.app.gomboc.ai',
+      rulesServiceToken: 'test-token',
+      rulesServiceAccountId: 'test-account-id',
+    });
+  });
+
+  describe('parseOrlOutput', () => {
+    it('should parse ORL dry-run output correctly', () => {
+      const mockOutput = `---
+main.tf
+resource "aws_s3_bucket" "example" {
+  bucket = "my-bucket"
+  acl    = "private"
+}
+---
+variables.tf
+variable "bucket_name" {
+  description = "Name of the S3 bucket"
+  type        = string
+}`;
+
+      // Access private method for testing
+      const result = (orlClient as any).parseOrlOutput(mockOutput);
+
+      expect(result).toEqual({
+        'main.tf': 'resource "aws_s3_bucket" "example" {\n  bucket = "my-bucket"\n  acl    = "private"\n}',
+        'variables.tf': 'variable "bucket_name" {\n  description = "Name of the S3 bucket"\n  type        = string\n}'
+      });
+    });
+
+    it('should handle unchanged files', () => {
+      const mockOutput = `---
+main.tf is unchanged.
+---
+variables.tf
+variable "bucket_name" {
+  description = "Name of the S3 bucket"
+  type        = string
+}`;
+
+      const result = (orlClient as any).parseOrlOutput(mockOutput);
+
+      expect(result).toEqual({
+        'variables.tf': 'variable "bucket_name" {\n  description = "Name of the S3 bucket"\n  type        = string\n}'
+      });
+    });
+
+    it('should handle empty output', () => {
+      const result = (orlClient as any).parseOrlOutput('');
+      expect(result).toEqual({});
+    });
+  });
+
+  describe('isIacFile', () => {
+    it('should identify IaC files correctly', () => {
+      expect((orlClient as any).isIacFile('main.tf')).toBe(true);
+      expect((orlClient as any).isIacFile('template.yaml')).toBe(true);
+      expect((orlClient as any).isIacFile('config.yml')).toBe(true);
+      expect((orlClient as any).isIacFile('data.json')).toBe(true);
+    });
+
+    it('should reject non-IaC files', () => {
+      expect((orlClient as any).isIacFile('README.md')).toBe(false);
+      expect((orlClient as any).isIacFile('script.sh')).toBe(false);
+      expect((orlClient as any).isIacFile('package.json')).toBe(false);
+    });
+  });
+});
