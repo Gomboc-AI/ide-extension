@@ -6,10 +6,12 @@ The Gomboc VS Code extension can use ORL (Open Remediation Language) for local s
 
 1. **Enable feature flag**: `gomboc-vscode-extension.remediateOrlEnabled = true`
 2. **Configure credentials**:
-  - `orlRulesServiceToken` - Rules service authentication token
-  - `orlRulesServiceAccountId` - Account ID for rules service
-  - `orlRulesServiceUrl` - Rules service URL (default: `https://rules.app.gomboc.ai`)
-  - `orlChannel` - Channel name (default: `default`)
+
+- `orlRulesServiceToken` - Rules service authentication token
+- `orlRulesServiceAccountId` - Account ID for rules service
+- `orlRulesServiceUrl` - Rules service URL (default: `https://rules.app.gomboc.ai`)
+- `orlChannel` - Channel name (default: `default`)
+
 3. **Ensure Docker is running**
 
 ## How It Works
