@@ -3,6 +3,7 @@ import * as path from 'path';
 import logger from '../utils/logger';
 import { PathConverter } from '../utils/pathConverter';
 import { FileDiffAnalyzer, Difference } from '../utils/fileDiffAnalyzer';
+import { DiffContentAnalyzer } from '../utils/diffContentAnalyzer';
 
 export interface OrlResult {
   success: boolean;
@@ -84,6 +85,10 @@ export class OrlResultConverter {
       // This ensures we always create the correct number of fixes
       for (let i = 0; i < differences.length; i++) {
         const diff = differences[i];
+
+        // Analyze the diff content to extract meaningful information
+        const analysis = DiffContentAnalyzer.analyzeDiffContent(diff);
+
         const fix = {
           filepath: actualFilePath,
           oldLine: diff.originalLine,
@@ -101,8 +106,8 @@ export class OrlResultConverter {
           benchmarkRecommendation: {
             id: `orl-recommendation-${i}`,
             identifier: 'ORL_REMEDIATION',
-            name: 'ORL Security Remediation',
-            description: `Automated security remediation via ORL (fix ${i + 1})`,
+            name: analysis.description,
+            description: analysis.description,
           },
           fixes: [fix],
           codeObservation: {
@@ -125,16 +130,19 @@ export class OrlResultConverter {
         content: Buffer.from(modifiedContent as string, 'utf8').toString(
           'base64',
         ),
-        comments: differences.map((diff: Difference, i: number) => ({
-          position: {
-            line: diff.targetLine,
-            column: 0,
-          },
-          benchmarkRecommendation: {
-            id: `orl-recommendation-${i}`,
-            name: `Apply all ${differences.length} ORL security fixes`,
-          },
-        })),
+        comments: differences.map((diff: Difference, i: number) => {
+          const analysis = DiffContentAnalyzer.analyzeDiffContent(diff);
+          return {
+            position: {
+              line: diff.targetLine,
+              column: 0,
+            },
+            benchmarkRecommendation: {
+              id: `orl-recommendation-${i}`,
+              name: analysis.description,
+            },
+          };
+        }),
       };
 
       groupedFixes.push(groupedFix);

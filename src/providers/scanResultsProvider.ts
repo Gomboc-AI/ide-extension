@@ -138,7 +138,7 @@ export class ScanResultsProvider {
 
         diagnosticTotal++;
         curDiag.push({
-          message: `Fix for ${remediation.codeObservation.codeResourceInstance.type} to enforce apply recommendation ${remediation.benchmarkRecommendation.name} with Gomboc`,
+          message: `${remediation.benchmarkRecommendation.name} with Gomboc`,
           individualFixGombocResult: remediation,
           quickFixMessage: `Fix with Gomboc ${remediation.benchmarkRecommendation.name} for ${remediation.codeObservation.codeResourceInstance.type}`,
           range: new vscode.Range(startPosition, endPosition),
