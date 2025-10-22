@@ -40,16 +40,21 @@ async function scanWithOrl(scanResultsProvider: ScanResultsProvider) {
     const document = editor.document;
     const filePath = document.uri.fsPath;
     const workspacePath = path.dirname(filePath);
-    
-    logger.info('ORL scanning scope', { 
+
+    logger.info('ORL scanning scope', {
       currentFile: filePath,
       workspacePath: workspacePath,
-      scope: 'workspace-level (all IaC files in directory)'
+      scope: 'workspace-level (all IaC files in directory)',
     });
 
     // Validate file type
     const filetype = getFileType(filePath);
-    if (filetype !== 'tf' && filetype !== 'yml' && filetype !== 'yaml' && filetype !== 'json') {
+    if (
+      filetype !== 'tf' &&
+      filetype !== 'yml' &&
+      filetype !== 'yaml' &&
+      filetype !== 'json'
+    ) {
       vscode.window.showErrorMessage(
         'Current file is not a cloudformation or terraform file',
       );
@@ -74,18 +79,23 @@ async function scanWithOrl(scanResultsProvider: ScanResultsProvider) {
     }
 
     // Convert ORL result to IDE extension format
-    const scanResponse = await convertOrlResultToScanResponse(result, filetype, filePath);
-    logger.info('ORL scan response converted', { 
+    const scanResponse = await convertOrlResultToScanResponse(
+      result,
+      filetype,
+      filePath,
+    );
+    logger.info('ORL scan response converted', {
       individualFixesCount: scanResponse.individualFixes.length,
       groupedFixesCount: scanResponse.groupedFixes.length,
-      modifiedFiles: Object.keys(result.modifiedFiles)
+      modifiedFiles: Object.keys(result.modifiedFiles),
     });
     scanResultsProvider.generateComments(scanResponse);
     scanResultsProvider.createDiagnostic();
-
   } catch (error) {
     logger.error('ORL scan failed', { error });
-    vscode.window.showErrorMessage(`ORL scan failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    vscode.window.showErrorMessage(
+      `ORL scan failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    );
   }
 }
 
@@ -136,44 +146,61 @@ async function scanWithApiClient(scanResultsProvider: ScanResultsProvider) {
 /**
  * Convert ORL result to IDE extension scan response format
  */
-async function convertOrlResultToScanResponse(result: any, filetype: string, currentFilePath: string): Promise<any> {
+async function convertOrlResultToScanResponse(
+  result: any,
+  filetype: string,
+  currentFilePath: string,
+): Promise<any> {
   // Create individual fixes based on actual differences between original and modified files
   const individualFixes: any[] = [];
   const groupedFixes: any[] = [];
 
-  for (const [orlFilePath, modifiedContent] of Object.entries(result.modifiedFiles)) {
+  for (const [orlFilePath, modifiedContent] of Object.entries(
+    result.modifiedFiles,
+  )) {
     // Convert ORL path (/workspace/file.tf) to actual file path
-    const actualFilePath = convertOrlPathToActualPath(orlFilePath as string, currentFilePath);
-    
+    const actualFilePath = convertOrlPathToActualPath(
+      orlFilePath as string,
+      currentFilePath,
+    );
+
     // Read the original file content
-    const originalContent = await vscode.workspace.fs.readFile(vscode.Uri.file(actualFilePath));
+    const originalContent = await vscode.workspace.fs.readFile(
+      vscode.Uri.file(actualFilePath),
+    );
     const originalText = new TextDecoder().decode(originalContent);
-    
+
     // Find the differences between original and modified content
     logger.info('File content comparison', {
       file: actualFilePath,
       originalLength: originalText.length,
       modifiedLength: (modifiedContent as string).length,
       originalPreview: originalText.split('\n').slice(0, 5).join('\n'),
-      modifiedPreview: (modifiedContent as string).split('\n').slice(0, 5).join('\n')
+      modifiedPreview: (modifiedContent as string)
+        .split('\n')
+        .slice(0, 5)
+        .join('\n'),
     });
-    
-    const differences = findDifferences(originalText, modifiedContent as string);
-    
+
+    const differences = findDifferences(
+      originalText,
+      modifiedContent as string,
+    );
+
     if (differences.length === 0) {
       logger.info('No differences found for file', { file: actualFilePath });
       continue;
     }
 
-    logger.info('Found differences in file', { 
-      file: actualFilePath, 
+    logger.info('Found differences in file', {
+      file: actualFilePath,
       differenceCount: differences.length,
-      differences: differences.map(d => ({ 
-        line: d.targetLine, 
-        type: d.type, 
+      differences: differences.map(d => ({
+        line: d.targetLine,
+        type: d.type,
         newLinesCount: d.newLines.length,
-        newLines: d.newLines.slice(0, 3) // Show first 3 lines of changes
-      }))
+        newLines: d.newLines.slice(0, 3), // Show first 3 lines of changes
+      })),
     });
 
     // Create individual fixes for each difference found
@@ -218,7 +245,9 @@ async function convertOrlResultToScanResponse(result: any, filetype: string, cur
     // Create grouped fix for the entire file
     const groupedFix = {
       path: actualFilePath,
-      content: Buffer.from(modifiedContent as string, 'utf8').toString('base64'),
+      content: Buffer.from(modifiedContent as string, 'utf8').toString(
+        'base64',
+      ),
       comments: differences.map((diff, i) => ({
         position: {
           line: diff.targetLine,
@@ -234,9 +263,9 @@ async function convertOrlResultToScanResponse(result: any, filetype: string, cur
     groupedFixes.push(groupedFix);
   }
 
-  logger.info('Created fixes', { 
+  logger.info('Created fixes', {
     individualFixesCount: individualFixes.length,
-    groupedFixesCount: groupedFixes.length 
+    groupedFixesCount: groupedFixes.length,
   });
 
   return {
@@ -249,7 +278,10 @@ async function convertOrlResultToScanResponse(result: any, filetype: string, cur
  * Find differences between original and modified file content
  * Uses a more granular approach to detect individual changes
  */
-function findDifferences(originalContent: string, modifiedContent: string): Array<{
+function findDifferences(
+  originalContent: string,
+  modifiedContent: string,
+): Array<{
   originalLine: number;
   targetLine: number;
   newLines: string[];
@@ -264,16 +296,19 @@ function findDifferences(originalContent: string, modifiedContent: string): Arra
     type: 'ADD' | 'UPDATE' | 'DELETE';
   }> = [];
 
-  logger.info('Comparing files', { 
-    originalLines: originalLines.length, 
-    modifiedLines: modifiedLines.length 
+  logger.info('Comparing files', {
+    originalLines: originalLines.length,
+    modifiedLines: modifiedLines.length,
   });
 
   // Use a line-by-line comparison with better change detection
   let originalIndex = 0;
   let modifiedIndex = 0;
 
-  while (originalIndex < originalLines.length || modifiedIndex < modifiedLines.length) {
+  while (
+    originalIndex < originalLines.length ||
+    modifiedIndex < modifiedLines.length
+  ) {
     const originalLine = originalLines[originalIndex] || '';
     const modifiedLine = modifiedLines[modifiedIndex] || '';
 
@@ -284,7 +319,7 @@ function findDifferences(originalContent: string, modifiedContent: string): Arra
     } else {
       // Lines differ - find the next matching line
       let nextMatch = { originalIdx: -1, modifiedIdx: -1 };
-      
+
       // Look ahead for the next matching line
       for (let i = originalIndex + 1; i < originalLines.length; i++) {
         for (let j = modifiedIndex + 1; j < modifiedLines.length; j++) {
@@ -300,8 +335,14 @@ function findDifferences(originalContent: string, modifiedContent: string): Arra
 
       if (nextMatch.originalIdx !== -1) {
         // Found a match - analyze the difference
-        const originalDiffLines = originalLines.slice(originalIndex, nextMatch.originalIdx);
-        const modifiedDiffLines = modifiedLines.slice(modifiedIndex, nextMatch.modifiedIdx);
+        const originalDiffLines = originalLines.slice(
+          originalIndex,
+          nextMatch.originalIdx,
+        );
+        const modifiedDiffLines = modifiedLines.slice(
+          modifiedIndex,
+          nextMatch.modifiedIdx,
+        );
 
         // Try to break down large changes into smaller, more meaningful ones
         if (originalDiffLines.length === 0 && modifiedDiffLines.length > 0) {
@@ -309,7 +350,11 @@ function findDifferences(originalContent: string, modifiedContent: string): Arra
           for (let i = 0; i < modifiedDiffLines.length; i++) {
             const line = modifiedDiffLines[i];
             // Only create separate fixes for lines that look like actual code changes
-            if (line.trim() && !line.trim().startsWith('#') && !line.trim().startsWith('//')) {
+            if (
+              line.trim() &&
+              !line.trim().startsWith('#') &&
+              !line.trim().startsWith('//')
+            ) {
               differences.push({
                 originalLine: originalIndex + 1,
                 targetLine: originalIndex + 1,
@@ -318,7 +363,10 @@ function findDifferences(originalContent: string, modifiedContent: string): Arra
               });
             }
           }
-        } else if (modifiedDiffLines.length === 0 && originalDiffLines.length > 0) {
+        } else if (
+          modifiedDiffLines.length === 0 &&
+          originalDiffLines.length > 0
+        ) {
           // Pure deletion
           differences.push({
             originalLine: originalIndex + 1,
@@ -326,9 +374,16 @@ function findDifferences(originalContent: string, modifiedContent: string): Arra
             newLines: [],
             type: 'DELETE',
           });
-        } else if (originalDiffLines.length > 0 && modifiedDiffLines.length > 0) {
+        } else if (
+          originalDiffLines.length > 0 &&
+          modifiedDiffLines.length > 0
+        ) {
           // Mixed change - try to identify individual changes
-          const changes = identifyIndividualChanges(originalDiffLines, modifiedDiffLines, originalIndex + 1);
+          const changes = identifyIndividualChanges(
+            originalDiffLines,
+            modifiedDiffLines,
+            originalIndex + 1,
+          );
           differences.push(...changes);
         }
 
@@ -353,14 +408,14 @@ function findDifferences(originalContent: string, modifiedContent: string): Arra
     }
   }
 
-  logger.info('Found differences', { 
+  logger.info('Found differences', {
     count: differences.length,
-    differences: differences.map(d => ({ 
-      line: d.targetLine, 
-      type: d.type, 
+    differences: differences.map(d => ({
+      line: d.targetLine,
+      type: d.type,
       newLinesCount: d.newLines.length,
-      newLines: d.newLines.slice(0, 2) // Show first 2 lines
-    }))
+      newLines: d.newLines.slice(0, 2), // Show first 2 lines
+    })),
   });
 
   return differences;
@@ -369,7 +424,11 @@ function findDifferences(originalContent: string, modifiedContent: string): Arra
 /**
  * Identify individual changes within a larger diff block
  */
-function identifyIndividualChanges(originalLines: string[], modifiedLines: string[], baseLine: number): Array<{
+function identifyIndividualChanges(
+  originalLines: string[],
+  modifiedLines: string[],
+  baseLine: number,
+): Array<{
   originalLine: number;
   targetLine: number;
   newLines: string[];
@@ -384,8 +443,12 @@ function identifyIndividualChanges(originalLines: string[], modifiedLines: strin
 
   // Simple approach: treat each non-empty line as a potential individual change
   let lineOffset = 0;
-  
-  for (let i = 0; i < Math.max(originalLines.length, modifiedLines.length); i++) {
+
+  for (
+    let i = 0;
+    i < Math.max(originalLines.length, modifiedLines.length);
+    i++
+  ) {
     const originalLine = originalLines[i] || '';
     const modifiedLine = modifiedLines[i] || '';
 
@@ -416,53 +479,59 @@ function identifyIndividualChanges(originalLines: string[], modifiedLines: strin
         });
       }
     }
-    
+
     lineOffset++;
   }
 
   return changes;
 }
 
-
 /**
  * Convert ORL Docker path to actual file system path
  */
-function convertOrlPathToActualPath(orlPath: string, currentFilePath?: string): string {
+function convertOrlPathToActualPath(
+  orlPath: string,
+  currentFilePath?: string,
+): string {
   logger.info('Converting ORL path', { orlPath, currentFilePath });
-  
+
   // If we have the current file path, use its directory as the base
   if (currentFilePath) {
     const currentDir = path.dirname(currentFilePath);
     const fileName = orlPath.includes('/') ? path.basename(orlPath) : orlPath;
     const actualPath = path.join(currentDir, fileName);
-    logger.info('Using current file directory', { currentDir, fileName, actualPath });
+    logger.info('Using current file directory', {
+      currentDir,
+      fileName,
+      actualPath,
+    });
     return actualPath;
   }
-  
+
   // Fallback to workspace root detection
   // ORL returns paths like "/workspace/main.tf" or just "main.tf"
   // We need to convert this to the actual file path
   let fileName = orlPath;
-  
+
   if (orlPath.startsWith('/workspace/')) {
     fileName = orlPath.replace('/workspace/', '');
   } else if (orlPath.startsWith('/')) {
     // Handle absolute paths by extracting just the filename
     fileName = path.basename(orlPath);
   }
-  
+
   logger.info('Extracted filename from ORL path', { fileName });
-  
+
   // Get the current workspace root
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   logger.info('Workspace root', { workspaceRoot });
-  
+
   if (workspaceRoot) {
     const actualPath = path.join(workspaceRoot, fileName);
     logger.info('Converted to actual path', { actualPath });
     return actualPath;
   }
-  
+
   logger.warn('Could not convert ORL path, using original', { orlPath });
   return orlPath;
 }

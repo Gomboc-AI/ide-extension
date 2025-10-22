@@ -31,8 +31,10 @@ variable "bucket_name" {
       const result = (orlClient as any).parseOrlOutput(mockOutput);
 
       expect(result).toEqual({
-        'main.tf': 'resource "aws_s3_bucket" "example" {\n  bucket = "my-bucket"\n  acl    = "private"\n}',
-        'variables.tf': 'variable "bucket_name" {\n  description = "Name of the S3 bucket"\n  type        = string\n}'
+        'main.tf':
+          'resource "aws_s3_bucket" "example" {\n  bucket = "my-bucket"\n  acl    = "private"\n}',
+        'variables.tf':
+          'variable "bucket_name" {\n  description = "Name of the S3 bucket"\n  type        = string\n}',
       });
     });
 
@@ -49,7 +51,8 @@ variable "bucket_name" {
       const result = (orlClient as any).parseOrlOutput(mockOutput);
 
       expect(result).toEqual({
-        'variables.tf': 'variable "bucket_name" {\n  description = "Name of the S3 bucket"\n  type        = string\n}'
+        'variables.tf':
+          'variable "bucket_name" {\n  description = "Name of the S3 bucket"\n  type        = string\n}',
       });
     });
 

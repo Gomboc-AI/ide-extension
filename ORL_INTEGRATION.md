@@ -9,12 +9,14 @@ When the `remediateOrlEnabled` feature flag is enabled, the extension will use O
 ## Configuration
 
 ### Feature Flag
+
 - **Setting**: `gomboc-vscode-extension.remediateOrlEnabled`
 - **Type**: Boolean
 - **Default**: `false`
 - **Description**: Enable ORL-based remediation using DevContainer execution (experimental)
 
 ### ORL Configuration
+
 - **Container Image**: `gomboc-vscode-extension.orlContainerImage` (default: `gomboc/orl:latest`)
 - **Rules Service URL**: `gomboc-vscode-extension.orlRulesServiceUrl` (default: `https://rules.app.gomboc.ai`)
 - **Rules Service Token**: `gomboc-vscode-extension.orlRulesServiceToken` (sensitive)
@@ -38,6 +40,7 @@ When the `remediateOrlEnabled` feature flag is enabled, the extension will use O
 ### Testing Connection
 
 Use the "Gomboc: Test ORL Connection" command to verify:
+
 - Docker is running
 - ORL container can be executed
 - Rules service credentials are valid
@@ -45,6 +48,7 @@ Use the "Gomboc: Test ORL Connection" command to verify:
 ### Running Scans
 
 When ORL mode is enabled:
+
 1. Open a Terraform (`.tf`) or CloudFormation (`.yaml`, `.yml`) file
 2. Use "Gomboc: Scan current file or scenario" command
 3. The extension will:
@@ -56,11 +60,13 @@ When ORL mode is enabled:
 ## How It Works
 
 ### Traditional Mode (Default)
+
 ```
 VS Code Extension → CustomerAPI GraphQL → Backend Processing → Results
 ```
 
 ### ORL Mode (Feature Flag Enabled)
+
 ```
 VS Code Extension → Docker Container → ORL Engine → Rules Service → Results
 ```
@@ -93,14 +99,17 @@ VS Code Extension → Docker Container → ORL Engine → Rules Service → Resu
 ### Common Issues
 
 1. **Docker Not Running**
+
    - Error: "Cannot connect to Docker daemon"
    - Solution: Start Docker Desktop or Docker service
 
 2. **Container Image Not Found**
+
    - Error: "Unable to find image"
    - Solution: Check container image name, ensure internet connection
 
 3. **Rules Service Authentication**
+
    - Error: "Authentication failed"
    - Solution: Verify token and account ID in settings
 
@@ -111,6 +120,7 @@ VS Code Extension → Docker Container → ORL Engine → Rules Service → Resu
 ### Debug Information
 
 Enable debug logging in VS Code:
+
 1. Open Command Palette (`Ctrl/Cmd + Shift + P`)
 2. Run "Developer: Toggle Developer Tools"
 3. Check Console for detailed error messages
