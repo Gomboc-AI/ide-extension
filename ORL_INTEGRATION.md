@@ -6,10 +6,10 @@ The Gomboc VS Code extension can use ORL (Open Remediation Language) for local s
 
 1. **Enable feature flag**: `gomboc-vscode-extension.remediateOrlEnabled = true`
 2. **Configure credentials**:
-   - `orlRulesServiceToken` - Rules service authentication token
-   - `orlRulesServiceAccountId` - Account ID for rules service
-   - `orlRulesServiceUrl` - Rules service URL (default: `https://rules.app.gomboc.ai`)
-   - `orlChannel` - Channel name (default: `default`)
+  - `orlRulesServiceToken` - Rules service authentication token
+  - `orlRulesServiceAccountId` - Account ID for rules service
+  - `orlRulesServiceUrl` - Rules service URL (default: `https://rules.app.gomboc.ai`)
+  - `orlChannel` - Channel name (default: `default`)
 3. **Ensure Docker is running**
 
 ## How It Works
@@ -36,14 +36,14 @@ VS Code Extension → Docker Container → ORL Engine → Rules Service → VS C
 
 ## Configuration
 
-| Setting | Type | Default | Description |
-|---------|------|---------|-------------|
-| `remediateOrlEnabled` | boolean | `false` | Enable ORL-based remediation |
-| `orlContainerImage` | string | `gomboc/orl:latest` | Docker image for ORL |
-| `orlRulesServiceUrl` | string | `https://rules.app.gomboc.ai` | Rules service URL |
-| `orlRulesServiceToken` | string | `""` | Authentication token (sensitive) |
-| `orlRulesServiceAccountId` | string | `""` | Account ID (sensitive) |
-| `orlChannel` | string | `default` | Channel name for rules |
+| Setting                    | Type    | Default                                                       | Description                      |
+| -------------------------- | ------- | ------------------------------------------------------------- | -------------------------------- |
+| `remediateOrlEnabled`      | boolean | `false`                                                       | Enable ORL-based remediation     |
+| `orlContainerImage`        | string  | `us-east4-docker.pkg.dev/gomboc-ai-staging/gomboc/orl:latest` | Docker image for ORL             |
+| `orlRulesServiceUrl`       | string  | `https://rules.app.gomboc.ai`                                 | Rules service URL                |
+| `orlRulesServiceToken`     | string  | `""`                                                          | Authentication token (sensitive) |
+| `orlRulesServiceAccountId` | string  | `""`                                                          | Account ID (sensitive)           |
+| `orlChannel`               | string  | `default`                                                     | Channel name for rules           |
 
 ## Troubleshooting
 
@@ -57,6 +57,7 @@ VS Code Extension → Docker Container → ORL Engine → Rules Service → VS C
 ### Testing Connection
 
 Use "Gomboc: Test ORL Connection" command to verify:
+
 - Docker is accessible
 - ORL container can execute
 - Rules service credentials work
@@ -64,5 +65,5 @@ Use "Gomboc: Test ORL Connection" command to verify:
 ## File Support
 
 - **Terraform**: `.tf` files
-- **CloudFormation**: `.yaml`, `.yml` files  
+- **CloudFormation**: `.yaml`, `.yml` files
 - **CloudFormation JSON**: `.json` files with "template", "cloudformation", "cfn", or "stack" in filename
