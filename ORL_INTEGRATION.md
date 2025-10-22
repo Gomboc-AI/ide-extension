@@ -1,133 +1,68 @@
-# ORL Integration Feature Flag
+# ORL Integration
 
-This document describes the new ORL (Open Remediation Language) integration feature that can be enabled via a feature flag in the Gomboc VS Code extension.
+The Gomboc VS Code extension can use ORL (Open Remediation Language) for local security remediation via Docker execution.
 
-## Overview
+## Quick Setup
 
-When the `remediateOrlEnabled` feature flag is enabled, the extension will use ORL running in a Docker container instead of the traditional API-based remediation approach.
-
-## Configuration
-
-### Feature Flag
-
-- **Setting**: `gomboc-vscode-extension.remediateOrlEnabled`
-- **Type**: Boolean
-- **Default**: `false`
-- **Description**: Enable ORL-based remediation using DevContainer execution (experimental)
-
-### ORL Configuration
-
-- **Container Image**: `gomboc-vscode-extension.orlContainerImage` (default: `gomboc/orl:latest`)
-- **Rules Service URL**: `gomboc-vscode-extension.orlRulesServiceUrl` (default: `https://rules.app.gomboc.ai`)
-- **Rules Service Token**: `gomboc-vscode-extension.orlRulesServiceToken` (sensitive)
-- **Rules Service Account ID**: `gomboc-vscode-extension.orlRulesServiceAccountId` (sensitive)
-
-## Prerequisites
-
-1. **Docker**: Docker must be installed and running on the user's machine
-2. **ORL Container**: The specified ORL container image must be available (will be pulled automatically)
-3. **Rules Service Access**: Valid token and account ID for the rules service
-
-## Usage
-
-### Enabling ORL Mode
-
-1. Open VS Code Settings (`Ctrl/Cmd + ,`)
-2. Search for "gomboc"
-3. Enable "Remediate Orl Enabled"
-4. Configure the ORL settings (container image, rules service credentials)
-
-### Testing Connection
-
-Use the "Gomboc: Test ORL Connection" command to verify:
-
-- Docker is running
-- ORL container can be executed
-- Rules service credentials are valid
-
-### Running Scans
-
-When ORL mode is enabled:
-
-1. Open a Terraform (`.tf`) or CloudFormation (`.yaml`, `.yml`) file
-2. Use "Gomboc: Scan current file or scenario" command
-3. The extension will:
-   - Copy workspace files to a temporary directory
-   - Execute ORL in a Docker container
-   - Parse the remediation results
-   - Display diagnostics and code actions in VS Code
+1. **Enable feature flag**: `gomboc-vscode-extension.remediateOrlEnabled = true`
+2. **Configure credentials**:
+   - `orlRulesServiceToken` - Rules service authentication token
+   - `orlRulesServiceAccountId` - Account ID for rules service
+   - `orlRulesServiceUrl` - Rules service URL (default: `https://rules.app.gomboc.ai`)
+   - `orlChannel` - Channel name (default: `default`)
+3. **Ensure Docker is running**
 
 ## How It Works
 
-### Traditional Mode (Default)
-
 ```
-VS Code Extension → CustomerAPI GraphQL → Backend Processing → Results
+VS Code Extension → Docker Container → ORL Engine → Rules Service → VS Code Diagnostics
 ```
 
-### ORL Mode (Feature Flag Enabled)
+### Process Flow
 
-```
-VS Code Extension → Docker Container → ORL Engine → Rules Service → Results
-```
+1. **Scan trigger**: User runs "Gomboc: Scan current file or scenario"
+2. **Workspace preparation**: Extension copies IaC files to `.orl-temp/` directory
+3. **Rules download**: ORL pulls rules from rules service using `rules pull` command
+4. **Remediation**: ORL runs `remediate --dry-run` on workspace files
+5. **Result parsing**: Extension parses ORL output and creates VS Code diagnostics
+6. **User interaction**: User can apply individual fixes or "Apply all fixes"
 
-### File Processing Flow
+## Current Implementation
 
-1. **File Collection**: Extension gathers IaC files from the workspace
-2. **Container Execution**: ORL runs in Docker with workspace mounted
-3. **Rules Processing**: ORL fetches rules from the rules service
-4. **Remediation**: ORL applies rules and generates modified files
-5. **Result Parsing**: Extension parses ORL output and creates VS Code diagnostics
-6. **User Interaction**: User can apply fixes via code actions
+- **Docker-based execution**: ORL runs in ephemeral containers
+- **Dynamic rule pulling**: Rules fetched fresh on each scan
+- **File diff analysis**: Extension compares original vs ORL-modified files
+- **VS Code integration**: Creates diagnostics and code actions for each fix
 
-## Benefits
+## Configuration
 
-- **Local Execution**: No code sent to external services
-- **Rule Privacy**: Rules are fetched but not exposed to users
-- **Consistent Environment**: Docker ensures identical behavior across platforms
-- **No Binary Signing**: Eliminates need for platform-specific certificates
-
-## Limitations
-
-- **Docker Dependency**: Requires Docker installation
-- **Performance Overhead**: Container startup adds 1-2 seconds per scan
-- **Resource Usage**: Docker containers consume additional memory
-- **Network Access**: Requires internet connection for rules service
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `remediateOrlEnabled` | boolean | `false` | Enable ORL-based remediation |
+| `orlContainerImage` | string | `gomboc/orl:latest` | Docker image for ORL |
+| `orlRulesServiceUrl` | string | `https://rules.app.gomboc.ai` | Rules service URL |
+| `orlRulesServiceToken` | string | `""` | Authentication token (sensitive) |
+| `orlRulesServiceAccountId` | string | `""` | Account ID (sensitive) |
+| `orlChannel` | string | `default` | Channel name for rules |
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Docker Not Running**
+- **"Cannot find module"**: Docker not running or image not available
+- **"Authentication failed"**: Invalid token/account ID
+- **"Permission denied"**: Docker lacks access to workspace directory
+- **"0 fixes found"**: No matching rules or file already compliant
 
-   - Error: "Cannot connect to Docker daemon"
-   - Solution: Start Docker Desktop or Docker service
+### Testing Connection
 
-2. **Container Image Not Found**
+Use "Gomboc: Test ORL Connection" command to verify:
+- Docker is accessible
+- ORL container can execute
+- Rules service credentials work
 
-   - Error: "Unable to find image"
-   - Solution: Check container image name, ensure internet connection
+## File Support
 
-3. **Rules Service Authentication**
-
-   - Error: "Authentication failed"
-   - Solution: Verify token and account ID in settings
-
-4. **Permission Denied**
-   - Error: "Permission denied" when accessing files
-   - Solution: Ensure Docker has access to workspace directory
-
-### Debug Information
-
-Enable debug logging in VS Code:
-
-1. Open Command Palette (`Ctrl/Cmd + Shift + P`)
-2. Run "Developer: Toggle Developer Tools"
-3. Check Console for detailed error messages
-
-## Future Enhancements
-
-- **Container Caching**: Keep containers running for faster subsequent scans
-- **Rule Caching**: Cache rules locally to reduce network calls
-- **Progress Indicators**: Better progress feedback during long operations
-- **Batch Processing**: Process multiple files in a single container execution
+- **Terraform**: `.tf` files
+- **CloudFormation**: `.yaml`, `.yml` files  
+- **CloudFormation JSON**: `.json` files with "template", "cloudformation", "cfn", or "stack" in filename
