@@ -574,8 +574,21 @@ export class OrlClient {
    * Check if file is an IaC file that ORL can process
    */
   private isIacFile(fileName: string): boolean {
-    const iacExtensions = ['.tf', '.yaml', '.yml', '.json'];
+    const iacExtensions = ['.tf', '.yaml', '.yml'];
     const ext = path.extname(fileName).toLowerCase();
+
+    // For JSON files, only accept CloudFormation templates
+    if (ext === '.json') {
+      const baseName = path.basename(fileName, ext).toLowerCase();
+      // Accept common CloudFormation template names
+      return (
+        baseName.includes('template') ||
+        baseName.includes('cloudformation') ||
+        baseName.includes('cfn') ||
+        baseName.includes('stack')
+      );
+    }
+
     return iacExtensions.includes(ext);
   }
 

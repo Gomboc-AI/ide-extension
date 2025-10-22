@@ -1,4 +1,12 @@
-import { OrlClient } from '../orl/orlClient';
+import { OrlClient } from '../orlClient';
+
+// Mock the logger to avoid setImmediate issues in test environment
+jest.mock('../../utils/logger', () => ({
+  info: jest.fn(),
+  debug: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn(),
+}));
 
 describe('OrlClient', () => {
   let orlClient: OrlClient;
@@ -67,13 +75,16 @@ variable "bucket_name" {
       expect((orlClient as any).isIacFile('main.tf')).toBe(true);
       expect((orlClient as any).isIacFile('template.yaml')).toBe(true);
       expect((orlClient as any).isIacFile('config.yml')).toBe(true);
-      expect((orlClient as any).isIacFile('data.json')).toBe(true);
+      expect((orlClient as any).isIacFile('template.json')).toBe(true);
+      expect((orlClient as any).isIacFile('cloudformation.json')).toBe(true);
+      expect((orlClient as any).isIacFile('stack.json')).toBe(true);
     });
 
     it('should reject non-IaC files', () => {
       expect((orlClient as any).isIacFile('README.md')).toBe(false);
       expect((orlClient as any).isIacFile('script.sh')).toBe(false);
       expect((orlClient as any).isIacFile('package.json')).toBe(false);
+      expect((orlClient as any).isIacFile('data.json')).toBe(false);
     });
   });
 });

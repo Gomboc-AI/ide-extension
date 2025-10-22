@@ -5,9 +5,6 @@ const tsJestTransformCfg = createDefaultPreset().transform;
 /** @type {import("jest").Config} **/
 module.exports = {
   testEnvironment: 'jsdom',
-  globals: {
-    'ts-jest': { isolatedModules: true },
-  },
   transform: {
     ...require('ts-jest').createDefaultPreset().transform,
   },
