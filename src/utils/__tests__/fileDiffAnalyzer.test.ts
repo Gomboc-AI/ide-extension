@@ -24,20 +24,27 @@ describe('FileDiffAnalyzer - Improved Grouping', () => {
   }
 }`;
 
-      const differences = FileDiffAnalyzer.findDifferences(originalContent, modifiedContent);
+      const differences = FileDiffAnalyzer.findDifferences(
+        originalContent,
+        modifiedContent,
+      );
 
       // Should create grouped changes instead of individual line changes
       expect(differences.length).toBeLessThan(4); // Less than individual lines
-      
+
       // Each difference should contain related lines
       differences.forEach(diff => {
         expect(diff.newLines.length).toBeGreaterThan(0);
         // Should contain complete blocks, not orphaned lines
         if (diff.newLines.some(line => line.includes('encryption'))) {
-          expect(diff.newLines.some(line => line.includes('algorithm'))).toBe(true);
+          expect(diff.newLines.some(line => line.includes('algorithm'))).toBe(
+            true,
+          );
         }
         if (diff.newLines.some(line => line.includes('versioning'))) {
-          expect(diff.newLines.some(line => line.includes('enabled'))).toBe(true);
+          expect(diff.newLines.some(line => line.includes('enabled'))).toBe(
+            true,
+          );
         }
       });
     });
@@ -55,17 +62,24 @@ describe('FileDiffAnalyzer - Improved Grouping', () => {
   }
 }`;
 
-      const differences = FileDiffAnalyzer.findDifferences(originalContent, modifiedContent);
+      const differences = FileDiffAnalyzer.findDifferences(
+        originalContent,
+        modifiedContent,
+      );
 
       // Should group the entire encryption block together
-      const encryptionDiff = differences.find(diff => 
-        diff.newLines.some(line => line.includes('encryption'))
+      const encryptionDiff = differences.find(diff =>
+        diff.newLines.some(line => line.includes('encryption')),
       );
-      
+
       expect(encryptionDiff).toBeDefined();
       expect(encryptionDiff!.newLines.length).toBeGreaterThan(1);
-      expect(encryptionDiff!.newLines.some(line => line.includes('algorithm'))).toBe(true);
-      expect(encryptionDiff!.newLines.some(line => line.includes('kms_key_id'))).toBe(true);
+      expect(
+        encryptionDiff!.newLines.some(line => line.includes('algorithm')),
+      ).toBe(true);
+      expect(
+        encryptionDiff!.newLines.some(line => line.includes('kms_key_id')),
+      ).toBe(true);
     });
 
     it('should not create orphaned closing braces', () => {
@@ -80,14 +94,17 @@ describe('FileDiffAnalyzer - Improved Grouping', () => {
   }
 }`;
 
-      const differences = FileDiffAnalyzer.findDifferences(originalContent, modifiedContent);
+      const differences = FileDiffAnalyzer.findDifferences(
+        originalContent,
+        modifiedContent,
+      );
 
       // Check that no difference contains orphaned braces
       differences.forEach(diff => {
         const content = diff.newLines.join('');
         const openBraces = (content.match(/{/g) || []).length;
         const closeBraces = (content.match(/}/g) || []).length;
-        
+
         // Each group should have balanced braces or be part of a larger balanced structure
         expect(Math.abs(openBraces - closeBraces)).toBeLessThanOrEqual(1);
       });
@@ -102,7 +119,7 @@ describe('FileDiffAnalyzer - Improved Grouping', () => {
         '  }',
         '  versioning {',
         '    enabled = true',
-        '  }'
+        '  }',
       ];
 
       const groups = (FileDiffAnalyzer as any).groupRelatedLines(lines);
@@ -111,19 +128,19 @@ describe('FileDiffAnalyzer - Improved Grouping', () => {
       expect(groups[0]).toEqual([
         '  encryption {',
         '    algorithm = "AES256"',
-        '  }'
+        '  }',
       ]);
       expect(groups[1]).toEqual([
         '  versioning {',
         '    enabled = true',
-        '  }'
+        '  }',
       ]);
     });
 
     it('should handle single-line additions', () => {
       const lines = [
         '  backup_window = "03:00-04:00"',
-        '  auto_minor_version_upgrade = false'
+        '  auto_minor_version_upgrade = false',
       ];
 
       const groups = (FileDiffAnalyzer as any).groupRelatedLines(lines);

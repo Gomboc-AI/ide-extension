@@ -133,7 +133,7 @@ export class FileDiffAnalyzer {
     if (originalLines.length === 0 && modifiedLines.length > 0) {
       // Pure addition - group related lines together
       const groupedAdditions = this.groupRelatedLines(modifiedLines);
-      
+
       for (const group of groupedAdditions) {
         changes.push({
           originalLine: baseLine,
@@ -173,9 +173,13 @@ export class FileDiffAnalyzer {
 
     for (const line of lines) {
       const trimmedLine = line.trim();
-      
+
       // Skip empty lines and comments
-      if (!trimmedLine || trimmedLine.startsWith('#') || trimmedLine.startsWith('//')) {
+      if (
+        !trimmedLine ||
+        trimmedLine.startsWith('#') ||
+        trimmedLine.startsWith('//')
+      ) {
         if (currentGroup.length > 0) {
           currentGroup.push(line);
         }
