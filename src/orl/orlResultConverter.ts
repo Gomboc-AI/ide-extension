@@ -101,7 +101,7 @@ export class OrlResultConverter {
           fixType: diff.type,
         };
 
-        // Create individual fix for this specific difference
+        // Create individual fix for this specific difference and force it into a benchmarkRecommendation/fix form
         const individualFix = {
           benchmarkRecommendation: {
             id: `orl-recommendation-${i}`,
