@@ -2,6 +2,11 @@
 
 The Gomboc VS Code extension can use ORL (Open Remediation Language) for local security remediation via Docker execution.
 
+## Setup Guides
+
+- **[Complete Setup Guide](SETUP_GUIDE.md)** - Comprehensive setup instructions
+- **[Docker Setup Reference](DOCKER_SETUP.md)** - Docker-specific setup and troubleshooting
+
 ## Quick Setup
 
 1. **Enable feature flag**: `gomboc-vscode-extension.remediateOrlEnabled = true`
@@ -41,7 +46,7 @@ VS Code Extension → Docker Container → ORL Engine → Rules Service → VS C
 | Setting                    | Type    | Default                                                       | Description                      |
 | -------------------------- | ------- | ------------------------------------------------------------- | -------------------------------- |
 | `remediateOrlEnabled`      | boolean | `false`                                                       | Enable ORL-based remediation     |
-| `orlContainerImage`        | string  | `us-east4-docker.pkg.dev/gomboc-ai-staging/gomboc/orl:latest` | Docker image for ORL             |
+| `orlContainerImage`        | string  | `gombocai/orl:v1.0.0` | Docker image for ORL             |
 | `orlRulesServiceUrl`       | string  | `https://rules.app.gomboc.ai`                                 | Rules service URL                |
 | `orlRulesServiceToken`     | string  | `""`                                                          | Authentication token (sensitive) |
 | `orlRulesServiceAccountId` | string  | `""`                                                          | Account ID (sensitive)           |
