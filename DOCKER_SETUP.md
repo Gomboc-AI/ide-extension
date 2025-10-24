@@ -5,6 +5,7 @@
 The ORL Docker image is now available publicly at [Docker Hub](https://hub.docker.com/r/gombocai/orl).
 
 ### Pull ORL Image
+
 ```bash
 # Pull the official ORL Docker image
 docker pull gombocai/orl:v1.0.0
@@ -14,6 +15,7 @@ docker images | grep gombocai/orl
 ```
 
 ### Test ORL Image
+
 ```bash
 # Test basic functionality
 docker run --rm gombocai/orl:v1.0.0 --help
@@ -70,6 +72,7 @@ ls -la rules/
 ## Troubleshooting Docker Issues
 
 ### Image Pull Issues
+
 ```bash
 # Clean Docker cache
 docker system prune -a
@@ -79,6 +82,7 @@ docker pull gombocai/orl:v1.0.0
 ```
 
 ### Permission Issues
+
 ```bash
 # Fix volume mount permissions (Linux/Mac)
 sudo chown -R $USER:$USER /path/to/workspace
@@ -88,6 +92,7 @@ docker run --rm -u $(id -u):$(id -g) -v $(pwd):/workspace gombocai/orl:v1.0.0 --
 ```
 
 ### Network Issues
+
 ```bash
 # Test network connectivity
 docker run --rm gombocai/orl:v1.0.0 ping -c 3 google.com
@@ -117,6 +122,7 @@ services:
 ```
 
 Usage:
+
 ```bash
 # Set environment variables
 export RULE_SERVICE_TOKEN="your-token"

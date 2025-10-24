@@ -43,14 +43,14 @@ VS Code Extension → Docker Container → ORL Engine → Rules Service → VS C
 
 ## Configuration
 
-| Setting                    | Type    | Default                                                       | Description                      |
-| -------------------------- | ------- | ------------------------------------------------------------- | -------------------------------- |
-| `remediateOrlEnabled`      | boolean | `false`                                                       | Enable ORL-based remediation     |
-| `orlContainerImage`        | string  | `gombocai/orl:v1.0.0` | Docker image for ORL             |
-| `orlRulesServiceUrl`       | string  | `https://rules.app.gomboc.ai`                                 | Rules service URL                |
-| `orlRulesServiceToken`     | string  | `""`                                                          | Authentication token (sensitive) |
-| `orlRulesServiceAccountId` | string  | `""`                                                          | Account ID (sensitive)           |
-| `orlChannel`               | string  | `default`                                                     | Channel name for rules           |
+| Setting                    | Type    | Default                       | Description                      |
+| -------------------------- | ------- | ----------------------------- | -------------------------------- |
+| `remediateOrlEnabled`      | boolean | `false`                       | Enable ORL-based remediation     |
+| `orlContainerImage`        | string  | `gombocai/orl:v1.0.0`         | Docker image for ORL             |
+| `orlRulesServiceUrl`       | string  | `https://rules.app.gomboc.ai` | Rules service URL                |
+| `orlRulesServiceToken`     | string  | `""`                          | Authentication token (sensitive) |
+| `orlRulesServiceAccountId` | string  | `""`                          | Account ID (sensitive)           |
+| `orlChannel`               | string  | `default`                     | Channel name for rules           |
 
 ## Troubleshooting
 

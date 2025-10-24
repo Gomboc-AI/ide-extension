@@ -12,6 +12,7 @@ This guide explains how to set up and run the Gomboc VS Code extension with ORL 
 ## Step 1: Environment Setup
 
 ### Install Node.js with nvm
+
 ```bash
 # Install nvm (if not already installed)
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
@@ -25,6 +26,7 @@ nvm use 18
 ```
 
 ### Verify Docker Installation
+
 ```bash
 docker --version
 docker run hello-world
@@ -33,6 +35,7 @@ docker run hello-world
 ## Step 2: Clone and Setup Extension
 
 ### Clone the Repository
+
 ```bash
 cd /path/to/your/workspace
 git clone <repository-url> ide-extension
@@ -40,6 +43,7 @@ cd ide-extension
 ```
 
 ### Install Dependencies
+
 ```bash
 # Install npm dependencies
 npm install
@@ -52,6 +56,7 @@ npm test
 ## Step 3: Pull ORL Docker Image
 
 ### Pull Public ORL Image
+
 ```bash
 # Pull the official ORL Docker image
 docker pull gombocai/orl:v1.0.0
@@ -61,6 +66,7 @@ docker images | grep gombocai/orl
 ```
 
 ### Test ORL Image
+
 ```bash
 # Test ORL functionality
 docker run --rm gombocai/orl:v1.0.0 --help
@@ -70,6 +76,7 @@ docker run --rm gombocai/orl:v1.0.0 remediate --help
 ## Step 4: Configure VS Code Extension
 
 ### Set Extension Configuration
+
 Open VS Code and configure the extension settings:
 
 1. **Open Command Palette**: `Ctrl+Shift+P` (or `Cmd+Shift+P` on Mac)
@@ -88,7 +95,9 @@ Open VS Code and configure the extension settings:
 ```
 
 ### Get Required Credentials
+
 You'll need to obtain:
+
 - **Rules Service Token**: Authentication token for the rules service
 - **Account ID**: Your account identifier
 - **Channel**: The channel name (default: `orl-test-channel`)
@@ -96,6 +105,7 @@ You'll need to obtain:
 ## Step 5: Test the Integration
 
 ### Launch Extension Development Mode
+
 ```bash
 cd ide-extension
 npm run compile
@@ -106,11 +116,13 @@ npm run compile
 3. **Open Extension Development Host**: The new window will have your extension active
 
 ### Test ORL Connection
+
 1. **Open Command Palette**: `Ctrl+Shift+P`
 2. **Run**: "Gomboc: Test ORL Connection"
 3. **Verify**: You should see "✅ ORL connection test successful!"
 
 ### Test with Sample Files
+
 Create a test Terraform file to trigger ORL rules:
 
 ```bash
@@ -163,6 +175,7 @@ EOF
 ```
 
 ### Test ORL Scanning
+
 1. **Open the test file**: `test-aws.tf` in VS Code
 2. **Save the file**: `Ctrl+S` (this triggers the scan)
 3. **Check Problems Panel**: `Ctrl+Shift+M`
@@ -172,6 +185,7 @@ EOF
 ## Step 6: Development Workflow
 
 ### Making Changes
+
 ```bash
 # After making code changes
 npm run compile
@@ -182,11 +196,13 @@ npm test
 ```
 
 ### Debugging
+
 1. **Open Developer Tools**: `Ctrl+Shift+I` in the Extension Development Host
 2. **Check Console**: Look for extension logs and errors
 3. **Check Output Panel**: View "Gomboc VS Code Extension" output
 
 ### Running Tests
+
 ```bash
 # Run all tests
 npm test
@@ -204,6 +220,7 @@ npm run test:coverage
 ### Common Issues
 
 #### Docker Issues
+
 ```bash
 # Check Docker is running
 docker ps
@@ -214,6 +231,7 @@ sudo systemctl restart docker  # Linux
 ```
 
 #### ORL Image Issues
+
 ```bash
 # Pull latest ORL image
 docker pull gombocai/orl:v1.0.0
@@ -223,6 +241,7 @@ docker run --rm -v $(pwd):/workspace gombocai/orl:v1.0.0 remediate /workspace --
 ```
 
 #### Extension Issues
+
 ```bash
 # Clear npm cache
 npm cache clean --force
@@ -236,17 +255,21 @@ npm run check-types
 ```
 
 #### Authentication Issues
+
 - Verify your token and account ID are correct
 - Check the rules service URL is accessible
 - Ensure the channel exists and has rules
 
 ### Debug Logs
+
 Check the VS Code Developer Console for detailed logs:
+
 1. **Open Extension Development Host**
 2. **Press F12** or `Ctrl+Shift+I`
 3. **Look for logs** starting with "ORL" or "Gomboc"
 
 ### Performance Issues
+
 - **Docker Resource Limits**: Ensure Docker has enough memory/CPU
 - **Large Workspaces**: ORL scans all IaC files in the directory
 - **Network Issues**: Rules service calls may be slow
@@ -275,6 +298,7 @@ ide-extension/
 ## Configuration Reference
 
 ### Extension Settings
+
 - `remediateOrlEnabled`: Enable/disable ORL integration
 - `orlContainerImage`: Docker image name (default: `gombocai/orl:v1.0.0`)
 - `orlRulesServiceUrl`: Rules service endpoint
@@ -283,6 +307,7 @@ ide-extension/
 - `orlChannel`: Channel name for rules
 
 ### Environment Variables (for ORL)
+
 - `RULE_SERVICE_TOKEN`: Authentication token
 - `RULE_SERVICE_ACCOUNT_ID`: Account identifier
 - `RULE_SERVICE_URL`: Rules service endpoint
@@ -297,6 +322,7 @@ ide-extension/
 ## Support
 
 For issues or questions:
+
 1. Check the VS Code Developer Console for error logs
 2. Verify Docker and ORL image are working correctly
 3. Test ORL connection using the built-in test command
