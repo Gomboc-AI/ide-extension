@@ -5,7 +5,7 @@
 
 set -e
 
-echo "🚀 ORL Docker Setup Script"
+echo "ORL Docker Setup Script"
 echo "=========================="
 
 # Colors for output
