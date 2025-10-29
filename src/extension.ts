@@ -7,15 +7,22 @@ import logger from './utils/logger';
 import { ScanResultsProvider } from './providers/scanResultsProvider';
 import { CodeActionProvider } from './providers/codeActionProvider';
 import { GombocInfoViewProvider } from './providers/sidebarProvider';
+import { getInfrastructureToolFromFileUri } from './infrastructureTool';
+import { DiagnosticCollectionManager } from './diagnosticCollectionManager';
 
 const previousContentMap = new Map<string, string>();
 
 export async function activate(context: vscode.ExtensionContext) {
   logger.info('VSCode extension activated .... ');
   // diagnostics initialization
+  const diagnosticCollectionManager = DiagnosticCollectionManager.get();
   const diagnosticCollection =
-    vscode.languages.createDiagnosticCollection('Gomboc-Results');
-  const scanResults = ScanResultsProvider.init(context, diagnosticCollection);
+    diagnosticCollectionManager.getDiagnosticCollection();
+
+  const scanResults = ScanResultsProvider.init(
+    context,
+    diagnosticCollectionManager,
+  );
 
   scanResults.registerApplyRemediation();
 
@@ -38,8 +45,12 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(name, handler),
   );
 
-  const onEdit = vscode.workspace.onDidChangeTextDocument(() => {
-    diagnosticCollection.clear();
+  const onEdit = vscode.workspace.onDidChangeTextDocument(({ document }) => {
+    const currentDocumentIac = getInfrastructureToolFromFileUri(document.uri);
+    diagnosticCollectionManager.clearDiagnosticCollection(
+      currentDocumentIac,
+      document.uri,
+    );
   });
 
   const onSave = vscode.workspace.onDidSaveTextDocument(document => {
