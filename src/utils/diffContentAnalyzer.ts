@@ -163,7 +163,7 @@ export class DiffContentAnalyzer {
 
     // If we have specific change info, use it
     if (changeType && propertyName) {
-      return `${changeType} for ${resourceIdentifier} at line ${diff.targetLine}`;
+      return `${changeType} for ${resourceIdentifier}`;
     }
 
     // Otherwise, use the actual content
