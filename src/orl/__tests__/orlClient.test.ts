@@ -16,7 +16,6 @@ describe('OrlClient', () => {
       containerImage: 'gomboc/orl:latest',
       rulesServiceUrl: 'https://rules.app.gomboc.ai',
       rulesServiceToken: 'test-token',
-      rulesServiceAccountId: 'test-account-id',
     });
   });
 

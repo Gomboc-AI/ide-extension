@@ -45,7 +45,6 @@ EOF
 docker run --rm \
   -v $(pwd):/workspace \
   -e RULE_SERVICE_TOKEN="your-token" \
-  -e RULE_SERVICE_ACCOUNT_ID="your-account-id" \
   gombocai/orl:v1.0.0 remediate /workspace --dry-run
 ```
 
@@ -59,7 +58,6 @@ mkdir rules
 docker run --rm \
   -v $(pwd)/rules:/output \
   -e RULE_SERVICE_TOKEN="your-token" \
-  -e RULE_SERVICE_ACCOUNT_ID="your-account-id" \
   gombocai/orl:v1.0.0 rules pull \
   --url="https://rules.dev.gcp.gomboc.ai" \
   --out=/output \
@@ -116,7 +114,6 @@ services:
       - ./rules:/rules
     environment:
       - RULE_SERVICE_TOKEN=${RULE_SERVICE_TOKEN}
-      - RULE_SERVICE_ACCOUNT_ID=${RULE_SERVICE_ACCOUNT_ID}
       - RULE_SERVICE_URL=https://rules.dev.gcp.gomboc.ai
     command: remediate /workspace --dry-run
 ```
@@ -126,7 +123,6 @@ Usage:
 ```bash
 # Set environment variables
 export RULE_SERVICE_TOKEN="your-token"
-export RULE_SERVICE_ACCOUNT_ID="your-account-id"
 
 # Run with docker-compose
 docker-compose up

@@ -130,11 +130,10 @@ EOF
 test_orl_with_files() {
     echo "Testing ORL with sample files..."
     
-    if [ -z "$RULE_SERVICE_TOKEN" ] || [ -z "$RULE_SERVICE_ACCOUNT_ID" ]; then
-        print_warning "RULE_SERVICE_TOKEN and RULE_SERVICE_ACCOUNT_ID not set"
-        print_warning "Skipping ORL execution test. Set these environment variables to test:"
+    if [ -z "$RULE_SERVICE_TOKEN" ]; then
+        print_warning "RULE_SERVICE_TOKEN not set"
+        print_warning "Skipping ORL execution test. Set this environment variable to test:"
         print_warning "  export RULE_SERVICE_TOKEN='your-token'"
-        print_warning "  export RULE_SERVICE_ACCOUNT_ID='your-account-id'"
         return
     fi
     
@@ -144,7 +143,6 @@ test_orl_with_files() {
     if docker run --rm \
         -v $(pwd):/workspace \
         -e RULE_SERVICE_TOKEN="$RULE_SERVICE_TOKEN" \
-        -e RULE_SERVICE_ACCOUNT_ID="$RULE_SERVICE_ACCOUNT_ID" \
         gombocai/orl:v1.0.0 remediate /workspace --dry-run > /dev/null 2>&1; then
         print_status "ORL remediation test passed"
     else

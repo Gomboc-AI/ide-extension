@@ -89,7 +89,6 @@ Open VS Code and configure the extension settings:
   "gomboc-vscode-extension.orlContainerImage": "gombocai/orl:v1.0.0",
   "gomboc-vscode-extension.orlRulesServiceUrl": "https://rules.dev.gcp.gomboc.ai",
   "gomboc-vscode-extension.orlRulesServiceToken": "YOUR_TOKEN_HERE",
-  "gomboc-vscode-extension.orlRulesServiceAccountId": "YOUR_ACCOUNT_ID_HERE",
   "gomboc-vscode-extension.orlChannel": "orl-test-channel"
 }
 ```
@@ -99,7 +98,6 @@ Open VS Code and configure the extension settings:
 You'll need to obtain:
 
 - **Rules Service Token**: Authentication token for the rules service
-- **Account ID**: Your account identifier
 - **Channel**: The channel name (default: `orl-test-channel`)
 
 ## Step 5: Test the Integration
@@ -256,7 +254,7 @@ npm run check-types
 
 #### Authentication Issues
 
-- Verify your token and account ID are correct
+- Verify your token is correct
 - Check the rules service URL is accessible
 - Ensure the channel exists and has rules
 
@@ -303,13 +301,11 @@ ide-extension/
 - `orlContainerImage`: Docker image name (default: `gombocai/orl:v1.0.0`)
 - `orlRulesServiceUrl`: Rules service endpoint
 - `orlRulesServiceToken`: Authentication token
-- `orlRulesServiceAccountId`: Account identifier
 - `orlChannel`: Channel name for rules
 
 ### Environment Variables (for ORL)
 
 - `RULE_SERVICE_TOKEN`: Authentication token
-- `RULE_SERVICE_ACCOUNT_ID`: Account identifier
 - `RULE_SERVICE_URL`: Rules service endpoint
 
 ## Next Steps

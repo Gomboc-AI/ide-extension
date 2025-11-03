@@ -96,12 +96,6 @@
             "description": "Rules service token for ORL authentication",
             "sensitive": true
           },
-          "gomboc-vscode-extension.orlRulesServiceAccountId": {
-            "type": "string",
-            "default": "",
-            "description": "Rules service account ID for ORL authentication",
-            "sensitive": true
-          },
           "gomboc-vscode-extension.orlChannel": {
             "type": "string",
             "default": "default",

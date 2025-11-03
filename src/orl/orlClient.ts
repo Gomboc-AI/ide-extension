@@ -11,7 +11,6 @@ export interface OrlConfig {
   containerImage: string;
   rulesServiceUrl: string;
   rulesServiceToken: string;
-  rulesServiceAccountId: string;
   channel: string;
 }
 
@@ -157,7 +156,6 @@ export class OrlClient {
     const {
       rulesServiceUrl,
       rulesServiceToken,
-      rulesServiceAccountId,
       channel,
     } = this.config;
 
@@ -165,7 +163,6 @@ export class OrlClient {
     const pullCommand = `docker run --rm \
       -v '${rulesDir}:/output' \
       -e RULE_SERVICE_TOKEN='${rulesServiceToken}' \
-      -e RULE_SERVICE_ACCOUNT_ID='${rulesServiceAccountId}' \
       gomboc/orl:latest rules pull --url='${rulesServiceUrl}' --out=/output --channel='${channel}'`;
 
     logger.info('Pulling rules using ORL', { command: pullCommand });
@@ -192,12 +189,7 @@ export class OrlClient {
     language?: string,
     rulesDir?: string,
   ): string {
-    const {
-      containerImage,
-      rulesServiceUrl,
-      rulesServiceToken,
-      rulesServiceAccountId,
-    } = this.config;
+    const { containerImage } = this.config;
 
     const command = [
       'docker run --rm',
@@ -334,7 +326,6 @@ export class OrlClient {
         'docker run --rm',
         `-e RULE_SERVICE_URL="${this.config.rulesServiceUrl}"`,
         `-e RULE_SERVICE_TOKEN="${this.config.rulesServiceToken}"`,
-        `-e RULE_SERVICE_ACCOUNT_ID="${this.config.rulesServiceAccountId}"`,
         this.config.containerImage,
         'rules list --help',
       ].join(' ');
@@ -359,7 +350,6 @@ export function createOrlClient(): OrlClient {
     rulesServiceUrl:
       config.get('orlRulesServiceUrl') || 'https://rules.app.gomboc.ai',
     rulesServiceToken: config.get('orlRulesServiceToken') || '',
-    rulesServiceAccountId: config.get('orlRulesServiceAccountId') || '',
     channel: config.get('orlChannel') || 'default',
   });
 }
