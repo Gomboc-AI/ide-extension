@@ -9,11 +9,79 @@ import {
 } from '../api/__generated__/graphql';
 import { ScanResultsProvider } from '../providers/scanResultsProvider';
 import * as path from 'path';
+import { createOrlClient } from '../orl/orlClient';
+import logger from '../utils/logger';
+import { PathConverter } from '../utils/pathConverter';
+import { FileDiffAnalyzer } from '../utils/fileDiffAnalyzer';
+import { OrlResultConverter } from '../orl/orlResultConverter';
+import { ScanValidator } from '../utils/scanValidator';
 
 export async function scanFileCommand(
   context: vscode.ExtensionContext,
   scanResultsProvider: ScanResultsProvider,
 ) {
+  // Check feature flag for ORL remediation
+  const config = vscode.workspace.getConfiguration('gomboc-vscode-extension');
+  const orlEnabled = config.get('remediateOrlEnabled') as boolean;
+
+  if (orlEnabled) {
+    logger.info('ORL remediation enabled, using ORL client');
+    await scanWithOrl(scanResultsProvider);
+  } else {
+    logger.info('Using traditional API client');
+    await scanWithApiClient(scanResultsProvider);
+  }
+}
+
+async function scanWithOrl(scanResultsProvider: ScanResultsProvider) {
+  try {
+    logger.info('ORL scan starting');
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      return;
+    }
+
+    // Validate file type and prepare scan parameters
+    const { filePath, workspacePath, filetype, language } =
+      ScanValidator.validateAndPrepareScan(editor);
+
+    logger.info('ORL scanning scope', {
+      currentFile: filePath,
+      workspacePath: workspacePath,
+      scope: 'workspace-level (all IaC files in directory)',
+    });
+
+    // Create ORL client and execute remediation
+    const orlClient = createOrlClient();
+    const result = await orlClient.remediate(workspacePath, language);
+
+    if (!result.success) {
+      vscode.window.showErrorMessage(`ORL remediation failed: ${result.error}`);
+      return;
+    }
+
+    // Convert ORL result to IDE extension format
+    const scanResponse = await OrlResultConverter.convertToScanResponse(
+      result,
+      filetype,
+      filePath,
+    );
+    logger.info('ORL scan response converted', {
+      individualFixesCount: scanResponse.individualFixes.length,
+      groupedFixesCount: scanResponse.groupedFixes.length,
+      modifiedFiles: Object.keys(result.modifiedFiles),
+    });
+    scanResultsProvider.generateComments(scanResponse);
+    scanResultsProvider.createDiagnostic();
+  } catch (error) {
+    logger.error('ORL scan failed', { error });
+    vscode.window.showErrorMessage(
+      `ORL scan failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    );
+  }
+}
+
+async function scanWithApiClient(scanResultsProvider: ScanResultsProvider) {
   const apiClient = new CustomerApiClient();
   // ----- Gather input ------- //
   const editor = vscode.window.activeTextEditor;
@@ -52,9 +120,6 @@ export async function scanFileCommand(
 
   scanResultsProvider.generateComments(scanResponse);
   scanResultsProvider.createDiagnostic();
-
-  // TODO
-  // ----- add a progress bar that possible measures the length of time? ------ //
 }
 
 async function getTFScenarioFiles(

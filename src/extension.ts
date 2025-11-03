@@ -3,6 +3,7 @@ import * as path from 'path';
 import { testApiKeyCommand } from './commands/testApiKey';
 import { scanFileCommand } from './commands/scanFile';
 import { showBenchmarksCommand } from './commands/showFrameworks';
+import { testOrlConnectionCommand } from './commands/testOrlConnection';
 import logger from './utils/logger';
 import { ScanResultsProvider } from './providers/scanResultsProvider';
 import { CodeActionProvider } from './providers/codeActionProvider';
@@ -38,6 +39,10 @@ export async function activate(context: vscode.ExtensionContext) {
     {
       name: 'gomboc-vscode-extension.showBenchmarks',
       handler: () => showBenchmarksCommand(context),
+    },
+    {
+      name: 'gomboc-vscode-extension.testOrlConnection',
+      handler: () => testOrlConnectionCommand(context),
     },
   ];
 

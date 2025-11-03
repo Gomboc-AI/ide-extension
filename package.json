@@ -39,6 +39,10 @@
       {
         "command": "gomboc-vscode-extension.showBenchmarks",
         "title": "Gomboc: Show organization benchmarks"
+      },
+      {
+        "command": "gomboc-vscode-extension.testOrlConnection",
+        "title": "Gomboc: Test ORL Connection"
       }
     ],
     "configuration": [
@@ -70,6 +74,32 @@
             "type": "string",
             "default": "https://api.app.gomboc.ai/graphql",
             "description": "When enabled will send requests to custom specified endpoint (default is 'https://api.app.gomboc.ai/graphql')"
+          },
+          "gomboc-vscode-extension.remediateOrlEnabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable ORL-based remediation using DevContainer execution (experimental)"
+          },
+          "gomboc-vscode-extension.orlContainerImage": {
+            "type": "string",
+            "default": "gombocai/orl:v1.0.0",
+            "description": "Docker image for ORL execution"
+          },
+          "gomboc-vscode-extension.orlRulesServiceUrl": {
+            "type": "string",
+            "default": "https://rules.app.gomboc.ai",
+            "description": "Rules service URL for ORL"
+          },
+          "gomboc-vscode-extension.orlRulesServiceToken": {
+            "type": "string",
+            "default": "",
+            "description": "Rules service token for ORL authentication",
+            "sensitive": true
+          },
+          "gomboc-vscode-extension.orlChannel": {
+            "type": "string",
+            "default": "default",
+            "description": "Channel name to pull rules from the rules service"
           }
         }
       }
