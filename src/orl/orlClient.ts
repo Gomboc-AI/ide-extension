@@ -159,7 +159,7 @@ export class OrlClient {
     const pullCommand = `docker run --rm \
       -v '${rulesDir}:/output' \
       -e RULE_SERVICE_TOKEN='${rulesServiceToken}' \
-      gomboc/orl:latest rules pull --url='${rulesServiceUrl}' --out=/output --channel='${channel}'`;
+      ${this.config.containerImage} rules pull --url='${rulesServiceUrl}' --out=/output --channel='${channel}'`;
 
     logger.info('Pulling rules using ORL', { command: pullCommand });
 
