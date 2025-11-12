@@ -5,6 +5,7 @@ export interface DiffAnalysis {
   resourceName?: string;
   changeType?: string;
   propertyName?: string;
+  properties?: string[];
   description: string;
 }
 
@@ -28,23 +29,29 @@ export class DiffContentAnalyzer {
     // Try to extract change type and property
     const changeInfo = this.extractChangeInfo(content, diff.type);
 
+    // Extract all properties mentioned in the diff (handles TF/Cfn/JSON)
+    const properties = this.extractAllProperties(content);
+
     // Generate description
     const description = this.generateDescription(
       resourceInfo,
       changeInfo,
       diff,
+      properties,
     );
 
     logger.info('Analyzed diff content', {
       content: content.slice(0, 100), // just limiting the log size
       resourceInfo,
       changeInfo,
+      properties,
       description,
     });
 
     return {
       ...resourceInfo,
       ...changeInfo,
+      properties,
       description,
     };
   }
@@ -138,12 +145,64 @@ export class DiffContentAnalyzer {
   }
 
   /**
+   * Extract all property names present in the diff content.
+   * Supports:
+   * - Terraform:   key = value
+   * - YAML/CFN:    key:
+   * - JSON:        "key":
+   */
+  private static extractAllProperties(content: string): string[] {
+    const properties = new Set<string>();
+    const lines = content.split('\n');
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('//')) {
+        continue;
+      }
+      // Skip resource headers and braces
+      if (
+        /^resource\s+"[^"]+"\s+"[^"]+"\s*\{/.test(trimmed) ||
+        trimmed === '{' ||
+        trimmed === '}' ||
+        trimmed.endsWith('{')
+      ) {
+        continue;
+      }
+
+      // Terraform style: key = value
+      const tfMatch = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=/);
+      if (tfMatch) {
+        properties.add(tfMatch[1]);
+        continue;
+      }
+
+      // YAML/CFN style: key:
+      const yamlMatch = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*:/);
+      if (yamlMatch) {
+        properties.add(yamlMatch[1]);
+        continue;
+      }
+
+      // JSON style: "key":
+      const jsonMatch = trimmed.match(/^"([^"]+)"\s*:/);
+      if (jsonMatch) {
+        properties.add(jsonMatch[1]);
+        continue;
+      }
+    }
+
+    return Array.from(properties);
+  }
+
+  /**
    * Generate a human-readable description
    */
   private static generateDescription(
     resourceInfo: { resourceType?: string; resourceName?: string },
     changeInfo: { changeType?: string; propertyName?: string },
     diff: { targetLine: number; newLines: string[] },
+    properties?: string[],
   ): string {
     const { resourceType, resourceName } = resourceInfo;
     const { changeType, propertyName } = changeInfo;
@@ -158,7 +217,16 @@ export class DiffContentAnalyzer {
       resourceIdentifier = 'resource';
     }
 
-    // Use the actual content for more specific descriptions
+    // If we have a list of properties, prefer using that to surface all changes
+    const props = Array.isArray(properties) ? properties.filter(Boolean) : [];
+    if (props.length > 0) {
+      const propsList =
+        props.length > 5 ? `${props.slice(0, 5).join(', ')}, ...` : props.join(', ');
+      // Keep verb generic so it fits ADD/UPDATE; the context (quick fix) explains it's a remediation
+      return `Update ${resourceIdentifier} properties: ${propsList}`;
+    }
+
+    // Fallback: Use the actual content for more specific descriptions
     const content = diff.newLines.join(' ').trim();
 
     // If we have specific change info, use it
