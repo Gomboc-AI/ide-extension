@@ -20,7 +20,9 @@ describe('DiffContentAnalyzer', () => {
 
       expect(analysis.changeType).toBe('Add encryption block');
       expect(analysis.propertyName).toBe('encryption');
-      expect(analysis.description).toContain('Add encryption block');
+      expect(analysis.description).toContain(
+        'Update resource properties: algorithm',
+      );
     });
 
     it('should analyze S3 bucket versioning changes', () => {
@@ -34,7 +36,9 @@ describe('DiffContentAnalyzer', () => {
 
       expect(analysis.changeType).toBe('Add versioning block');
       expect(analysis.propertyName).toBe('versioning');
-      expect(analysis.description).toContain('Add versioning block');
+      expect(analysis.description).toContain(
+        'Update resource properties: enabled',
+      );
     });
 
     it('should analyze RDS backup window changes', () => {
@@ -48,7 +52,9 @@ describe('DiffContentAnalyzer', () => {
 
       expect(analysis.changeType).toBe('Set backup_window');
       expect(analysis.propertyName).toBe('backup_window');
-      expect(analysis.description).toContain('Set backup_window');
+      expect(analysis.description).toContain(
+        'Update resource properties: backup_window',
+      );
     });
 
     it('should analyze resource definitions', () => {
@@ -80,7 +86,9 @@ describe('DiffContentAnalyzer', () => {
 
       expect(analysis.changeType).toBe('Set auto_minor_version_upgrade');
       expect(analysis.propertyName).toBe('auto_minor_version_upgrade');
-      expect(analysis.description).toContain('Set auto_minor_version_upgrade');
+      expect(analysis.description).toContain(
+        'Update resource properties: auto_minor_version_upgrade',
+      );
     });
 
     it('should use actual content when no specific patterns match', () => {
@@ -94,7 +102,9 @@ describe('DiffContentAnalyzer', () => {
 
       expect(analysis.changeType).toBe('Set some_unknown_property');
       expect(analysis.propertyName).toBe('some_unknown_property');
-      expect(analysis.description).toContain('Set some_unknown_property');
+      expect(analysis.description).toContain(
+        'Update resource properties: some_unknown_property',
+      );
     });
   });
 });
