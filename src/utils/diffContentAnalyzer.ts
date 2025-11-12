@@ -221,7 +221,9 @@ export class DiffContentAnalyzer {
     const props = Array.isArray(properties) ? properties.filter(Boolean) : [];
     if (props.length > 0) {
       const propsList =
-        props.length > 5 ? `${props.slice(0, 5).join(', ')}, ...` : props.join(', ');
+        props.length > 5
+          ? `${props.slice(0, 5).join(', ')}, ...`
+          : props.join(', ');
       // Keep verb generic so it fits ADD/UPDATE; the context (quick fix) explains it's a remediation
       return `Update ${resourceIdentifier} properties: ${propsList}`;
     }
