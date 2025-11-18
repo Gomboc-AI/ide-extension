@@ -667,17 +667,26 @@ export class OrlResultConverter {
           }
         }
 
-        // Format: Resource Name (short) followed by descriptions
-        // Keep it simple: resource name on first line, descriptions below
+        // Format: Resource Name followed by descriptions
+        // Use Markdown formatting for better structure and sections
         let descriptionText: string;
         if (aggregatedDescriptions.length > 0) {
-          // Format as: Resource Name\n\nDescription1\nDescription2...
-          const descriptions = aggregatedDescriptions.slice(0, 5).join('\n\n');
-          descriptionText = `${resourceName}\n\n${descriptions}`;
+          // Format as: Resource Name\nDescription1\nDescription2 (single newlines, no extra spacing)
+          const descriptions = aggregatedDescriptions.slice(0, 5).join('\n');
+          descriptionText = `${resourceName}\n${descriptions}`;
         } else {
           // Fallback if no descriptions found
-          descriptionText = `${resourceName}\n\n${analysis.description || 'ORL remediation'}`;
+          descriptionText = `${resourceName}\n${analysis.description || 'ORL remediation'}`;
         }
+        
+        // Note: VS Code Diagnostic messages support MarkdownString for rich formatting
+        // You can use MarkdownString to create sections like:
+        // const markdown = new vscode.MarkdownString();
+        // markdown.appendMarkdown(`### ${resourceName}\n\n`);
+        // markdown.appendMarkdown(`**Rules Applied:**\n`);
+        // descriptions.forEach(desc => markdown.appendMarkdown(`- ${desc}\n`));
+        // markdown.appendMarkdown(`\n**Additional Info:**\n...`);
+        // Then use markdown.value as the message
 
         const ruleIdentifier =
           matchingRules.length > 1
