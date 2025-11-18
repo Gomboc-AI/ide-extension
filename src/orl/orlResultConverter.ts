@@ -55,18 +55,21 @@ export class OrlResultConverter {
       logger.warn('No report provided to extractRuleDescriptionsFromReport');
       return {};
     }
-    
+
     // The report might be embedded in stdout with file diffs before it
     // Look for the YAML report section (starts with "---" followed by "type: Report")
     let reportStart = report.indexOf('---\ntype: Report');
     if (reportStart === -1) {
       reportStart = report.indexOf('type: Report');
     }
-    const yamlReport = reportStart >= 0 ? report.substring(reportStart) : report;
-    
+    const yamlReport =
+      reportStart >= 0 ? report.substring(reportStart) : report;
+
     // Remove the leading "---" if present
-    const cleanReport = yamlReport.startsWith('---\n') ? yamlReport.substring(4) : yamlReport;
-    
+    const cleanReport = yamlReport.startsWith('---\n')
+      ? yamlReport.substring(4)
+      : yamlReport;
+
     logger.debug('Extracting from report', {
       reportLength: report.length,
       yamlReportLength: yamlReport.length,
@@ -74,7 +77,7 @@ export class OrlResultConverter {
       hasTypeReport: cleanReport.includes('type: Report'),
       firstLines: cleanReport.split('\n').slice(0, 10),
     });
-    
+
     const lines = cleanReport.split('\n');
     const descriptions: Record<string, string> = {};
     let inSpec = false;
@@ -86,7 +89,7 @@ export class OrlResultConverter {
     let metadataIndent = 0;
     let pendingDescription: string | null = null;
 
-    const getIndent = (s: string) => (s.match(/^(\s*)/)?.[1]?.length ?? 0);
+    const getIndent = (s: string) => s.match(/^(\s*)/)?.[1]?.length ?? 0;
     const unquote = (s: string) => s.replace(/^['"]|['"]$/g, '');
 
     const saveDescription = (ruleName: string, desc: string) => {
@@ -108,7 +111,7 @@ export class OrlResultConverter {
       const line = lines[i];
       const indent = getIndent(line);
       const trimmed = line.trim();
-      
+
       // Look for spec: section first
       if (!inSpec) {
         if (trimmed === 'spec:' || trimmed.startsWith('spec:')) {
@@ -117,7 +120,7 @@ export class OrlResultConverter {
         }
         continue;
       }
-      
+
       // Now look for rules: inside spec:
       if (!inRules) {
         if (trimmed === 'rules:' || trimmed.startsWith('rules:')) {
@@ -133,7 +136,12 @@ export class OrlResultConverter {
       }
 
       // End rules section when we hit a top-level key (indent 0, not a list item)
-      if (indent === 0 && !trimmed.startsWith('- ') && trimmed !== 'rules:' && trimmed !== '') {
+      if (
+        indent === 0 &&
+        !trimmed.startsWith('- ') &&
+        trimmed !== 'rules:' &&
+        trimmed !== ''
+      ) {
         inRules = false;
         if (currentRuleName && pendingDescription) {
           saveDescription(currentRuleName, pendingDescription);
@@ -161,26 +169,26 @@ export class OrlResultConverter {
         pendingDescription = null;
         // The indent of the list item line (spaces before '- ')
         currentRuleIndent = indent;
-        
+
         // Check if metadata: is on the same line as '- '
         const afterDash = trimmed.substring(2).trim();
         if (afterDash.startsWith('metadata:')) {
           inMetadata = true;
           // metadata: is on same line, so metadataIndent is the same as the line
           metadataIndent = indent;
-          logger.debug('New rule item with metadata on same line', { 
-            lineNumber: i, 
-            indent, 
-            currentRuleIndent, 
+          logger.debug('New rule item with metadata on same line', {
+            lineNumber: i,
+            indent,
+            currentRuleIndent,
             metadataIndent,
-            line: line.substring(0, 80) 
+            line: line.substring(0, 80),
           });
         } else {
-          logger.debug('New rule item', { 
-            lineNumber: i, 
-            indent, 
-            currentRuleIndent, 
-            line: line.substring(0, 80) 
+          logger.debug('New rule item', {
+            lineNumber: i,
+            indent,
+            currentRuleIndent,
+            line: line.substring(0, 80),
           });
         }
         continue;
@@ -193,17 +201,20 @@ export class OrlResultConverter {
 
       // Within a rule block (indented more than the list item)
       // Note: After '- metadata:', the next line might be at same indent or more
-      if (indent > currentRuleIndent || (indent === currentRuleIndent && !trimmed.startsWith('-'))) {
+      if (
+        indent > currentRuleIndent ||
+        (indent === currentRuleIndent && !trimmed.startsWith('-'))
+      ) {
         // Check if we're entering metadata section (on its own line)
         if (trimmed.startsWith('metadata:')) {
           inMetadata = true;
           metadataIndent = indent;
-          logger.debug('Entered metadata section (own line)', { 
-            lineNumber: i, 
-            indent, 
-            metadataIndent, 
+          logger.debug('Entered metadata section (own line)', {
+            lineNumber: i,
+            indent,
+            metadataIndent,
             currentRuleIndent,
-            line: line.substring(0, 80) 
+            line: line.substring(0, 80),
           });
           continue;
         }
@@ -218,14 +229,19 @@ export class OrlResultConverter {
             indentGreater: indent > metadataIndent,
             trimmed: trimmed.substring(0, 50),
           });
-          
+
           if (indent > metadataIndent) {
             if (trimmed.startsWith('name:')) {
               // metadata.name
               const nm = trimmed.match(/^name:\s*(.+)\s*$/);
               if (nm) {
                 metadataName = unquote(nm[1].trim());
-                logger.debug('Found metadata.name', { metadataName, lineNumber: i, indent, metadataIndent });
+                logger.debug('Found metadata.name', {
+                  metadataName,
+                  lineNumber: i,
+                  indent,
+                  metadataIndent,
+                });
                 // If we already have a description, save it
                 if (pendingDescription) {
                   saveDescription(metadataName, pendingDescription);
@@ -234,34 +250,49 @@ export class OrlResultConverter {
             } else if (trimmed.startsWith('description:')) {
               // Description can be on same line or next line(s)
               let desc = trimmed.replace(/^description:\s*/, '').trim();
-              
+
               // Handle multi-line descriptions with | or > indicators
-              if (desc === '' || desc === '|' || desc === '>' || desc.startsWith('|') || desc.startsWith('>')) {
+              if (
+                desc === '' ||
+                desc === '|' ||
+                desc === '>' ||
+                desc.startsWith('|') ||
+                desc.startsWith('>')
+              ) {
                 // Multi-line description - look ahead
                 let descLines: string[] = [];
                 const descIndent = indent; // The indent of the description: line
-                
+
                 for (let j = i + 1; j < lines.length; j++) {
                   const nextLine = lines[j];
                   const nextIndent = getIndent(nextLine);
                   const nextTrimmed = nextLine.trim();
-                  
+
                   // Stop when we hit same or less indent than metadata (end of metadata block)
                   if (nextIndent <= metadataIndent) {
                     break;
                   }
-                  
+
                   // Stop if we hit another key at the same indent as description:
-                  if (nextIndent === descIndent && nextTrimmed && !nextTrimmed.startsWith(' ') && nextTrimmed.includes(':')) {
+                  if (
+                    nextIndent === descIndent &&
+                    nextTrimmed &&
+                    !nextTrimmed.startsWith(' ') &&
+                    nextTrimmed.includes(':')
+                  ) {
                     break;
                   }
-                  
+
                   // Include lines that are indented more than the description: line
                   if (nextIndent > descIndent) {
                     // Remove the extra indent to get the actual content
                     const content = nextLine.substring(nextIndent);
                     descLines.push(content);
-                  } else if (nextIndent === descIndent && nextTrimmed && !nextTrimmed.includes(':')) {
+                  } else if (
+                    nextIndent === descIndent &&
+                    nextTrimmed &&
+                    !nextTrimmed.includes(':')
+                  ) {
                     // Same indent but not a key - might be continuation (shouldn't happen with | but handle it)
                     descLines.push(nextTrimmed);
                   } else {
@@ -270,7 +301,7 @@ export class OrlResultConverter {
                 }
                 desc = descLines.join('\n').trim();
               }
-              
+
               const cleaned = unquote(desc);
               logger.debug('Processing description line', {
                 originalDesc: desc.substring(0, 50),
@@ -391,7 +422,7 @@ export class OrlResultConverter {
     // Extract rule descriptions from ORL YAML report
     const ruleDescriptions =
       OrlResultConverter.extractRuleDescriptionsFromReport(result.report);
-    
+
     logger.info('Rule descriptions extracted', {
       count: Object.keys(ruleDescriptions).length,
       sampleRules: Object.keys(ruleDescriptions).slice(0, 3),
@@ -457,9 +488,13 @@ export class OrlResultConverter {
         let resourceName = 'Resource';
         const fileLines = originalText.split('\n');
         const diffLineIndex = diff.targetLine - 1; // Convert to 0-based index
-        
+
         // Search backwards from the diff line to find the resource definition
-        for (let lineIdx = Math.min(diffLineIndex, fileLines.length - 1); lineIdx >= 0; lineIdx--) {
+        for (
+          let lineIdx = Math.min(diffLineIndex, fileLines.length - 1);
+          lineIdx >= 0;
+          lineIdx--
+        ) {
           const line = fileLines[lineIdx];
           // Look for Terraform resource definition: resource "type" "name" {
           const resourceMatch = line.match(/resource\s+"([^"]+)"\s+"([^"]+)"/);
@@ -472,13 +507,19 @@ export class OrlResultConverter {
             break;
           }
         }
-        
+
         // If we didn't find it in the original file, try the modified content
         if (resourceName === 'Resource') {
           const modifiedLines = (modifiedContent as string).split('\n');
-          for (let lineIdx = Math.min(diffLineIndex, modifiedLines.length - 1); lineIdx >= 0; lineIdx--) {
+          for (
+            let lineIdx = Math.min(diffLineIndex, modifiedLines.length - 1);
+            lineIdx >= 0;
+            lineIdx--
+          ) {
             const line = modifiedLines[lineIdx];
-            const resourceMatch = line.match(/resource\s+"([^"]+)"\s+"([^"]+)"/);
+            const resourceMatch = line.match(
+              /resource\s+"([^"]+)"\s+"([^"]+)"/,
+            );
             if (resourceMatch) {
               resourceName = resourceMatch[1];
               break;
@@ -488,7 +529,7 @@ export class OrlResultConverter {
             }
           }
         }
-        
+
         // Analyze the diff content to extract meaningful information
         const analysis = DiffContentAnalyzer.analyzeDiffContent(diff);
 
@@ -504,7 +545,7 @@ export class OrlResultConverter {
           actualFilePath,
           path.basename(actualFilePath),
         );
-        
+
         // Find all rules that touched this file
         const allFileRules: string[] = [];
         for (const key of matchKeys) {
@@ -517,7 +558,7 @@ export class OrlResultConverter {
             }
           }
         }
-        
+
         // Filter rules to only those that match this specific resource type
         // Rule names contain the resource type, e.g.:
         // "gomboc-ai/...for_hashicorp__aws-resources-aws_elasticache_replication_group000"
@@ -532,7 +573,7 @@ export class OrlResultConverter {
             .replace(/^azurerm-resources-/, '')
             .replace(/\./g, '_')
             .replace(/-/g, '_');
-          
+
           // Also try with hashicorp__ prefix variations
           const resourceVariants = [
             normalizedResource,
@@ -543,26 +584,26 @@ export class OrlResultConverter {
             `aws-resources-${normalizedResource}`,
             `aws-resources-aws_${normalizedResource}`,
           ];
-          
+
           for (const ruleName of allFileRules) {
             // Check if rule name contains any variant of the resource type
             const ruleLower = ruleName.toLowerCase();
-            const matches = resourceVariants.some(variant => 
-              ruleLower.includes(variant.toLowerCase())
+            const matches = resourceVariants.some(variant =>
+              ruleLower.includes(variant.toLowerCase()),
             );
-            
+
             if (matches) {
               matchingRules.push(ruleName);
             }
           }
         }
-        
+
         // If no resource-specific rules found, fall back to all file rules
         // (this handles cases where resource type couldn't be determined)
         if (matchingRules.length === 0 && allFileRules.length > 0) {
           matchingRules.push(...allFileRules);
         }
-        
+
         // Get rule descriptions
         let aggregatedDescriptions: string[] = [];
         let primaryRule = 'ORL_REMEDIATION';
@@ -572,39 +613,50 @@ export class OrlResultConverter {
           for (const ruleName of matchingRules) {
             // Try exact match first
             let d = ruleDescriptions[ruleName];
-            
+
             // If no exact match, try partial matching (rule names in diagnostics might have suffixes)
             if (!d) {
               // Rule names in diagnostics might be like "gomboc-ai/ensure_data_at_rest_is_encrypted_for_hashicorp__aws-resources-aws_rds_cluster000"
               // But in YAML report might be "gomboc-ai/ensure_data_at_rest_is_encrypted_for_hashicorp__aws-resources-aws_rds_cluster"
               // Try matching without the numeric suffix
               const baseName = ruleName.replace(/[0-9]+$/, '');
-              for (const [reportRuleName, desc] of Object.entries(ruleDescriptions)) {
-                if (reportRuleName.startsWith(baseName) || baseName.startsWith(reportRuleName)) {
+              for (const [reportRuleName, desc] of Object.entries(
+                ruleDescriptions,
+              )) {
+                if (
+                  reportRuleName.startsWith(baseName) ||
+                  baseName.startsWith(reportRuleName)
+                ) {
                   d = desc;
                   break;
                 }
               }
             }
-            
+
             // If still no match, try matching the core rule name (after last /)
             if (!d) {
               const coreName = ruleName.split('/').pop() || ruleName;
-              for (const [reportRuleName, desc] of Object.entries(ruleDescriptions)) {
-                const reportCore = reportRuleName.split('/').pop() || reportRuleName;
-                if (coreName.includes(reportCore) || reportCore.includes(coreName)) {
+              for (const [reportRuleName, desc] of Object.entries(
+                ruleDescriptions,
+              )) {
+                const reportCore =
+                  reportRuleName.split('/').pop() || reportRuleName;
+                if (
+                  coreName.includes(reportCore) ||
+                  reportCore.includes(coreName)
+                ) {
                   d = desc;
                   break;
                 }
               }
             }
-            
+
             if (d && !descs.includes(d)) {
               descs.push(d);
             }
           }
           aggregatedDescriptions = descs;
-          
+
           // Debug logging
           if (aggregatedDescriptions.length === 0) {
             logger.warn('No descriptions found for matching rules', {
@@ -614,7 +666,7 @@ export class OrlResultConverter {
             });
           }
         }
-        
+
         // Format: Resource Name (short) followed by descriptions
         // Keep it simple: resource name on first line, descriptions below
         let descriptionText: string;
@@ -626,8 +678,11 @@ export class OrlResultConverter {
           // Fallback if no descriptions found
           descriptionText = `${resourceName}\n\n${analysis.description || 'ORL remediation'}`;
         }
-        
-        const ruleIdentifier = matchingRules.length > 1 ? 'orl-rule:multiple' : `orl-rule:${primaryRule}`;
+
+        const ruleIdentifier =
+          matchingRules.length > 1
+            ? 'orl-rule:multiple'
+            : `orl-rule:${primaryRule}`;
 
         const fix = {
           filepath: actualFilePath,
@@ -670,7 +725,13 @@ export class OrlResultConverter {
       const diffs = differences;
       const counts: Record<string, number> = {};
       const orlNorm = (orlFilePath as string).replace(/^\/workspace\/+/, '');
-      const keys = [orlFilePath as string, orlNorm, path.basename(orlNorm), actualFilePath, path.basename(actualFilePath)];
+      const keys = [
+        orlFilePath as string,
+        orlNorm,
+        path.basename(orlNorm),
+        actualFilePath,
+        path.basename(actualFilePath),
+      ];
       // Count rules that touched this file (file-level attribution)
       for (const key of keys) {
         const rules = fileToRules[key];
@@ -717,7 +778,9 @@ export class OrlResultConverter {
               localCounts[ruleName] = (localCounts[ruleName] || 0) + 1;
             }
           }
-          const localSorted = Object.entries(localCounts).sort((a, b) => b[1] - a[1]);
+          const localSorted = Object.entries(localCounts).sort(
+            (a, b) => b[1] - a[1],
+          );
           let localName = analysis.description;
           let localId = 'orl-rule:multiple';
           if (localSorted.length > 0) {
@@ -728,7 +791,7 @@ export class OrlResultConverter {
                 descs.push(d);
               }
             }
-            localName = (descs.slice(0, 3).join(' | ')) || analysis.description;
+            localName = descs.slice(0, 3).join(' | ') || analysis.description;
             if (localSorted.length === 1) {
               localId = `orl-rule:${localSorted[0][0]}`;
             }

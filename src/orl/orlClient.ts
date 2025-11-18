@@ -137,7 +137,10 @@ rulesDir="$BASE/.orl/diagnostics/rules"
     };
     for (const [name, content] of Object.entries(scripts)) {
       const file = path.join(hooksDir, name);
-      await fs.promises.writeFile(file, content, { encoding: 'utf8', mode: 0o755 });
+      await fs.promises.writeFile(file, content, {
+        encoding: 'utf8',
+        mode: 0o755,
+      });
       await fs.promises.chmod(file, 0o755);
     }
   }
@@ -416,22 +419,28 @@ rulesDir="$BASE/.orl/diagnostics/rules"
           trimmedLine.endsWith('.yaml') ||
           trimmedLine.endsWith('.yml') ||
           trimmedLine.endsWith('.json');
-        
+
         // Skip lines with colons that look like YAML key:value pairs
         // But allow paths that might contain colons in certain contexts
         const hasColon = trimmedLine.includes(':');
-        const looksLikeYamlKey = hasColon && !trimmedLine.startsWith('/') && !trimmedLine.startsWith('./');
-        
+        const looksLikeYamlKey =
+          hasColon &&
+          !trimmedLine.startsWith('/') &&
+          !trimmedLine.startsWith('./');
+
         // Accept if it's an IaC file and doesn't look like a YAML key
         if (isIacExt && !looksLikeYamlKey) {
           // Normalize to container workspace path if relative
-          currentFile = trimmedLine.startsWith('/workspace/') 
-            ? trimmedLine 
-            : trimmedLine.startsWith('./') 
+          currentFile = trimmedLine.startsWith('/workspace/')
+            ? trimmedLine
+            : trimmedLine.startsWith('./')
               ? `/workspace/${trimmedLine.slice(2)}`
               : `/workspace/${trimmedLine}`;
           inFileContent = true;
-          logger.info('Found file path', { file: currentFile, original: trimmedLine });
+          logger.info('Found file path', {
+            file: currentFile,
+            original: trimmedLine,
+          });
           continue;
         }
       }
