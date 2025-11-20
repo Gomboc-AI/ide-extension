@@ -35,7 +35,7 @@ export class OrlClient {
   private async writeHooksToTempWorkspace(tempDir: string): Promise<void> {
     const hooksDir = path.join(tempDir, '.orl', 'hooks');
     await fs.promises.mkdir(hooksDir, { recursive: true });
-    
+
     // Read hook scripts from separate files for maintainability
     const hookFiles = [
       'pre_remediate',
@@ -45,9 +45,9 @@ export class OrlClient {
       'post_remediate_rule',
       'post_remediate',
     ];
-    
+
     const scripts: Record<string, string> = {};
-    
+
     // Try to read hook files from the source directory (for development)
     // or use legacy inline scripts as fallback
     for (const hookName of hookFiles) {
@@ -56,7 +56,7 @@ export class OrlClient {
         path.join(__dirname, 'hooks', `${hookName}.sh`),
         path.join(process.cwd(), 'src', 'orl', 'hooks', `${hookName}.sh`),
       ];
-      
+
       let found = false;
       for (const hookPath of possiblePaths) {
         try {
@@ -68,12 +68,14 @@ export class OrlClient {
           // Try next path
         }
       }
-      
+
       if (!found) {
-        logger.warn(`Failed to read hook file for ${hookName}, using legacy script`);
+        logger.warn(
+          `Failed to read hook file for ${hookName}, using legacy script`,
+        );
       }
     }
-    
+
     // Legacy inline scripts (used as fallback if hook files aren't found)
     const legacyScripts: Record<string, string> = {
       pre_remediate: `#!/bin/sh
@@ -480,7 +482,7 @@ rulesDir="\$BASE/.orl/diagnostics/rules"
 } > "\$aggregate"
 `,
     };
-    
+
     // Merge hook files with legacy scripts (legacy scripts as fallback)
     const finalScripts: Record<string, string> = { ...legacyScripts };
     for (const [name, content] of Object.entries(scripts)) {
@@ -488,7 +490,7 @@ rulesDir="\$BASE/.orl/diagnostics/rules"
         finalScripts[name] = content;
       }
     }
-    
+
     for (const [name, content] of Object.entries(finalScripts)) {
       const file = path.join(hooksDir, name);
       await fs.promises.writeFile(file, content, {

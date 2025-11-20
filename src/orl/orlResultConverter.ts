@@ -433,10 +433,12 @@ export class OrlResultConverter {
     logger.debug('Resource instance mapping', {
       fileToResourceInstances: Object.keys(fileToResourceInstances).length,
       resourceInstanceToRules: Object.keys(resourceInstanceToRules).length,
-      resourceInstanceDetails: Object.entries(resourceInstanceToRules).map(([key, rules]) => ({
-        key,
-        rules,
-      })),
+      resourceInstanceDetails: Object.entries(resourceInstanceToRules).map(
+        ([key, rules]) => ({
+          key,
+          rules,
+        }),
+      ),
     });
 
     // Extract rule descriptions from ORL YAML report
@@ -580,12 +582,13 @@ export class OrlResultConverter {
             }
           }
         }
-        
+
         logger.debug('Identified resource for diff', {
           resourceType: resourceName,
           resourceInstance: resourceInstanceName,
           diffLine: diff.targetLine,
-          resourceStartLine: resourceStartLine >= 0 ? resourceStartLine + 1 : null,
+          resourceStartLine:
+            resourceStartLine >= 0 ? resourceStartLine + 1 : null,
           resourceEndLine: resourceEndLine >= 0 ? resourceEndLine + 1 : null,
         });
 
@@ -593,7 +596,7 @@ export class OrlResultConverter {
         // This can help identify which attributes were changed, which might help
         // narrow down which rules applied (though we're still limited by file-level hooks)
         const analysis = DiffContentAnalyzer.analyzeDiffContent(diff);
-        
+
         // Note: We could potentially use analysis.properties to further filter rules,
         // but without instance-level tracking from hooks, we can't be 100% accurate
         // when multiple resources of the same type exist in the same file.
@@ -630,7 +633,7 @@ export class OrlResultConverter {
         // 3. Diff line falls within resource's line range
         let matchingRules: string[] = [];
         const diffLine = diff.targetLine;
-        
+
         if (
           resourceName !== 'Resource' &&
           resourceInstanceName !== null &&
@@ -639,53 +642,57 @@ export class OrlResultConverter {
         ) {
           // Check if the diff line falls within this resource's line range
           // Note: resourceStartLine and resourceEndLine are 0-based, diff.targetLine is 1-based
-          const resourceContainsDiff = 
-            diffLine >= resourceStartLine + 1 && diffLine <= resourceEndLine + 1;
-          
+          const resourceContainsDiff =
+            diffLine >= resourceStartLine + 1 &&
+            diffLine <= resourceEndLine + 1;
+
           if (resourceContainsDiff && allFileRules.length > 0) {
             // Match rules to this specific resource instance by checking if the rule
             // has this specific resource instance in its resources list
             // This ensures we only show rules that actually modified this specific instance
             for (const ruleName of allFileRules) {
               // Find the rule in diagnostics
-              const rule = result.diagnostics?.rules?.find((r) => r.ruleName === ruleName);
+              const rule = result.diagnostics?.rules?.find(
+                r => r.ruleName === ruleName,
+              );
               if (!rule) {
                 continue;
               }
-              
+
               // Check if this rule has this specific resource instance in its resources
               const ruleFiles = rule.files || [];
               for (const ruleFile of ruleFiles) {
                 const keys = addFileKeys(ruleFile.path);
-                const fileMatches = keys.some((k) => matchKeys.includes(k));
+                const fileMatches = keys.some(k => matchKeys.includes(k));
                 if (!fileMatches) {
                   continue;
                 }
-                
+
                 const resources = (ruleFile as any).resources || [];
                 // Check if this specific resource instance is in the rule's resources
                 // AND the diff line falls within that resource's line range
-                const resourceMatches = resources.some((r: any) => 
-                  r.type === resourceName &&
-                  r.name === resourceInstanceName &&
-                  diffLine >= r.startLine &&
-                  diffLine <= r.endLine
+                const resourceMatches = resources.some(
+                  (r: any) =>
+                    r.type === resourceName &&
+                    r.name === resourceInstanceName &&
+                    diffLine >= r.startLine &&
+                    diffLine <= r.endLine,
                 );
-                
+
                 if (resourceMatches && !matchingRules.includes(ruleName)) {
                   matchingRules.push(ruleName);
                   break; // Found a match for this rule, no need to check other files
                 }
               }
             }
-            
+
             // If no instance-level match found (resources list is empty in dry-run mode),
             // use diff content analysis to match rules based on what was changed
             if (matchingRules.length === 0) {
               // Extract properties from the diff to help match rules
               const diffProperties = analysis.properties || [];
               const diffContent = diff.newLines.join('\n').toLowerCase();
-              
+
               // Normalize resource name for matching
               const normalizedResource = resourceName
                 .replace(/^hashicorp__/, '')
@@ -707,30 +714,43 @@ export class OrlResultConverter {
 
               for (const ruleName of allFileRules) {
                 const ruleLower = ruleName.toLowerCase();
-                
+
                 // First check if rule matches resource type
                 const matchesResourceType = resourceVariants.some(variant =>
                   ruleLower.includes(variant.toLowerCase()),
                 );
-                
+
                 if (!matchesResourceType) {
                   continue;
                 }
-                
+
                 // Then check if the diff content matches what this rule would change
                 // This helps distinguish between rules that apply to the same resource type
                 // For example, "auto_minor_version_upgrade" vs "at_rest_encryption_enabled"
                 let matchesDiffContent = false;
-                
+
                 // Extract key terms from rule name that might appear in the diff
                 // Rules often have descriptive names that hint at what they change
                 const ruleTerms = ruleLower
                   .split(/[_\-\s]+/)
                   .filter(term => term.length > 3) // Only meaningful terms
-                  .filter(term => 
-                    !['for', 'hashicorp', 'aws', 'resources', 'ensure', 'that', 'the', 'is', 'are', 'and', 'or'].includes(term)
+                  .filter(
+                    term =>
+                      ![
+                        'for',
+                        'hashicorp',
+                        'aws',
+                        'resources',
+                        'ensure',
+                        'that',
+                        'the',
+                        'is',
+                        'are',
+                        'and',
+                        'or',
+                      ].includes(term),
                   );
-                
+
                 // Check if any rule term appears in the diff content or properties
                 // This helps match rules to the specific changes they make
                 if (ruleTerms.length > 0) {
@@ -740,27 +760,56 @@ export class OrlResultConverter {
                       return true;
                     }
                     // Check if term appears in property names
-                    if (diffProperties.some(prop => prop.toLowerCase().includes(term))) {
+                    if (
+                      diffProperties.some(prop =>
+                        prop.toLowerCase().includes(term),
+                      )
+                    ) {
                       return true;
                     }
                     // Check for common property name patterns
                     // e.g., "automatic" -> "auto_minor_version_upgrade"
                     // e.g., "encryption" -> "at_rest_encryption_enabled"
                     const propertyPatterns: Record<string, string[]> = {
-                      'automatic': ['auto_minor_version_upgrade', 'auto_minor', 'automatic'],
-                      'updates': ['auto_minor_version_upgrade', 'auto_minor'],
-                      'patching': ['auto_minor_version_upgrade', 'maintenance'],
-                      'encryption': ['encryption', 'encrypted', 'kms', 'at_rest_encryption_enabled', 'storage_encrypted'],
-                      'data': ['at_rest_encryption', 'encryption', 'at_rest_encryption_enabled'],
-                      'rest': ['at_rest_encryption', 'storage_encrypted', 'at_rest_encryption_enabled'],
+                      automatic: [
+                        'auto_minor_version_upgrade',
+                        'auto_minor',
+                        'automatic',
+                      ],
+                      updates: ['auto_minor_version_upgrade', 'auto_minor'],
+                      patching: ['auto_minor_version_upgrade', 'maintenance'],
+                      encryption: [
+                        'encryption',
+                        'encrypted',
+                        'kms',
+                        'at_rest_encryption_enabled',
+                        'storage_encrypted',
+                      ],
+                      data: [
+                        'at_rest_encryption',
+                        'encryption',
+                        'at_rest_encryption_enabled',
+                      ],
+                      rest: [
+                        'at_rest_encryption',
+                        'storage_encrypted',
+                        'at_rest_encryption_enabled',
+                      ],
                     };
-                    
-                    for (const [key, patterns] of Object.entries(propertyPatterns)) {
+
+                    for (const [key, patterns] of Object.entries(
+                      propertyPatterns,
+                    )) {
                       if (term.includes(key) || key.includes(term)) {
-                        if (patterns.some(pattern => 
-                          diffContent.includes(pattern) || 
-                          diffProperties.some(prop => prop.toLowerCase().includes(pattern))
-                        )) {
+                        if (
+                          patterns.some(
+                            pattern =>
+                              diffContent.includes(pattern) ||
+                              diffProperties.some(prop =>
+                                prop.toLowerCase().includes(pattern),
+                              ),
+                          )
+                        ) {
                           return true;
                         }
                       }
@@ -772,12 +821,12 @@ export class OrlResultConverter {
                   // This prevents false positives when we can't determine what changed
                   matchesDiffContent = false;
                 }
-                
+
                 if (matchesDiffContent && !matchingRules.includes(ruleName)) {
                   matchingRules.push(ruleName);
                 }
               }
-              
+
               logger.debug('Matched rules using diff content analysis', {
                 resourceType: resourceName,
                 resourceInstance: resourceInstanceName,
@@ -787,7 +836,7 @@ export class OrlResultConverter {
                 matchingRules,
               });
             }
-            
+
             logger.debug('Matched rules for resource', {
               resourceType: resourceName,
               resourceInstance: resourceInstanceName,
@@ -801,7 +850,11 @@ export class OrlResultConverter {
 
         // Fallback: If no resource-specific match, don't show any rules
         // (this prevents false positives where all rules are shown for all resources)
-        if (matchingRules.length === 0 && resourceName !== 'Resource' && allFileRules.length > 0) {
+        if (
+          matchingRules.length === 0 &&
+          resourceName !== 'Resource' &&
+          allFileRules.length > 0
+        ) {
           // Normalize resource name for matching (handle variations)
           const normalizedResource = resourceName
             .replace(/^hashicorp__/, '')
