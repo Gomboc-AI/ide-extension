@@ -402,6 +402,13 @@ export class OrlResultConverter {
       keys.add('/workspace/' + norm.replace(/^\//, ''));
       return Array.from(keys);
     };
+    // Build mapping: file -> rules, and file -> resource instances -> rules
+    const fileToResourceInstances: Record<
+      string,
+      Array<{ type: string; name: string; startLine: number; endLine: number }>
+    > = {};
+    const resourceInstanceToRules: Record<string, string[]> = {};
+
     if (result.diagnostics?.rules?.length) {
       for (const r of result.diagnostics.rules) {
         const files = r.files || [];
@@ -415,9 +422,22 @@ export class OrlResultConverter {
               fileToRules[k].push(r.ruleName);
             }
           }
+
+          // In dry-run mode, resources_modified.json is empty, so we don't have resource-level data from hooks
+          // We'll extract resources from the original file and match based on diff line numbers
+          // For now, just track file-level rules (resource-level matching happens later when processing diffs)
         }
       }
     }
+
+    logger.debug('Resource instance mapping', {
+      fileToResourceInstances: Object.keys(fileToResourceInstances).length,
+      resourceInstanceToRules: Object.keys(resourceInstanceToRules).length,
+      resourceInstanceDetails: Object.entries(resourceInstanceToRules).map(([key, rules]) => ({
+        key,
+        rules,
+      })),
+    });
 
     // Extract rule descriptions from ORL YAML report
     const ruleDescriptions =
@@ -483,13 +503,18 @@ export class OrlResultConverter {
       for (let i = 0; i < differences.length; i++) {
         const diff = differences[i];
 
-        // Extract resource name from the actual file content at the diff line
+        // Extract resource type and instance name from the actual file content at the diff line
         // Look backwards from the diff line to find the resource definition
+        // This helps distinguish between multiple resources of the same type in the same file
         let resourceName = 'Resource';
+        let resourceInstanceName: string | null = null;
         const fileLines = originalText.split('\n');
         const diffLineIndex = diff.targetLine - 1; // Convert to 0-based index
 
         // Search backwards from the diff line to find the resource definition
+        // Also track where this resource block ends to identify the specific instance
+        let resourceStartLine = -1;
+        let resourceEndLine = -1;
         for (
           let lineIdx = Math.min(diffLineIndex, fileLines.length - 1);
           lineIdx >= 0;
@@ -499,7 +524,20 @@ export class OrlResultConverter {
           // Look for Terraform resource definition: resource "type" "name" {
           const resourceMatch = line.match(/resource\s+"([^"]+)"\s+"([^"]+)"/);
           if (resourceMatch) {
-            resourceName = resourceMatch[1]; // Use the resource type (e.g., aws_db_instance)
+            resourceName = resourceMatch[1]; // Resource type (e.g., aws_db_instance)
+            resourceInstanceName = resourceMatch[2]; // Instance name (e.g., my_db)
+            resourceStartLine = lineIdx;
+            // Find the end of this resource block by looking for the closing brace
+            let braceCount = 0;
+            for (let j = lineIdx; j < fileLines.length; j++) {
+              const currentLine = fileLines[j];
+              braceCount += (currentLine.match(/{/g) || []).length;
+              braceCount -= (currentLine.match(/}/g) || []).length;
+              if (braceCount === 0 && j > lineIdx) {
+                resourceEndLine = j;
+                break;
+              }
+            }
             break;
           }
           // Stop searching if we've gone too far back (more than 50 lines)
@@ -522,6 +560,19 @@ export class OrlResultConverter {
             );
             if (resourceMatch) {
               resourceName = resourceMatch[1];
+              resourceInstanceName = resourceMatch[2];
+              resourceStartLine = lineIdx;
+              // Find the end of this resource block
+              let braceCount = 0;
+              for (let j = lineIdx; j < modifiedLines.length; j++) {
+                const currentLine = modifiedLines[j];
+                braceCount += (currentLine.match(/{/g) || []).length;
+                braceCount -= (currentLine.match(/}/g) || []).length;
+                if (braceCount === 0 && j > lineIdx) {
+                  resourceEndLine = j;
+                  break;
+                }
+              }
               break;
             }
             if (diffLineIndex - lineIdx > 50) {
@@ -529,9 +580,23 @@ export class OrlResultConverter {
             }
           }
         }
+        
+        logger.debug('Identified resource for diff', {
+          resourceType: resourceName,
+          resourceInstance: resourceInstanceName,
+          diffLine: diff.targetLine,
+          resourceStartLine: resourceStartLine >= 0 ? resourceStartLine + 1 : null,
+          resourceEndLine: resourceEndLine >= 0 ? resourceEndLine + 1 : null,
+        });
 
         // Analyze the diff content to extract meaningful information
+        // This can help identify which attributes were changed, which might help
+        // narrow down which rules applied (though we're still limited by file-level hooks)
         const analysis = DiffContentAnalyzer.analyzeDiffContent(diff);
+        
+        // Note: We could potentially use analysis.properties to further filter rules,
+        // but without instance-level tracking from hooks, we can't be 100% accurate
+        // when multiple resources of the same type exist in the same file.
 
         // Attribute to rules using file-level mapping from diagnostics
         // Since hooks provide file paths (not hunks), we attribute all diffs in a file to rules that touched it
@@ -559,12 +624,184 @@ export class OrlResultConverter {
           }
         }
 
-        // Filter rules to only those that match this specific resource type
-        // Rule names contain the resource type, e.g.:
-        // "gomboc-ai/...for_hashicorp__aws-resources-aws_elasticache_replication_group000"
-        // "gomboc-ai/...for_hashicorp__aws-resources-aws_rds_cluster000"
-        const matchingRules: string[] = [];
-        if (resourceName !== 'Resource' && allFileRules.length > 0) {
+        // Match rules to resources based on:
+        // 1. Rules that touched this file
+        // 2. Resource type matching (rule name contains resource type)
+        // 3. Diff line falls within resource's line range
+        let matchingRules: string[] = [];
+        const diffLine = diff.targetLine;
+        
+        if (
+          resourceName !== 'Resource' &&
+          resourceInstanceName !== null &&
+          resourceStartLine >= 0 &&
+          resourceEndLine >= 0
+        ) {
+          // Check if the diff line falls within this resource's line range
+          // Note: resourceStartLine and resourceEndLine are 0-based, diff.targetLine is 1-based
+          const resourceContainsDiff = 
+            diffLine >= resourceStartLine + 1 && diffLine <= resourceEndLine + 1;
+          
+          if (resourceContainsDiff && allFileRules.length > 0) {
+            // Match rules to this specific resource instance by checking if the rule
+            // has this specific resource instance in its resources list
+            // This ensures we only show rules that actually modified this specific instance
+            for (const ruleName of allFileRules) {
+              // Find the rule in diagnostics
+              const rule = result.diagnostics?.rules?.find((r) => r.ruleName === ruleName);
+              if (!rule) {
+                continue;
+              }
+              
+              // Check if this rule has this specific resource instance in its resources
+              const ruleFiles = rule.files || [];
+              for (const ruleFile of ruleFiles) {
+                const keys = addFileKeys(ruleFile.path);
+                const fileMatches = keys.some((k) => matchKeys.includes(k));
+                if (!fileMatches) {
+                  continue;
+                }
+                
+                const resources = (ruleFile as any).resources || [];
+                // Check if this specific resource instance is in the rule's resources
+                // AND the diff line falls within that resource's line range
+                const resourceMatches = resources.some((r: any) => 
+                  r.type === resourceName &&
+                  r.name === resourceInstanceName &&
+                  diffLine >= r.startLine &&
+                  diffLine <= r.endLine
+                );
+                
+                if (resourceMatches && !matchingRules.includes(ruleName)) {
+                  matchingRules.push(ruleName);
+                  break; // Found a match for this rule, no need to check other files
+                }
+              }
+            }
+            
+            // If no instance-level match found (resources list is empty in dry-run mode),
+            // use diff content analysis to match rules based on what was changed
+            if (matchingRules.length === 0) {
+              // Extract properties from the diff to help match rules
+              const diffProperties = analysis.properties || [];
+              const diffContent = diff.newLines.join('\n').toLowerCase();
+              
+              // Normalize resource name for matching
+              const normalizedResource = resourceName
+                .replace(/^hashicorp__/, '')
+                .replace(/^aws-resources-/, '')
+                .replace(/^google-resources-/, '')
+                .replace(/^azurerm-resources-/, '')
+                .replace(/\./g, '_')
+                .replace(/-/g, '_');
+
+              const resourceVariants = [
+                normalizedResource,
+                `hashicorp__aws-resources-${normalizedResource}`,
+                `hashicorp__aws-resources-aws_${normalizedResource}`,
+                `hashicorp__google-resources-${normalizedResource}`,
+                `hashicorp__google-resources-google_${normalizedResource}`,
+                `aws-resources-${normalizedResource}`,
+                `aws-resources-aws_${normalizedResource}`,
+              ];
+
+              for (const ruleName of allFileRules) {
+                const ruleLower = ruleName.toLowerCase();
+                
+                // First check if rule matches resource type
+                const matchesResourceType = resourceVariants.some(variant =>
+                  ruleLower.includes(variant.toLowerCase()),
+                );
+                
+                if (!matchesResourceType) {
+                  continue;
+                }
+                
+                // Then check if the diff content matches what this rule would change
+                // This helps distinguish between rules that apply to the same resource type
+                // For example, "auto_minor_version_upgrade" vs "at_rest_encryption_enabled"
+                let matchesDiffContent = false;
+                
+                // Extract key terms from rule name that might appear in the diff
+                // Rules often have descriptive names that hint at what they change
+                const ruleTerms = ruleLower
+                  .split(/[_\-\s]+/)
+                  .filter(term => term.length > 3) // Only meaningful terms
+                  .filter(term => 
+                    !['for', 'hashicorp', 'aws', 'resources', 'ensure', 'that', 'the', 'is', 'are', 'and', 'or'].includes(term)
+                  );
+                
+                // Check if any rule term appears in the diff content or properties
+                // This helps match rules to the specific changes they make
+                if (ruleTerms.length > 0) {
+                  matchesDiffContent = ruleTerms.some(term => {
+                    // Check if term appears in diff content
+                    if (diffContent.includes(term)) {
+                      return true;
+                    }
+                    // Check if term appears in property names
+                    if (diffProperties.some(prop => prop.toLowerCase().includes(term))) {
+                      return true;
+                    }
+                    // Check for common property name patterns
+                    // e.g., "automatic" -> "auto_minor_version_upgrade"
+                    // e.g., "encryption" -> "at_rest_encryption_enabled"
+                    const propertyPatterns: Record<string, string[]> = {
+                      'automatic': ['auto_minor_version_upgrade', 'auto_minor', 'automatic'],
+                      'updates': ['auto_minor_version_upgrade', 'auto_minor'],
+                      'patching': ['auto_minor_version_upgrade', 'maintenance'],
+                      'encryption': ['encryption', 'encrypted', 'kms', 'at_rest_encryption_enabled', 'storage_encrypted'],
+                      'data': ['at_rest_encryption', 'encryption', 'at_rest_encryption_enabled'],
+                      'rest': ['at_rest_encryption', 'storage_encrypted', 'at_rest_encryption_enabled'],
+                    };
+                    
+                    for (const [key, patterns] of Object.entries(propertyPatterns)) {
+                      if (term.includes(key) || key.includes(term)) {
+                        if (patterns.some(pattern => 
+                          diffContent.includes(pattern) || 
+                          diffProperties.some(prop => prop.toLowerCase().includes(pattern))
+                        )) {
+                          return true;
+                        }
+                      }
+                    }
+                    return false;
+                  });
+                } else {
+                  // If no meaningful terms, don't match (be conservative)
+                  // This prevents false positives when we can't determine what changed
+                  matchesDiffContent = false;
+                }
+                
+                if (matchesDiffContent && !matchingRules.includes(ruleName)) {
+                  matchingRules.push(ruleName);
+                }
+              }
+              
+              logger.debug('Matched rules using diff content analysis', {
+                resourceType: resourceName,
+                resourceInstance: resourceInstanceName,
+                diffLine,
+                diffProperties,
+                diffContent: diffContent.slice(0, 100),
+                matchingRules,
+              });
+            }
+            
+            logger.debug('Matched rules for resource', {
+              resourceType: resourceName,
+              resourceInstance: resourceInstanceName,
+              diffLine,
+              resourceRange: `${resourceStartLine + 1}-${resourceEndLine + 1}`,
+              matchingRules,
+              allFileRules,
+            });
+          }
+        }
+
+        // Fallback: If no resource-specific match, don't show any rules
+        // (this prevents false positives where all rules are shown for all resources)
+        if (matchingRules.length === 0 && resourceName !== 'Resource' && allFileRules.length > 0) {
           // Normalize resource name for matching (handle variations)
           const normalizedResource = resourceName
             .replace(/^hashicorp__/, '')
@@ -598,10 +835,25 @@ export class OrlResultConverter {
           }
         }
 
-        // If no resource-specific rules found, fall back to all file rules
-        // (this handles cases where resource type couldn't be determined)
-        if (matchingRules.length === 0 && allFileRules.length > 0) {
-          matchingRules.push(...allFileRules);
+        // If no resource-specific rules found, don't show any rules
+        // This prevents false positives where all rules are shown for all resources
+        // Only show rules when we can confidently match them to a specific resource
+        if (matchingRules.length === 0) {
+          logger.debug('No matching rules found for resource', {
+            file: actualFilePath,
+            resourceType: resourceName,
+            resourceInstance: resourceInstanceName,
+            diffLine: diff.targetLine,
+            allFileRulesCount: allFileRules.length,
+          });
+        } else if (matchingRules.length > 0) {
+          logger.debug('Matched rules by resource instance', {
+            file: actualFilePath,
+            resourceType: resourceName,
+            resourceInstance: resourceInstanceName,
+            matchingRulesCount: matchingRules.length,
+            matchingRules: matchingRules.slice(0, 3),
+          });
         }
 
         // Get rule descriptions
@@ -678,7 +930,7 @@ export class OrlResultConverter {
           // Fallback if no descriptions found
           descriptionText = `${resourceName}\n${analysis.description || 'ORL remediation'}`;
         }
-        
+
         // Note: VS Code Diagnostic messages support MarkdownString for rich formatting
         // You can use MarkdownString to create sections like:
         // const markdown = new vscode.MarkdownString();
