@@ -47,6 +47,9 @@ export class OrlClient {
       'post_remediate',
     ];
 
+    // Also include common.sh which is sourced by some hooks
+    const supportFiles = ['common'];
+
     const scripts: Record<string, string> = {};
 
     // Determine the extension path - we know exactly where hooks are
@@ -66,8 +69,9 @@ export class OrlClient {
       }
     }
 
-    // Read hook files - we know exactly where they are
-    for (const hookName of hookFiles) {
+    // Read hook files and support files (like common.sh) - we know exactly where they are
+    const allFiles = [...hookFiles, ...supportFiles];
+    for (const hookName of allFiles) {
       let hookPath: string | undefined;
 
       if (extensionPath) {
@@ -140,12 +144,24 @@ export class OrlClient {
       }
     }
 
-    // Verify all required hooks were found
+    // Verify all required hooks were found (support files like common.sh are optional)
     const missingHooks: string[] = [];
     for (const hookName of hookFiles) {
       if (!scripts[hookName] || scripts[hookName].trim() === '') {
         missingHooks.push(hookName);
       }
+    }
+    
+    // Fail if common.sh is missing (required by pre_remediate_rule_finding and post_remediate_rule_finding)
+    if (!scripts['common'] || scripts['common'].trim() === '') {
+      const errorMessage =
+        'Failed to load required support file: common.sh. ' +
+        'Hooks that source it (pre_remediate_rule_finding, post_remediate_rule_finding) will fail. ' +
+        `Expected location: ${extensionPath ? path.join(extensionPath, 'dist', 'orl', 'hooks') : 'unknown'}.`;
+      logger.error(errorMessage, {
+        extensionPath,
+      });
+      throw new Error(errorMessage);
     }
 
     if (missingHooks.length > 0) {
