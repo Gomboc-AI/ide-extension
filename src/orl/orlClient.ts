@@ -12,6 +12,7 @@ export interface OrlConfig {
   rulesServiceUrl: string;
   rulesServiceToken: string;
   channel: string;
+  extensionPath?: string; // Path to extension directory (from context.extensionPath)
 }
 
 export interface OrlResult {
@@ -48,456 +49,109 @@ export class OrlClient {
 
     const scripts: Record<string, string> = {};
 
-    // Try to read hook files from the source directory (for development)
-    // or use legacy inline scripts as fallback
-    for (const hookName of hookFiles) {
-      // Try multiple possible paths
-      const possiblePaths = [
-        path.join(__dirname, 'hooks', `${hookName}.sh`),
-        path.join(process.cwd(), 'src', 'orl', 'hooks', `${hookName}.sh`),
-      ];
+    // Determine the extension path - we know exactly where hooks are
+    let extensionPath: string | undefined = this.config.extensionPath;
+    
+    // Fallback: try to get extension path from VS Code API
+    if (!extensionPath) {
+      try {
+        const extension = vscode.extensions.getExtension('gomboc.gomboc-vscode-extension');
+        if (extension) {
+          extensionPath = extension.extensionPath;
+        }
+      } catch (e) {
+        // Extension not available
+      }
+    }
 
-      let found = false;
-      for (const hookPath of possiblePaths) {
+    // Read hook files - we know exactly where they are
+    for (const hookName of hookFiles) {
+      let hookPath: string | undefined;
+      
+      if (extensionPath) {
+        // First try dist/orl/hooks (production - hooks are copied there during build)
+        const distHookPath = path.join(extensionPath, 'dist', 'orl', 'hooks', `${hookName}.sh`);
+        try {
+          await fs.promises.access(distHookPath, fs.constants.F_OK);
+          hookPath = distHookPath;
+        } catch (e) {
+          // dist path doesn't exist, try src/orl/hooks (development)
+          const srcHookPath = path.join(extensionPath, 'src', 'orl', 'hooks', `${hookName}.sh`);
+          try {
+            await fs.promises.access(srcHookPath, fs.constants.F_OK);
+            hookPath = srcHookPath;
+          } catch (e2) {
+            // src path doesn't exist either
+          }
+        }
+      }
+      
+      // If we found a path, read the file
+      if (hookPath) {
         try {
           const content = await fs.promises.readFile(hookPath, 'utf8');
           scripts[hookName] = content;
-          found = true;
-          break;
+          logger.info(`Successfully read hook file: ${hookName}`, {
+            path: hookPath,
+            length: content.length,
+          });
         } catch (error) {
-          // Try next path
+          logger.warn(`Failed to read hook file: ${hookName}`, {
+            path: hookPath,
+            error,
+          });
         }
-      }
-
-      if (!found) {
-        logger.warn(
-          `Failed to read hook file for ${hookName}, using legacy script`,
-        );
+      } else {
+        logger.warn(`Hook file not found: ${hookName}`, {
+          extensionPath,
+          triedPaths: extensionPath
+            ? [
+                path.join(extensionPath, 'dist', 'orl', 'hooks', `${hookName}.sh`),
+                path.join(extensionPath, 'src', 'orl', 'hooks', `${hookName}.sh`),
+              ]
+            : [],
+        });
       }
     }
 
-    // Legacy inline scripts (used as fallback if hook files aren't found)
-    const legacyScripts: Record<string, string> = {
-      pre_remediate: `#!/bin/sh
-set -eu
-timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
-BASE="/workspace"
-mkdir -p "\$BASE/.orl/diagnostics/rules" "\$BASE/.orl/diag/rules"
-manifest="\$BASE/.orl/diagnostics/manifest.jsonl"
-: > "\$manifest"
-rules="\${1:-0}"; workspaces="\${2:-0}"
-case "\$rules" in ''|*[!0-9]*) rules=0;; esac
-case "\$workspaces" in ''|*[!0-9]*) workspaces=0;; esac
-printf '{"event":"pre_remediate","rules":%s,"workspaces":%s,"time":"%s"}\\n' "\$rules" "\$workspaces" "\$(timestamp)" >> "\$manifest"
-`,
-      pre_remediate_rule: `#!/bin/sh
-set -eu
-timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
-json_escape() { printf '%s' "\$1" | sed -e 's/[\\\\]/\\\\\\\\/g' -e 's/"/\\"/g'; }
-BASE="/workspace"
-mkdir -p "\$BASE/.orl/diagnostics" "\$BASE/.orl/diag"
-manifest="\$BASE/.orl/diagnostics/manifest.jsonl"
-rule="\${1:-unknown}"; prio="\${2:-0}"
-case "\$prio" in ''|*[!0-9-]*) prio=0;; esac
-rule_esc=\$(json_escape "\$rule")
-printf '{"event":"pre_remediate_rule","ruleName":"%s","priority":%s,"time":"%s"}\\n' "\$rule_esc" "\$prio" "\$(timestamp)" >> "\$manifest"
-# Snapshot current workspace for this rule's baseline
-snapDir="\$BASE/.orl/diag/rules/\$rule_esc/before"
-mkdir -p "\$snapDir"
-# Copy only IaC files; preserve directory structure
-cd "\$BASE"
-find . -type d -name ".orl" -prune -o -type f \\( -name "*.tf" -o -name "*.yaml" -o -name "*.yml" -o -name "*.json" \\) -print | while IFS= read -r f; do
-  # Remove leading ./ from path
-  rel_path=\$(echo "\$f" | sed 's|^\\./||')
-  dest="\$snapDir/\$rel_path"
-  mkdir -p "\$(dirname "\$dest")"
-  cp "\$f" "\$dest" 2>/dev/null || true
-done
-`,
-      post_remediate_rule: `#!/bin/sh
-set -e
-timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
-json_escape() { printf '%s' "\$1" | sed -e 's/[\\\\]/\\\\\\\\/g' -e 's/"/\\"/g'; }
-BASE="/workspace"
-mkdir -p "\$BASE/.orl/diagnostics" "\$BASE/.orl/diag"
-manifest="\$BASE/.orl/diagnostics/manifest.jsonl"
-rule="\${1:-unknown}"; prio="\${2:-0}"; files_csv="\${3:-}"
-case "\$prio" in ''|*[!0-9-]*) prio=0;; esac
-rule_esc=\$(json_escape "\$rule")
-printf '{"event":"post_remediate_rule","ruleName":"%s","priority":%s,"time":"%s"}\\n' "\$rule_esc" "\$prio" "\$(timestamp)" >> "\$manifest" || true
+    // Verify all required hooks were found
+    const missingHooks: string[] = [];
+    for (const hookName of hookFiles) {
+      if (!scripts[hookName] || scripts[hookName].trim() === '') {
+        missingHooks.push(hookName);
+      }
+    }
 
-# Build per-rule JSON with file paths and resource instances
-rulesOut="\$BASE/.orl/diagnostics/rules"
-ruleDir="\$rulesOut/\$rule_esc"
-mkdir -p "\$rulesOut" "\$ruleDir" || true
+    if (missingHooks.length > 0) {
+      const errorMessage = `Failed to load required hook files: ${missingHooks.join(', ')}. ` +
+        `Expected location: ${extensionPath ? path.join(extensionPath, 'dist', 'orl', 'hooks') : 'unknown'}. ` +
+        'Please ensure hooks are copied during build.';
+      logger.error(errorMessage, {
+        missingHooks,
+        extensionPath,
+        triedPaths: extensionPath
+          ? [
+              path.join(extensionPath, 'dist', 'orl', 'hooks'),
+              path.join(extensionPath, 'src', 'orl', 'hooks'),
+            ]
+          : [],
+      });
+      throw new Error(errorMessage);
+    }
 
-# Sanitize rule name for filename
-rule_file=\$(printf '%s' "\$rule" | sed 's/[^a-zA-Z0-9._-]/_/g' | head -c 200)
-ruleJson="\$rulesOut/\$rule_file.json"
-ruleJsonTmp="\$ruleJson.tmp"
-
-# Read modified resources if available
-modified_resources="\$ruleDir/resources_modified.json"
-if [ -f "\$modified_resources" ] && command -v jq >/dev/null 2>&1; then
-  # Include resource instances in the JSON
-  printf '{"ruleName":"%s","priority":%s,"files":[' "\$rule_esc" "\$prio" > "\$ruleJsonTmp" || true
-  firstFile=1
-  
-  if [ -n "\$files_csv" ]; then
-    OLDIFS=\$IFS
-    IFS=','; set -- \$files_csv; IFS=\$OLDIFS
-    for p in "\$@"; do
-      t=\$(printf '%s' "\$p" | sed -e 's/^ *//' -e 's/ *\$//' || echo "")
-      [ -z "\$t" ] && continue
-      
-      # Normalize path
-      if [ "\${t#/workspace/}" != "\$t" ]; then
-        normalized_path="\${t#/workspace/}"
-      elif [ "\${t#./}" != "\$t" ]; then
-        normalized_path="\${t#./}"
-      else
-        normalized_path="\$t"
-      fi
-      
-      if [ "\$firstFile" -eq 0 ]; then printf ',' >> "\$ruleJsonTmp" || true; fi
-      firstFile=0
-      
-      fileEsc=\$(json_escape "\$normalized_path")
-      
-      # Get resources for this file from modified_resources
-      resources_json=\$(jq -r --arg file "\$normalized_path" '.[\$file] // []' "\$modified_resources" 2>/dev/null || echo "[]")
-      
-      printf '{"path":"%s","resources":%s}' "\$fileEsc" "\$resources_json" >> "\$ruleJsonTmp" || true
-    done
-  fi
-  printf ']}\\n' >> "\$ruleJsonTmp" || true
-else
-  # Fallback: no resource instances, just file paths
-  printf '{"ruleName":"%s","priority":%s,"files":[' "\$rule_esc" "\$prio" > "\$ruleJsonTmp" || true
-  firstFile=1
-  if [ -n "\$files_csv" ]; then
-    OLDIFS=\$IFS
-    IFS=','; set -- \$files_csv; IFS=\$OLDIFS
-    for p in "\$@"; do
-      t=\$(printf '%s' "\$p" | sed -e 's/^ *//' -e 's/ *\$//' || echo "")
-      [ -z "\$t" ] && continue
-      if [ "\$firstFile" -eq 0 ]; then printf ',' >> "\$ruleJsonTmp" || true; fi
-      firstFile=0
-      fileEsc=\$(printf '%s' "\$t" | sed -e 's/[\\\\]/\\\\\\\\/g' -e 's/"/\\"/g' || echo "\$t")
-      printf '{"path":"%s","resources":[]}' "\$fileEsc" >> "\$ruleJsonTmp" || true
-    done
-  fi
-  printf ']}\\n' >> "\$ruleJsonTmp" || true
-fi
-
-mv "\$ruleJsonTmp" "\$ruleJson" 2>/dev/null || cp "\$ruleJsonTmp" "\$ruleJson" || true
-`,
-      pre_remediate_rule_finding: `#!/bin/sh
-set -e
-timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
-json_escape() { printf '%s' "\$1" | sed -e 's/[\\\\]/\\\\\\\\/g' -e 's/"/\\"/g'; }
-BASE="/workspace"
-rule="\${1:-unknown}"; prio="\${2:-0}"; files_csv="\${3:-}"
-rule_esc=\$(json_escape "\$rule")
-ruleDir="\$BASE/.orl/diagnostics/rules/\$rule_esc"
-mkdir -p "\$ruleDir" || true
-
-# Function to extract resource content hash (for comparison)
-get_resource_hash() {
-  file_path="\$1"
-  start_line="\$2"
-  end_line="\$3"
-  if [ ! -f "\$file_path" ] || [ \$start_line -le 0 ] || [ \$end_line -lt \$start_line ]; then
-    echo ""
-    return 0
-  fi
-  sed -n "\${start_line},\${end_line}p" "\$file_path" 2>/dev/null | md5sum 2>/dev/null | cut -d' ' -f1 || echo ""
-}
-
-# Function to extract Terraform resource instances from a file
-# Outputs JSON array of resources with content hash: [{"type":"...","name":"...","startLine":N,"endLine":M,"hash":"..."}]
-extract_resources() {
-  file_path="\$1"
-  if [ ! -f "\$file_path" ]; then return 0; fi
-  
-  # Only process Terraform files
-  case "\$file_path" in
-    *.tf) ;;
-    *) return 0 ;;
-  esac
-  
-  line_num=0
-  in_resource=0
-  resource_type=""
-  resource_name=""
-  resource_start=0
-  brace_depth=0
-  
-  while IFS= read -r line || [ -n "\$line" ]; do
-    line_num=\$((line_num + 1))
-    
-    # Check for resource definition: resource "type" "name" {
-    if echo "\$line" | grep -qE '^[[:space:]]*resource[[:space:]]+"[^"]+"[[:space:]]+"[^"]+"[[:space:]]*\{'; then
-      # Extract type and name (using basic sed for compatibility)
-      resource_type=\$(echo "\$line" | sed -n 's/.*resource[[:space:]]*"\\([^"]*\\)".*/\\1/p')
-      resource_name=\$(echo "\$line" | sed -n 's/.*resource[[:space:]]*"[^"]*"[[:space:]]*"\\([^"]*\\)".*/\\1/p')
-      resource_start=\$line_num
-      in_resource=1
-      brace_depth=1
-      continue
-    fi
-    
-    # If we're in a resource block, track braces
-    if [ \$in_resource -eq 1 ]; then
-      # Count opening and closing braces on this line
-      open_braces=\$(echo "\$line" | tr -cd '{' | wc -c)
-      close_braces=\$(echo "\$line" | tr -cd '}' | wc -c)
-      brace_depth=\$((brace_depth + open_braces - close_braces))
-      
-      # If brace depth reaches 0, we've found the end of the resource
-      if [ \$brace_depth -le 0 ]; then
-        # Get content hash for comparison
-        content_hash=\$(get_resource_hash "\$file_path" "\$resource_start" "\$line_num")
-        # Output the resource as JSON (with newline for line-by-line reading)
-        type_esc=\$(json_escape "\$resource_type")
-        name_esc=\$(json_escape "\$resource_name")
-        printf '{"type":"%s","name":"%s","startLine":%d,"endLine":%d,"hash":"%s"}\\n' "\$type_esc" "\$name_esc" "\$resource_start" "\$line_num" "\$content_hash"
-        in_resource=0
-        resource_type=""
-        resource_name=""
-        resource_start=0
-        brace_depth=0
-      fi
-    fi
-  done < "\$file_path"
-}
-
-# Extract resources from all files with findings
-resources_json="\$ruleDir/resources_before.json"
-printf '{' > "\$resources_json.tmp" || true
-first_file=1
-
-if [ -n "\$files_csv" ]; then
-  OLDIFS=\$IFS
-  IFS=','; set -- \$files_csv; IFS=\$OLDIFS
-  for file_path in "\$@"; do
-    file_path=\$(printf '%s' "\$file_path" | sed -e 's/^ *//' -e 's/ *\$//')
-    [ -z "\$file_path" ] && continue
-    
-    # Normalize path (remove /workspace prefix if present, add if missing)
-    if [ "\${file_path#/workspace/}" != "\$file_path" ]; then
-      normalized_path="\${file_path#/workspace/}"
-    elif [ "\${file_path#./}" != "\$file_path" ]; then
-      normalized_path="\${file_path#./}"
-    else
-      normalized_path="\$file_path"
-    fi
-    full_path="\$BASE/\$normalized_path"
-    
-    if [ ! -f "\$full_path" ]; then continue; fi
-    
-    if [ \$first_file -eq 0 ]; then printf ',' >> "\$resources_json.tmp" || true; fi
-    first_file=0
-    
-    file_esc=\$(json_escape "\$normalized_path")
-    printf '"%s":[' "\$file_esc" >> "\$resources_json.tmp" || true
-    
-    first_resource=1
-    # Extract resources and write to temp file (capture stderr for debugging)
-    extract_resources "\$full_path" > "\$ruleDir/tmp_resources.txt" 2>"\$ruleDir/tmp_resources.err" || true
-    # Read resources line by line (each resource is on its own line)
-    while IFS= read -r resource_json || [ -n "\$resource_json" ]; do
-      [ -z "\$resource_json" ] && continue
-      if [ \$first_resource -eq 0 ]; then printf ',' >> "\$resources_json.tmp" || true; fi
-      first_resource=0
-      printf '%s' "\$resource_json" >> "\$resources_json.tmp" || true
-    done < "\$ruleDir/tmp_resources.txt" 2>/dev/null || true
-    rm -f "\$ruleDir/tmp_resources.txt" "\$ruleDir/tmp_resources.err" 2>/dev/null || true
-    
-    printf ']' >> "\$resources_json.tmp" || true
-  done
-fi
-
-printf '}\\n' >> "\$resources_json.tmp" || true
-mv "\$resources_json.tmp" "\$resources_json" 2>/dev/null || cp "\$resources_json.tmp" "\$resources_json" || true
-`,
-      post_remediate_rule_finding: `#!/bin/sh
-set -e
-timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
-json_escape() { printf '%s' "\$1" | sed -e 's/[\\\\]/\\\\\\\\/g' -e 's/"/\\"/g'; }
-BASE="/workspace"
-rule="\${1:-unknown}"; prio="\${2:-0}"; files_csv="\${3:-}"
-rule_esc=\$(json_escape "\$rule")
-ruleDir="\$BASE/.orl/diagnostics/rules/\$rule_esc"
-mkdir -p "\$ruleDir" || true
-
-# Function to extract resource content hash (for comparison)
-get_resource_hash() {
-  file_path="\$1"
-  start_line="\$2"
-  end_line="\$3"
-  if [ ! -f "\$file_path" ] || [ \$start_line -le 0 ] || [ \$end_line -lt \$start_line ]; then
-    echo ""
-    return 0
-  fi
-  sed -n "\${start_line},\${end_line}p" "\$file_path" 2>/dev/null | md5sum 2>/dev/null | cut -d' ' -f1 || echo ""
-}
-
-# Function to extract resources (same as pre_remediate_rule_finding, with hash)
-extract_resources() {
-  file_path="\$1"
-  if [ ! -f "\$file_path" ]; then return 0; fi
-  
-  case "\$file_path" in
-    *.tf) ;;
-    *) return 0 ;;
-  esac
-  
-  line_num=0
-  in_resource=0
-  resource_type=""
-  resource_name=""
-  resource_start=0
-  brace_depth=0
-  
-  while IFS= read -r line || [ -n "\$line" ]; do
-    line_num=\$((line_num + 1))
-    
-    if echo "\$line" | grep -qE '^[[:space:]]*resource[[:space:]]+"[^"]+"[[:space:]]+"[^"]+"[[:space:]]*\{'; then
-      resource_type=\$(echo "\$line" | sed -n 's/.*resource[[:space:]]*"\\([^"]*\\)".*/\\1/p')
-      resource_name=\$(echo "\$line" | sed -n 's/.*resource[[:space:]]*"[^"]*"[[:space:]]*"\\([^"]*\\)".*/\\1/p')
-      resource_start=\$line_num
-      in_resource=1
-      brace_depth=1
-      continue
-    fi
-    
-    if [ \$in_resource -eq 1 ]; then
-      open_braces=\$(echo "\$line" | tr -cd '{' | wc -c)
-      close_braces=\$(echo "\$line" | tr -cd '}' | wc -c)
-      brace_depth=\$((brace_depth + open_braces - close_braces))
-      
-      if [ \$brace_depth -le 0 ]; then
-        # Get content hash for comparison
-        content_hash=\$(get_resource_hash "\$file_path" "\$resource_start" "\$line_num")
-        type_esc=\$(json_escape "\$resource_type")
-        name_esc=\$(json_escape "\$resource_name")
-        printf '{"type":"%s","name":"%s","startLine":%d,"endLine":%d,"hash":"%s"}\\n' "\$type_esc" "\$name_esc" "\$resource_start" "\$line_num" "\$content_hash"
-        in_resource=0
-        resource_type=""
-        resource_name=""
-        resource_start=0
-        brace_depth=0
-      fi
-    fi
-  done < "\$file_path"
-}
-
-# Read before snapshot
-before_json="\$ruleDir/resources_before.json"
-modified_json="\$ruleDir/resources_modified.json"
-current_json="\$ruleDir/resources_after.json"
-
-# Extract current resources
-printf '{' > "\$current_json.tmp" || true
-first_file=1
-
-if [ -n "\$files_csv" ]; then
-  OLDIFS=\$IFS
-  IFS=','; set -- \$files_csv; IFS=\$OLDIFS
-  for file_path in "\$@"; do
-    file_path=\$(printf '%s' "\$file_path" | sed -e 's/^ *//' -e 's/ *\$//')
-    [ -z "\$file_path" ] && continue
-    
-    if [ "\${file_path#/workspace/}" != "\$file_path" ]; then
-      normalized_path="\${file_path#/workspace/}"
-    elif [ "\${file_path#./}" != "\$file_path" ]; then
-      normalized_path="\${file_path#./}"
-    else
-      normalized_path="\$file_path"
-    fi
-    full_path="\$BASE/\$normalized_path"
-    
-    if [ ! -f "\$full_path" ]; then continue; fi
-    
-    if [ \$first_file -eq 0 ]; then printf ',' >> "\$current_json.tmp" || true; fi
-    first_file=0
-    
-    file_esc=\$(json_escape "\$normalized_path")
-    printf '"%s":[' "\$file_esc" >> "\$current_json.tmp" || true
-    
-    first_resource=1
-    # Extract resources and write to temp file
-    extract_resources "\$full_path" > "\$ruleDir/tmp_resources_after.txt" 2>"\$ruleDir/tmp_resources_after.err" || true
-    # Read resources line by line (each resource is on its own line)
-    while IFS= read -r resource_json || [ -n "\$resource_json" ]; do
-      [ -z "\$resource_json" ] && continue
-      if [ \$first_resource -eq 0 ]; then printf ',' >> "\$current_json.tmp" || true; fi
-      first_resource=0
-      printf '%s' "\$resource_json" >> "\$current_json.tmp" || true
-    done < "\$ruleDir/tmp_resources_after.txt" 2>/dev/null || true
-    rm -f "\$ruleDir/tmp_resources_after.txt" "\$ruleDir/tmp_resources_after.err" 2>/dev/null || true
-    
-    printf ']' >> "\$current_json.tmp" || true
-  done
-fi
-
-printf '}\\n' >> "\$current_json.tmp" || true
-mv "\$current_json.tmp" "\$current_json" 2>/dev/null || cp "\$current_json.tmp" "\$current_json" || true
-
-# In dry-run mode, don't include resources in modified list
-# The IDE extension will extract resources from the original file and match based on diff line numbers
-# This avoids false positives where all resources from a file are attributed to all rules
-printf '{}\\n' > "\$modified_json" || true
-`,
-      post_remediate: `#!/bin/sh
-set -eu
-timestamp() { date -u +"%Y-%m-%dT%H:%M:%SZ"; }
-BASE="/workspace"
-mkdir -p "\$BASE/.orl/diagnostics" "\$BASE/.orl/diag"
-manifest="\$BASE/.orl/diagnostics/manifest.jsonl"
-aggregate="\$BASE/.orl/diagnostics/diagnostics.json"
-rules="\${1:-0}"
-case "\$rules" in ''|*[!0-9-]*) rules=0;; esac
-printf '{"event":"post_remediate","rulesExecuted":%s,"time":"%s"}\\n' "\$rules" "\$(timestamp)" >> "\$manifest"
-# Aggregate per-rule JSON files into final diagnostics
-rulesDir="\$BASE/.orl/diagnostics/rules"
-{
-  printf '{'
-  printf '"version":1,'
-  printf '"generatedAt":"%s",' "\$(timestamp)"
-  printf '"rules":['
-  first=1
-  for f in "\$rulesDir"/*.json; do
-    if [ ! -f "\$f" ]; then continue; fi
-    # Skip resource tracking files (they have / in the name)
-    case "\$f" in
-      */resources_*.json) continue ;;
-    esac
-    if [ \$first -eq 0 ]; then printf ','; fi
-    first=0
-    cat "\$f"
-  done
-  printf ']}\\n'
-} > "\$aggregate"
-`,
-    };
-
-    // Merge hook files with legacy scripts (legacy scripts as fallback)
-    const finalScripts: Record<string, string> = { ...legacyScripts };
+    // All hooks loaded successfully - write them to temp workspace
+    // Note: We fail fast if any hooks are missing (checked above), ensuring proper deployment
     for (const [name, content] of Object.entries(scripts)) {
-      if (content && content.trim() !== `#!/bin/sh\n# Hook ${name}\n`) {
-        finalScripts[name] = content;
-      }
-    }
-
-    for (const [name, content] of Object.entries(finalScripts)) {
       const file = path.join(hooksDir, name);
       await fs.promises.writeFile(file, content, {
         encoding: 'utf8',
         mode: 0o755,
       });
       await fs.promises.chmod(file, 0o755);
+      logger.debug(`Wrote hook file: ${name}`, {
+        path: file,
+        length: content.length,
+      });
     }
   }
 
@@ -570,8 +224,9 @@ rulesDir="\$BASE/.orl/diagnostics/rules"
           logger.warn('ORL execution warnings', { stderr });
         }
 
-        // Parse ORL output to extract modified files
-        const modifiedFiles = this.parseOrlOutput(stdout);
+        // Read modified files directly from temp directory (non-dry-run mode)
+        // Files are actually modified in .orl-temp, so we can read them directly
+        const modifiedFiles = await this.readModifiedFilesFromTemp(tempDir);
 
         // Attempt to read aggregated diagnostics generated by hooks
         const diagnostics = await this.readDiagnostics(tempDir);
@@ -599,8 +254,8 @@ rulesDir="\$BASE/.orl/diagnostics/rules"
             stderr: error.stderr,
           });
 
-          // Parse ORL output to extract modified files
-          const modifiedFiles = this.parseOrlOutput(error.stdout);
+          // Read modified files directly from temp directory (non-dry-run mode)
+          const modifiedFiles = await this.readModifiedFilesFromTemp(tempDir);
 
           // Attempt to read aggregated diagnostics generated by hooks
           const diagnostics = await this.readDiagnostics(tempDir);
@@ -702,13 +357,13 @@ rulesDir="\$BASE/.orl/diagnostics/rules"
       'docker run --rm',
       `-v '${workspacePath}:/workspace'`,
       containerImage,
-      'remediate /workspace --dry-run --hooks-dir /workspace/.orl/hooks',
+      'remediate /workspace --hooks-dir /workspace/.orl/hooks',
     ];
 
     // Add rulespace if rules directory exists
     if (rulesDir) {
       command[command.length - 1] =
-        'remediate /workspace --dry-run --rulespace /workspace/rules --hooks-dir /workspace/.orl/hooks';
+        'remediate /workspace --rulespace /workspace/rules --hooks-dir /workspace/.orl/hooks';
     }
 
     // Add language if specified
@@ -720,7 +375,84 @@ rulesDir="\$BASE/.orl/diagnostics/rules"
   }
 
   /**
-   * Parse ORL dry-run output to extract modified files
+   * Read modified files directly from the temp directory (non-dry-run mode)
+   */
+  private async readModifiedFilesFromTemp(
+    tempDir: string,
+  ): Promise<{ [filePath: string]: string }> {
+    const modifiedFiles: { [filePath: string]: string } = {};
+    
+    try {
+      // Read all IaC files from temp directory
+      const files = await this.getAllIacFiles(tempDir);
+      
+      for (const filePath of files) {
+        try {
+          // Read the modified file content
+          const content = await fs.promises.readFile(filePath, 'utf8');
+          
+          // Convert temp directory path to ORL workspace path format
+          // e.g., /path/to/.orl-temp/test-aws.tf -> /workspace/test-aws.tf
+          const relativePath = path.relative(tempDir, filePath);
+          const orlPath = `/workspace/${relativePath}`;
+          
+          modifiedFiles[orlPath] = content;
+          
+          logger.debug('Read modified file from temp directory', {
+            filePath,
+            orlPath,
+            contentLength: content.length,
+          });
+        } catch (error) {
+          logger.warn('Failed to read modified file', { filePath, error });
+        }
+      }
+      
+      logger.info('Read modified files from temp directory', {
+        fileCount: Object.keys(modifiedFiles).length,
+        files: Object.keys(modifiedFiles),
+      });
+    } catch (error) {
+      logger.error('Failed to read modified files from temp directory', { error });
+    }
+    
+    return modifiedFiles;
+  }
+
+  /**
+   * Recursively get all IaC files from a directory
+   */
+  private async getAllIacFiles(dir: string): Promise<string[]> {
+    const files: string[] = [];
+    
+    try {
+      const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+      
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        
+        // Skip .orl directory and other hidden/system directories
+        if (entry.name.startsWith('.') && entry.name !== '.') {
+          continue;
+        }
+        
+        if (entry.isDirectory()) {
+          // Recursively search subdirectories
+          const subFiles = await this.getAllIacFiles(fullPath);
+          files.push(...subFiles);
+        } else if (entry.isFile() && this.isIacFile(entry.name)) {
+          files.push(fullPath);
+        }
+      }
+    } catch (error) {
+      logger.warn('Failed to read directory', { dir, error });
+    }
+    
+    return files;
+  }
+
+  /**
+   * Parse ORL dry-run output to extract modified files (legacy method, kept for fallback)
    */
   private parseOrlOutput(output: string): { [filePath: string]: string } {
     logger.info('Raw ORL output', { output });
@@ -868,8 +600,22 @@ rulesDir="\$BASE/.orl/diagnostics/rules"
 /**
  * Factory function to create OrlClient from VS Code configuration
  */
-export function createOrlClient(): OrlClient {
+export function createOrlClient(
+  extensionPath?: string,
+): OrlClient {
   const config = vscode.workspace.getConfiguration('gomboc-vscode-extension');
+
+  // Get extension path if not provided
+  if (!extensionPath) {
+    try {
+      const extension = vscode.extensions.getExtension('gomboc.gomboc-vscode-extension');
+      if (extension) {
+        extensionPath = extension.extensionPath;
+      }
+    } catch (e) {
+      // Extension not available
+    }
+  }
 
   return new OrlClient({
     containerImage: config.get('orlContainerImage') || 'gomboc/orl:latest',
@@ -877,5 +623,6 @@ export function createOrlClient(): OrlClient {
       config.get('orlRulesServiceUrl') || 'https://rules.app.gomboc.ai',
     rulesServiceToken: config.get('orlRulesServiceToken') || '',
     channel: config.get('orlChannel') || 'default',
+    extensionPath,
   });
 }
