@@ -24,10 +24,10 @@ if GlobalConfig.Remediate.DryRun {
 ```go
 func (r *Remediator) Remediate(ctx context.Context) report.Report {
     // ... apply all rules (files modified in memory/AST) ...
-    
+
     hookDetails = r.hookHandler.RunHook(utils.PostRemediate, ...)  // Line 109
     // Hook runs HERE, then function returns
-    
+
     return *topLevelReport  // Line 112
 }
 ```
@@ -58,6 +58,7 @@ func (h HookHandler) RunHook(hookName string, arguments ...string) *HookDetails 
 ## Implications for Hash Comparison
 
 When `post_remediate.sh` runs:
+
 - ✅ Can read `resources_before.json` (created earlier)
 - ❌ Cannot read modified file content from disk (not flushed yet)
 - ❌ Cannot access file content from AST (shell script limitation)
@@ -66,19 +67,23 @@ When `post_remediate.sh` runs:
 ## Solutions
 
 ### Option 1: Background Process (Unreliable)
+
 - Hook starts background process that waits for files to flush
 - Problem: Unreliable timing, process may be killed
 
 ### Option 2: IDE Extension Post-Processing (Reliable)
+
 - Do hash comparison in IDE extension after ORL completes
 - Files are definitely flushed by then
 - Requires changes to IDE extension (acceptable)
 
 ### Option 3: File Polling (Complex)
+
 - Poll file modification times to detect flush
 - Problem: Complex, race conditions, unreliable
 
 ### Option 4: ORL Modification (Not Allowed)
+
 - Have ORL write file content to temp location before flush
 - Or pass file content via environment variables
 - **Cannot do this - user said no ORL modifications**
@@ -93,8 +98,8 @@ When `post_remediate.sh` runs:
 4. Update `diagnostics.json` with precise results if hash comparison succeeds
 
 This provides:
+
 - ✅ Reliable fallback (workaround always works)
 - ✅ Precise attribution when possible (hash comparison in IDE)
 - ✅ No ORL modifications required
 - ✅ Clean separation of concerns
-

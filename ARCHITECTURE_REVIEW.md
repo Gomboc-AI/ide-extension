@@ -4,19 +4,17 @@
 
 ### 🔴 Critical Issues
 
-1. **Legacy Script Fallback Still Present**
+1. **Legacy Script Fallback Still Present** ✅ **RESOLVED**
 
-   - **Location**: `orlClient.ts:79-483`
-   - **Issue**: The `legacyScripts` object contains 400+ lines of inline shell scripts that duplicate the external hook files. This creates maintenance burden and confusion.
-   - **Impact**: If external files fail to load, we fall back to potentially outdated inline scripts.
-   - **Recommendation**: Remove legacy scripts entirely and fail fast if hook files can't be loaded. This forces proper deployment and makes issues visible immediately.
+   - **Location**: `orlClient.ts` (previously lines 79-483)
+   - **Status**: ✅ **FIXED** - Legacy scripts removed. Code now fails fast if hook files can't be loaded (lines 151-167).
+   - **Resolution**: Removed all inline script fallbacks. If hooks can't be loaded, an error is thrown immediately, forcing proper deployment.
 
-2. **Duplicate Code in Hooks**
+2. **Duplicate Code in Hooks** ✅ **RESOLVED**
 
    - **Location**: `pre_remediate_rule_finding.sh` and `post_remediate_rule_finding.sh`
-   - **Issue**: The `extract_resources()` function is duplicated identically in both files (~70 lines each).
-   - **Impact**: Bug fixes and improvements must be made in two places, increasing risk of divergence.
-   - **Recommendation**: Extract to a shared library or source it from a common file.
+   - **Status**: ✅ **FIXED** - Extracted shared functions to `common.sh`.
+   - **Resolution**: Created `src/orl/hooks/common.sh` containing `get_resource_hash()` and `extract_resources()` functions. Both hook files now source this common file, eliminating duplication.
 
 3. **Brittle Resource Parsing**
 
@@ -29,11 +27,10 @@
    - **Impact**: May miss resources or incorrectly parse boundaries, leading to wrong attribution.
    - **Recommendation**: Use a proper Terraform parser (e.g., `hcl2json` or tree-sitter) if available in the container, or at least add more robust error handling.
 
-4. **Empty Resources in Dry-Run Mode**
-   - **Location**: `post_remediate_rule_finding.sh:128`
-   - **Issue**: Always outputs `{}` for `resources_modified.json` in dry-run mode, making the entire resource tracking infrastructure unused.
-   - **Impact**: Forces the IDE extension to use heuristic matching (diff content analysis) which is less precise.
-   - **Recommendation**: Consider extracting resources from the diff itself or using ORL's internal tracking if available.
+4. **Empty Resources in Dry-Run Mode** ✅ **RESOLVED**
+   - **Location**: `post_remediate_rule_finding.sh`
+   - **Status**: ✅ **RESOLVED** - No longer using dry-run mode. Workaround implemented to mark all resources in touched files.
+   - **Resolution**: Since we're running in non-dry-run mode, files are actually modified. However, ORL flushes files after all rules complete, so we use a workaround: mark all resources in files touched by each rule as potentially modified. The IDE extension uses diff content analysis for precise attribution.
 
 ### 🟡 Design Concerns
 
@@ -341,11 +338,17 @@ For each diff:
 
 ## Recommendations for Improvement
 
-1. **Remove legacy scripts** - Fail fast if hooks can't be loaded
-2. **Extract shared functions** - Create a common library for `extract_resources()`
-3. **Use proper Terraform parser** - Replace regex-based parsing
-4. **Centralize path normalization** - Single source of truth
-5. **Add error logging** - Don't suppress all errors
-6. **Validate JSON** - Use `jq` or validate before writing
-7. **Improve dry-run resource tracking** - Extract resources from diff content in hooks
-8. **Add unit tests** - Test resource extraction and matching logic
+1. ✅ **Remove legacy scripts** - **COMPLETED** - Fail fast if hooks can't be loaded
+2. ✅ **Extract shared functions** - **COMPLETED** - Created `common.sh` for `extract_resources()` and `get_resource_hash()`
+3. **Use proper Terraform parser** - Replace regex-based parsing (still recommended for future improvement)
+4. **Centralize path normalization** - Single source of truth (still recommended)
+5. **Add error logging** - Don't suppress all errors (partially addressed with debug.log)
+6. **Validate JSON** - Use `jq` or validate before writing (partially addressed with jq validation)
+7. ✅ **Improve dry-run resource tracking** - **RESOLVED** - No longer using dry-run mode; workaround implemented
+8. **Add unit tests** - Test resource extraction and matching logic (still recommended)
+
+## Recent Changes
+
+- **Hash Comparison Removed**: Hash comparison strategy was removed as it couldn't provide precise attribution when multiple rules modify the same resource. Attribution now relies entirely on diff content analysis, which matches rule names/keywords to actual changes in diffs.
+- **Legacy Scripts Removed**: All inline script fallbacks removed. Code fails fast if hooks can't be loaded.
+- **Shared Functions Extracted**: `extract_resources()` and `get_resource_hash()` moved to `common.sh` to eliminate duplication.

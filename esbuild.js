@@ -17,9 +17,10 @@ function copyHooks() {
     fs.mkdirSync(distHooksDir, { recursive: true });
   }
 
-  // Copy all .sh files from src to dist
+  // Copy all .sh files from src to dist (including common.sh)
   if (fs.existsSync(srcHooksDir)) {
     const files = fs.readdirSync(srcHooksDir);
+    let copiedCount = 0;
     for (const file of files) {
       if (file.endsWith('.sh')) {
         const srcFile = path.join(srcHooksDir, file);
@@ -27,10 +28,11 @@ function copyHooks() {
         fs.copyFileSync(srcFile, distFile);
         // Make executable
         fs.chmodSync(distFile, 0o755);
+        copiedCount++;
       }
     }
     console.log(
-      `[build] Copied ${files.filter(f => f.endsWith('.sh')).length} hook files to dist/orl/hooks/`,
+      `[build] Copied ${copiedCount} hook files (including common.sh) to dist/orl/hooks/`,
     );
   }
 }
