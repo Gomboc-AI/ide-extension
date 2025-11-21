@@ -275,7 +275,7 @@ export class OrlClient {
         const diagnostics = await this.readDiagnostics(tempDir);
 
         // Clean up temp directory
-        //await fs.promises.rm(tempDir, { recursive: true, force: true });
+        await fs.promises.rm(tempDir, { recursive: true, force: true });
 
         logger.info('ORL remediation completed', {
           filesModified: Object.keys(modifiedFiles).length,
@@ -304,7 +304,7 @@ export class OrlClient {
           const diagnostics = await this.readDiagnostics(tempDir);
 
           // Clean up temp directory
-          //await fs.promises.rm(tempDir, { recursive: true, force: true });
+          await fs.promises.rm(tempDir, { recursive: true, force: true });
 
           logger.info('ORL remediation completed with violations', {
             filesModified: Object.keys(modifiedFiles).length,
@@ -320,7 +320,7 @@ export class OrlClient {
         }
 
         // For other errors, clean up and rethrow
-        //await fs.promises.rm(tempDir, { recursive: true, force: true });
+        await fs.promises.rm(tempDir, { recursive: true, force: true });
         throw error;
       }
     } catch (error) {

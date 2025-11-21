@@ -20,6 +20,11 @@ get_resource_hash() {
 # Function to extract Terraform resource instances from a file
 # Outputs JSON objects (one per line) with: {"type":"...","name":"...","startLine":N,"endLine":M,"hash":"..."}
 # Usage: extract_resources "file_path"
+# 
+# Improvements:
+# - Handles multi-line resource declarations (resource "type" "name" { can span lines)
+# - Skips full-line comments when counting braces (comments don't affect structure)
+# - More robust brace counting
 extract_resources() {
   file_path="$1"
   if [ ! -f "$file_path" ]; then return 0; fi
@@ -36,23 +41,65 @@ extract_resources() {
   resource_name=""
   resource_start=0
   brace_depth=0
+  pending_resource=0
+  pending_start=0
+  pending_line=""
   
   while IFS= read -r line || [ -n "$line" ]; do
     line_num=$((line_num + 1))
     
-    # Check for resource definition: resource "type" "name" {
-    if echo "$line" | grep -qE '^[[:space:]]*resource[[:space:]]+"[^"]+"[[:space:]]+"[^"]+"[[:space:]]*\{'; then
-      # Extract type and name (using basic sed for compatibility)
-      resource_type=$(echo "$line" | sed -n 's/.*resource[[:space:]]*"\([^"]*\)".*/\1/p')
-      resource_name=$(echo "$line" | sed -n 's/.*resource[[:space:]]*"[^"]*"[[:space:]]*"\([^"]*\)".*/\1/p')
-      resource_start=$line_num
-      in_resource=1
-      brace_depth=1
-      continue
+    # Check if line is a full-line comment (starts with # after optional whitespace)
+    is_comment=0
+    trimmed_line=$(echo "$line" | sed 's/^[[:space:]]*//')
+    case "$trimmed_line" in
+      \#*) is_comment=1 ;;
+    esac
+    
+    # If we're accumulating a multi-line resource declaration
+    if [ $pending_resource -eq 1 ]; then
+      # Accumulate lines until we find the opening brace
+      pending_line="$pending_line $line"
+      if echo "$line" | grep -qE '\{'; then
+        # Found opening brace - extract type and name from accumulated text
+        resource_type=$(echo "$pending_line" | sed -n 's/.*resource[[:space:]]*"\([^"]*\)".*/\1/p')
+        resource_name=$(echo "$pending_line" | sed -n 's/.*resource[[:space:]]*"[^"]*"[[:space:]]*"\([^"]*\)".*/\1/p')
+        resource_start=$pending_start
+        in_resource=1
+        brace_depth=1
+        pending_resource=0
+        pending_line=""
+        # Continue to brace counting below (don't skip this line)
+      else
+        # Still accumulating, skip to next line
+        continue
+      fi
     fi
     
-    # If we're in a resource block, track braces
-    if [ $in_resource -eq 1 ]; then
+    # Check for resource definition start (single-line or start of multi-line)
+    if [ $in_resource -eq 0 ] && [ $pending_resource -eq 0 ]; then
+      # Check if line contains "resource" keyword
+      if echo "$line" | grep -qE '[[:space:]]*resource[[:space:]]+'; then
+        # Check if it's a complete single-line declaration with opening brace
+        if echo "$line" | grep -qE '^[[:space:]]*resource[[:space:]]+"[^"]+"[[:space:]]+"[^"]+"[[:space:]]*\{'; then
+          # Single-line: resource "type" "name" {
+          resource_type=$(echo "$line" | sed -n 's/.*resource[[:space:]]*"\([^"]*\)".*/\1/p')
+          resource_name=$(echo "$line" | sed -n 's/.*resource[[:space:]]*"[^"]*"[[:space:]]*"\([^"]*\)".*/\1/p')
+          resource_start=$line_num
+          in_resource=1
+          brace_depth=1
+          continue
+        else
+          # Multi-line: start accumulating (resource "type" "name" on this line, { on later line)
+          pending_resource=1
+          pending_start=$line_num
+          pending_line="$line"
+          continue
+        fi
+      fi
+    fi
+    
+    # If we're in a resource block, track braces (skip full-line comments)
+    if [ $in_resource -eq 1 ] && [ $is_comment -eq 0 ]; then
       # Count opening and closing braces on this line
       open_braces=$(echo "$line" | tr -cd '{' | wc -c)
       close_braces=$(echo "$line" | tr -cd '}' | wc -c)
