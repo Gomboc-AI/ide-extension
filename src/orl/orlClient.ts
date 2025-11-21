@@ -151,7 +151,7 @@ export class OrlClient {
         missingHooks.push(hookName);
       }
     }
-    
+
     // Fail if common.sh is missing (required by pre_remediate_rule_finding and post_remediate_rule_finding)
     if (!scripts['common'] || scripts['common'].trim() === '') {
       const errorMessage =
