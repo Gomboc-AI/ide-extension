@@ -35,7 +35,7 @@ export async function testOrlConnectionCommand(
         if (isConnected) {
           vscode.window
             .showInformationMessage(
-              '010101-ORL connection test successful',
+              '121212-ORL connection test successful',
               'Open Settings',
             )
             .then(selection => {
