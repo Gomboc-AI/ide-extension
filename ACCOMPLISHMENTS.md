@@ -9,6 +9,7 @@ We successfully implemented a comprehensive hook-based system that provides prec
 ### 1. Hook Infrastructure ✅
 
 **Hook Scripts Created:**
+
 - `pre_remediate.sh` - Initializes diagnostics infrastructure
 - `pre_remediate_rule.sh` - Snapshots workspace before each rule
 - `pre_remediate_rule_finding.sh` - Extracts "before" snapshot of resource instances (type, name, line range, content hash)
@@ -17,6 +18,7 @@ We successfully implemented a comprehensive hook-based system that provides prec
 - `post_remediate.sh` - Aggregates all per-rule JSON files into final `diagnostics.json`
 
 **Key Features:**
+
 - All hooks are POSIX-compliant shell scripts
 - Extract resource instances from Terraform files with line ranges and content hashes
 - Track which files and resources each rule touches
@@ -25,6 +27,7 @@ We successfully implemented a comprehensive hook-based system that provides prec
 ### 2. Build System Integration ✅
 
 **esbuild.js Updates:**
+
 - Added `copyHooks()` function that copies all `.sh` files from `src/orl/hooks/` to `dist/orl/hooks/` during build
 - Makes copied files executable (chmod 755)
 - Runs before build and on rebuild in watch mode
@@ -33,6 +36,7 @@ We successfully implemented a comprehensive hook-based system that provides prec
 ### 3. Path Resolution ✅
 
 **orlClient.ts Improvements:**
+
 - Uses extension context to get deterministic extension path
 - Checks `dist/orl/hooks/` first (production)
 - Falls back to `src/orl/hooks/` (development)
@@ -42,12 +46,14 @@ We successfully implemented a comprehensive hook-based system that provides prec
 ### 4. Resource Instance Tracking ✅
 
 **What Gets Tracked:**
+
 - Resource type (e.g., `aws_elasticache_replication_group`)
 - Resource instance name (e.g., `bad_cache`, `less_bad`)
 - Start and end line numbers
 - Content hash (for future hash comparison when ORL flushes files)
 
 **Current Implementation:**
+
 - Since ORL modifies files in-memory (AST) and only flushes after all rules complete, we mark all resources in touched files as potentially modified
 - This is a workaround that provides file-level precision
 - Future improvement: Use hash comparison when ORL provides access to modified content
@@ -57,10 +63,12 @@ We successfully implemented a comprehensive hook-based system that provides prec
 **Three-Layer Filtering:**
 
 1. **Resource Type Filtering:**
+
    - Only considers rules whose names contain the resource type
    - Handles various naming conventions (e.g., `aws_elasticache_replication_group`, `hashicorp__aws-resources-aws_elasticache_replication_group`)
 
 2. **Instance-Level Matching:**
+
    - Verifies the specific resource instance (type + name) is in the rule's resources list
    - Checks that the diff line falls within that resource's line range
    - Ensures we only match rules that actually touched that specific instance
@@ -72,6 +80,7 @@ We successfully implemented a comprehensive hook-based system that provides prec
    - Uses pattern matching to connect rule terms to property names
 
 **Result:**
+
 - Each resource instance shows only the rules that actually apply to it
 - Different instances of the same resource type show different rules (if applicable)
 - No false positives from rules that don't actually modify that instance
@@ -79,12 +88,14 @@ We successfully implemented a comprehensive hook-based system that provides prec
 ### 6. IDE Integration ✅
 
 **Diagnostics Display:**
+
 - Hover text shows resource name followed by rule descriptions
 - Each fix block shows only relevant rule descriptions
 - Resource names are correctly extracted and displayed
 - Rule descriptions come from `metadata.description` in ORL's YAML report
 
 **YAML Report Parsing:**
+
 - Correctly extracts rule descriptions from ORL's YAML report
 - Handles multi-line descriptions with proper indentation
 - Supports both `metadata.name` and rule-level `name` fields
@@ -93,12 +104,15 @@ We successfully implemented a comprehensive hook-based system that provides prec
 ## Technical Achievements
 
 ### Problem Solved
+
 **Before:** All rules that touched a file were shown for all diffs in that file, causing:
+
 - False positives (rules shown that didn't apply)
 - Confusion (same descriptions for different resource instances)
 - Poor user experience (too much irrelevant information)
 
 **After:** Each resource instance shows only the rules that:
+
 - Apply to that resource type
 - Actually touched that specific instance
 - Modified properties relevant to that rule
@@ -106,11 +120,13 @@ We successfully implemented a comprehensive hook-based system that provides prec
 ### Architecture Decisions
 
 1. **File-Level Resource Tracking (Current):**
+
    - Marks all resources in touched files as potentially modified
    - Reason: ORL doesn't flush files to disk until after all rules complete
    - Trade-off: Less precise than hash comparison, but still accurate with diff content filtering
 
 2. **Diff Content Analysis:**
+
    - Uses property extraction and pattern matching
    - Reason: Provides additional precision when multiple rules touch the same resource
    - Trade-off: Requires rule names to contain meaningful terms
@@ -123,6 +139,7 @@ We successfully implemented a comprehensive hook-based system that provides prec
 ## Current State
 
 ### ✅ Working
+
 - Hooks are read from `dist/orl/hooks/` successfully
 - `resources_modified.json` is populated with resources from touched files
 - `diagnostics.json` contains per-rule data with resource instances
@@ -133,6 +150,7 @@ We successfully implemented a comprehensive hook-based system that provides prec
 - Different resource instances show different rules (when applicable)
 
 ### 📊 Metrics
+
 - **6 hook scripts** created and integrated
 - **3-layer filtering** for precise attribution
 - **100% deterministic** path resolution (no guessing)
@@ -150,10 +168,12 @@ We successfully implemented a comprehensive hook-based system that provides prec
 ## Future Improvements
 
 1. **Hash Comparison:**
+
    - When ORL provides access to modified content before flush, use hash comparison for precise attribution
    - Would eliminate the need to mark all resources in touched files
 
 2. **Per-Hunk Attribution:**
+
    - Track which specific hunks/lines each rule modified
    - Would provide even more precise attribution
 
@@ -164,4 +184,3 @@ We successfully implemented a comprehensive hook-based system that provides prec
 ## Conclusion
 
 We successfully implemented a comprehensive hook-based system that provides precise rule-to-resource-instance attribution. The system correctly identifies which rules apply to which resource instances, even when multiple instances of the same type exist in the same file. The attribution is accurate, maintainable, and provides a great user experience in the IDE.
-

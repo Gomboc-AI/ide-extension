@@ -51,11 +51,13 @@ export class OrlClient {
 
     // Determine the extension path - we know exactly where hooks are
     let extensionPath: string | undefined = this.config.extensionPath;
-    
+
     // Fallback: try to get extension path from VS Code API
     if (!extensionPath) {
       try {
-        const extension = vscode.extensions.getExtension('gomboc.gomboc-vscode-extension');
+        const extension = vscode.extensions.getExtension(
+          'gomboc.gomboc-vscode-extension',
+        );
         if (extension) {
           extensionPath = extension.extensionPath;
         }
@@ -67,16 +69,28 @@ export class OrlClient {
     // Read hook files - we know exactly where they are
     for (const hookName of hookFiles) {
       let hookPath: string | undefined;
-      
+
       if (extensionPath) {
         // First try dist/orl/hooks (production - hooks are copied there during build)
-        const distHookPath = path.join(extensionPath, 'dist', 'orl', 'hooks', `${hookName}.sh`);
+        const distHookPath = path.join(
+          extensionPath,
+          'dist',
+          'orl',
+          'hooks',
+          `${hookName}.sh`,
+        );
         try {
           await fs.promises.access(distHookPath, fs.constants.F_OK);
           hookPath = distHookPath;
         } catch (e) {
           // dist path doesn't exist, try src/orl/hooks (development)
-          const srcHookPath = path.join(extensionPath, 'src', 'orl', 'hooks', `${hookName}.sh`);
+          const srcHookPath = path.join(
+            extensionPath,
+            'src',
+            'orl',
+            'hooks',
+            `${hookName}.sh`,
+          );
           try {
             await fs.promises.access(srcHookPath, fs.constants.F_OK);
             hookPath = srcHookPath;
@@ -85,7 +99,7 @@ export class OrlClient {
           }
         }
       }
-      
+
       // If we found a path, read the file
       if (hookPath) {
         try {
@@ -106,8 +120,20 @@ export class OrlClient {
           extensionPath,
           triedPaths: extensionPath
             ? [
-                path.join(extensionPath, 'dist', 'orl', 'hooks', `${hookName}.sh`),
-                path.join(extensionPath, 'src', 'orl', 'hooks', `${hookName}.sh`),
+                path.join(
+                  extensionPath,
+                  'dist',
+                  'orl',
+                  'hooks',
+                  `${hookName}.sh`,
+                ),
+                path.join(
+                  extensionPath,
+                  'src',
+                  'orl',
+                  'hooks',
+                  `${hookName}.sh`,
+                ),
               ]
             : [],
         });
@@ -123,7 +149,8 @@ export class OrlClient {
     }
 
     if (missingHooks.length > 0) {
-      const errorMessage = `Failed to load required hook files: ${missingHooks.join(', ')}. ` +
+      const errorMessage =
+        `Failed to load required hook files: ${missingHooks.join(', ')}. ` +
         `Expected location: ${extensionPath ? path.join(extensionPath, 'dist', 'orl', 'hooks') : 'unknown'}. ` +
         'Please ensure hooks are copied during build.';
       logger.error(errorMessage, {
@@ -381,23 +408,23 @@ export class OrlClient {
     tempDir: string,
   ): Promise<{ [filePath: string]: string }> {
     const modifiedFiles: { [filePath: string]: string } = {};
-    
+
     try {
       // Read all IaC files from temp directory
       const files = await this.getAllIacFiles(tempDir);
-      
+
       for (const filePath of files) {
         try {
           // Read the modified file content
           const content = await fs.promises.readFile(filePath, 'utf8');
-          
+
           // Convert temp directory path to ORL workspace path format
           // e.g., /path/to/.orl-temp/test-aws.tf -> /workspace/test-aws.tf
           const relativePath = path.relative(tempDir, filePath);
           const orlPath = `/workspace/${relativePath}`;
-          
+
           modifiedFiles[orlPath] = content;
-          
+
           logger.debug('Read modified file from temp directory', {
             filePath,
             orlPath,
@@ -407,15 +434,17 @@ export class OrlClient {
           logger.warn('Failed to read modified file', { filePath, error });
         }
       }
-      
+
       logger.info('Read modified files from temp directory', {
         fileCount: Object.keys(modifiedFiles).length,
         files: Object.keys(modifiedFiles),
       });
     } catch (error) {
-      logger.error('Failed to read modified files from temp directory', { error });
+      logger.error('Failed to read modified files from temp directory', {
+        error,
+      });
     }
-    
+
     return modifiedFiles;
   }
 
@@ -424,18 +453,18 @@ export class OrlClient {
    */
   private async getAllIacFiles(dir: string): Promise<string[]> {
     const files: string[] = [];
-    
+
     try {
       const entries = await fs.promises.readdir(dir, { withFileTypes: true });
-      
+
       for (const entry of entries) {
         const fullPath = path.join(dir, entry.name);
-        
+
         // Skip .orl directory and other hidden/system directories
         if (entry.name.startsWith('.') && entry.name !== '.') {
           continue;
         }
-        
+
         if (entry.isDirectory()) {
           // Recursively search subdirectories
           const subFiles = await this.getAllIacFiles(fullPath);
@@ -447,7 +476,7 @@ export class OrlClient {
     } catch (error) {
       logger.warn('Failed to read directory', { dir, error });
     }
-    
+
     return files;
   }
 
@@ -600,15 +629,15 @@ export class OrlClient {
 /**
  * Factory function to create OrlClient from VS Code configuration
  */
-export function createOrlClient(
-  extensionPath?: string,
-): OrlClient {
+export function createOrlClient(extensionPath?: string): OrlClient {
   const config = vscode.workspace.getConfiguration('gomboc-vscode-extension');
 
   // Get extension path if not provided
   if (!extensionPath) {
     try {
-      const extension = vscode.extensions.getExtension('gomboc.gomboc-vscode-extension');
+      const extension = vscode.extensions.getExtension(
+        'gomboc.gomboc-vscode-extension',
+      );
       if (extension) {
         extensionPath = extension.extensionPath;
       }

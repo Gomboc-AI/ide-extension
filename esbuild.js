@@ -11,12 +11,12 @@ const watch = process.argv.includes('--watch');
 function copyHooks() {
   const srcHooksDir = path.join(__dirname, 'src', 'orl', 'hooks');
   const distHooksDir = path.join(__dirname, 'dist', 'orl', 'hooks');
-  
+
   // Create dist/orl/hooks directory
   if (!fs.existsSync(distHooksDir)) {
     fs.mkdirSync(distHooksDir, { recursive: true });
   }
-  
+
   // Copy all .sh files from src to dist
   if (fs.existsSync(srcHooksDir)) {
     const files = fs.readdirSync(srcHooksDir);
@@ -29,14 +29,16 @@ function copyHooks() {
         fs.chmodSync(distFile, 0o755);
       }
     }
-    console.log(`[build] Copied ${files.filter(f => f.endsWith('.sh')).length} hook files to dist/orl/hooks/`);
+    console.log(
+      `[build] Copied ${files.filter(f => f.endsWith('.sh')).length} hook files to dist/orl/hooks/`,
+    );
   }
 }
 
 async function main() {
   // Copy hooks before building
   copyHooks();
-  
+
   const ctx = await esbuild.context({
     entryPoints: ['src/extension.ts'],
     bundle: true,

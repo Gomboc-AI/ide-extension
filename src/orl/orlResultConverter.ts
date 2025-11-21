@@ -814,11 +814,12 @@ export class OrlResultConverter {
                       diffLine,
                       resourceRange: `${matchingResource.startLine}-${matchingResource.endLine}`,
                       diffProperties,
-                      matchedTerms: ruleTerms.filter(term =>
-                        diffContent.includes(term) ||
-                        diffProperties.some(prop =>
-                          prop.toLowerCase().includes(term),
-                        ),
+                      matchedTerms: ruleTerms.filter(
+                        term =>
+                          diffContent.includes(term) ||
+                          diffProperties.some(prop =>
+                            prop.toLowerCase().includes(term),
+                          ),
                       ),
                     });
                     matchingRules.push(ruleName);
