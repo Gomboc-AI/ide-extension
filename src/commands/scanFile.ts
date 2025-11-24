@@ -26,14 +26,17 @@ export async function scanFileCommand(
 
   if (orlEnabled) {
     logger.info('ORL remediation enabled, using ORL client');
-    await scanWithOrl(scanResultsProvider);
+    await scanWithOrl(context, scanResultsProvider);
   } else {
     logger.info('Using traditional API client');
     await scanWithApiClient(scanResultsProvider);
   }
 }
 
-async function scanWithOrl(scanResultsProvider: ScanResultsProvider) {
+async function scanWithOrl(
+  context: vscode.ExtensionContext,
+  scanResultsProvider: ScanResultsProvider,
+) {
   try {
     logger.info('ORL scan starting');
     const editor = vscode.window.activeTextEditor;
@@ -52,7 +55,8 @@ async function scanWithOrl(scanResultsProvider: ScanResultsProvider) {
     });
 
     // Create ORL client and execute remediation
-    const orlClient = createOrlClient();
+    // Pass extension path so we know exactly where hooks are
+    const orlClient = createOrlClient(context.extensionPath);
     const result = await orlClient.remediate(workspacePath, language);
 
     if (!result.success) {
