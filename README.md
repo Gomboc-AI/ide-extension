@@ -36,4 +36,4 @@ That's all you need!
 ## Resources    
 * [Information](https://www.gomboc.ai/devops)    
 * [Documentation](https://docs.gomboc.ai/)
-* [Submit Feedback](mailto:support@gomboc.ai)   
+* [Submit Feedback](mailto:support@gomboc.ai) 
