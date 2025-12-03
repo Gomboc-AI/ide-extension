@@ -59,10 +59,6 @@ async function main() {
   });
   if (watch) {
     await ctx.watch();
-    // In watch mode, copy hooks on each rebuild
-    ctx.onRebuild(() => {
-      copyHooks();
-    });
   } else {
     await ctx.rebuild();
     await ctx.dispose();
@@ -90,6 +86,10 @@ const esbuildProblemMatcherPlugin = {
         );
       });
       console.log('[watch] build finished');
+      // Copy hooks after each rebuild (in watch mode) or after initial build
+      if (result.errors.length === 0) {
+        copyHooks();
+      }
     });
   },
 };

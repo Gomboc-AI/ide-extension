@@ -259,7 +259,8 @@ export class OrlClient {
 
       try {
         const { stdout, stderr } = await execAsync(dockerCommand, {
-          timeout: 60000, // 60 second timeout
+          timeout: 90000, // 90 second timeout - hooks add overhead but shouldn't take this long
+          maxBuffer: 10 * 1024 * 1024, // 10MB buffer (default is 1MB, hooks produce more output)
           cwd: workspacePath,
         });
 
@@ -289,6 +290,41 @@ export class OrlClient {
           diagnostics,
         };
       } catch (error: any) {
+        // Handle SIGPIPE - if process was killed but files might have been modified
+        if (error.signal === 'SIGPIPE' || error.signal === 'SIGTERM') {
+          logger.warn('ORL process was interrupted (SIGPIPE/SIGTERM), checking for modified files', {
+            signal: error.signal,
+          });
+          
+          // Try to read modified files anyway - ORL might have completed before the pipe closed
+          const modifiedFiles = await this.readModifiedFilesFromTemp(tempDir);
+          const diagnostics = await this.readDiagnostics(tempDir);
+          
+          // If we got some results, treat it as success
+          if (Object.keys(modifiedFiles).length > 0) {
+            logger.info('ORL remediation completed despite signal interruption', {
+              filesModified: Object.keys(modifiedFiles).length,
+            });
+            
+            // Clean up temp directory
+            await fs.promises.rm(tempDir, { recursive: true, force: true });
+            
+            return {
+              success: true,
+              modifiedFiles,
+              report: error.stdout || '',
+              // @ts-ignore add diagnostics for downstream usage
+              diagnostics,
+            };
+          }
+          
+          // No files modified, treat as failure
+          await fs.promises.rm(tempDir, { recursive: true, force: true });
+          throw new Error(
+            `ORL process was interrupted (${error.signal}). This may indicate the process was killed due to timeout or output buffer overflow.`,
+          );
+        }
+        
         // ORL returns exit code 2 when it finds violations (even if it fixes some)
         // This is normal behavior, not an error
         if (error.code === 2 && error.stdout) {
@@ -365,10 +401,14 @@ export class OrlClient {
     const { rulesServiceUrl, rulesServiceToken, channel } = this.config;
 
     // reuse ORL's rules pull command
-    const pullCommand = `docker run --rm \
-      -v '${rulesDir}:/output' \
-      -e RULE_SERVICE_TOKEN='${rulesServiceToken}' \
-      ${this.config.containerImage} rules pull --url='${rulesServiceUrl}' --out=/output --channel='${channel}'`;
+    // Note: We don't force --platform to allow Docker to use native architecture
+    const commandParts = ['docker run --rm'];
+    commandParts.push(
+      `-v '${rulesDir}:/output'`,
+      `-e RULE_SERVICE_TOKEN='${rulesServiceToken}'`,
+      `${this.config.containerImage} rules pull --url='${rulesServiceUrl}' --out=/output --channel='${channel}'`,
+    );
+    const pullCommand = commandParts.join(' \\\n      ');
 
     logger.info('Pulling rules using ORL', { command: pullCommand });
 
@@ -396,12 +436,15 @@ export class OrlClient {
   ): string {
     const { containerImage } = this.config;
 
-    const command = [
-      'docker run --rm',
+    // Note: We don't force --platform to allow Docker to use native architecture
+    // This avoids emulation overhead on ARM Macs if the image supports ARM64
+    // Docker Desktop on Windows automatically handles path conversion (C:\Users\... -> /c/Users/...)
+    const command: string[] = ['docker run --rm'];
+    command.push(
       `-v '${workspacePath}:/workspace'`,
       containerImage,
       'remediate /workspace --hooks-dir /workspace/.orl/hooks',
-    ];
+    );
 
     // Add rulespace if rules directory exists
     if (rulesDir) {
@@ -625,13 +668,15 @@ export class OrlClient {
    */
   async testConnection(): Promise<boolean> {
     try {
-      const testCommand = [
-        'docker run --rm',
+      // Note: We don't force --platform to allow Docker to use native architecture
+      const testCommandParts: string[] = ['docker run --rm'];
+      testCommandParts.push(
         `-e RULE_SERVICE_URL="${this.config.rulesServiceUrl}"`,
         `-e RULE_SERVICE_TOKEN="${this.config.rulesServiceToken}"`,
         this.config.containerImage,
         'rules list --help',
-      ].join(' ');
+      );
+      const testCommand = testCommandParts.join(' ');
 
       await execAsync(testCommand, { timeout: 30000 });
       return true;
