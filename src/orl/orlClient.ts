@@ -292,23 +292,29 @@ export class OrlClient {
       } catch (error: any) {
         // Handle SIGPIPE - if process was killed but files might have been modified
         if (error.signal === 'SIGPIPE' || error.signal === 'SIGTERM') {
-          logger.warn('ORL process was interrupted (SIGPIPE/SIGTERM), checking for modified files', {
-            signal: error.signal,
-          });
-          
+          logger.warn(
+            'ORL process was interrupted (SIGPIPE/SIGTERM), checking for modified files',
+            {
+              signal: error.signal,
+            },
+          );
+
           // Try to read modified files anyway - ORL might have completed before the pipe closed
           const modifiedFiles = await this.readModifiedFilesFromTemp(tempDir);
           const diagnostics = await this.readDiagnostics(tempDir);
-          
+
           // If we got some results, treat it as success
           if (Object.keys(modifiedFiles).length > 0) {
-            logger.info('ORL remediation completed despite signal interruption', {
-              filesModified: Object.keys(modifiedFiles).length,
-            });
-            
+            logger.info(
+              'ORL remediation completed despite signal interruption',
+              {
+                filesModified: Object.keys(modifiedFiles).length,
+              },
+            );
+
             // Clean up temp directory
             await fs.promises.rm(tempDir, { recursive: true, force: true });
-            
+
             return {
               success: true,
               modifiedFiles,
@@ -317,14 +323,14 @@ export class OrlClient {
               diagnostics,
             };
           }
-          
+
           // No files modified, treat as failure
           await fs.promises.rm(tempDir, { recursive: true, force: true });
           throw new Error(
             `ORL process was interrupted (${error.signal}). This may indicate the process was killed due to timeout or output buffer overflow.`,
           );
         }
-        
+
         // ORL returns exit code 2 when it finds violations (even if it fixes some)
         // This is normal behavior, not an error
         if (error.code === 2 && error.stdout) {
