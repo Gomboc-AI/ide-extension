@@ -653,13 +653,32 @@ export class OrlClient {
    * Check if file is an IaC file that ORL can process
    */
   private isIacFile(fileName: string): boolean {
-    const iacExtensions = ['.tf', '.yaml', '.yml'];
+    const fileNameLower = fileName.toLowerCase();
     const ext = path.extname(fileName).toLowerCase();
+    const baseName = path.basename(fileName, ext).toLowerCase();
 
-    // For JSON files, only accept CloudFormation templates
+    // Docker: Dockerfile* (no extension or any extension)
+    if (baseName.startsWith('dockerfile')) {
+      return true;
+    }
+
+    // Terraform: .tf, .hcl, .tfvars
+    if (['.tf', '.hcl', '.tfvars'].includes(ext)) {
+      return true;
+    }
+
+    // Helm: .yaml, .yml, .tpl
+    if (['.yaml', '.yml', '.tpl'].includes(ext)) {
+      return true;
+    }
+
+    // Kubernetes: .yaml, .yml
+    if (['.yaml', '.yml'].includes(ext)) {
+      return true;
+    }
+
+    // CloudFormation: .json (with specific naming patterns)
     if (ext === '.json') {
-      const baseName = path.basename(fileName, ext).toLowerCase();
-      // Accept common CloudFormation template names
       return (
         baseName.includes('template') ||
         baseName.includes('cloudformation') ||
@@ -668,7 +687,7 @@ export class OrlClient {
       );
     }
 
-    return iacExtensions.includes(ext);
+    return false;
   }
 
   /**
