@@ -35,10 +35,7 @@ function getFirstLines(content: string, maxLines: number = 50): string {
  * Detect language from file path and content
  * Uses file extension first (safe, fast), then content analysis for ambiguous cases
  */
-function detectLanguage(
-  filePath: string,
-  fileContent: string,
-): string | null {
+function detectLanguage(filePath: string, fileContent: string): string | null {
   const fileName = path.basename(filePath).toLowerCase();
   const ext = path.extname(filePath).toLowerCase();
   const filetype = getFileType(filePath);
