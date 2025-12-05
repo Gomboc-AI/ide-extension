@@ -419,7 +419,9 @@ export class OrlClient {
     logger.info('Pulling rules using ORL', { command: pullCommand });
 
     try {
-      const result = await execAsync(pullCommand);
+      const result = await execAsync(pullCommand, {
+        maxBuffer: 10 * 1024 * 1024, // 10MB buffer for verbose output
+      });
       logger.info('Rules pulled successfully', {
         stdout: result.stdout,
         stderr: result.stderr,
@@ -713,11 +715,18 @@ export function createOrlClient(extensionPath?: string): OrlClient {
     }
   }
 
+  // Get rules service token, falling back to apiKey if not set
+  // This allows using the same PAT for both the IDE extension and rules service
+  const rulesServiceToken =
+    (config.get('orlRulesServiceToken') as string | undefined) ||
+    (config.get('apiKey') as string | undefined) ||
+    '';
+
   return new OrlClient({
     containerImage: config.get('orlContainerImage') || 'gomboc/orl:latest',
     rulesServiceUrl:
       config.get('orlRulesServiceUrl') || 'https://rules.app.gomboc.ai',
-    rulesServiceToken: config.get('orlRulesServiceToken') || '',
+    rulesServiceToken,
     channel: config.get('orlChannel') || 'default',
     extensionPath,
   });
