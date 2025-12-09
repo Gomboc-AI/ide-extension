@@ -14,7 +14,7 @@ snapDir="$BASE/.orl/diag/rules/$rule_esc/before"
 mkdir -p "$snapDir"
 # Copy only IaC files; preserve directory structure
 cd "$BASE"
-find . -type d -name ".orl" -prune -o -type f \( -name "*.tf" -o -name "*.yaml" -o -name "*.yml" -o -name "*.json" \) -print | while IFS= read -r f; do
+find . -type d -name ".orl" -prune -o -type f \( -name "*.tf" -o -name "*.hcl" -o -name "*.tfvars" -o -name "*.yaml" -o -name "*.yml" -o -name "*.tpl" -o -name "*.json" -o -name "Dockerfile*" \) -print | while IFS= read -r f; do
   # Remove leading ./ from path
   rel_path=$(echo "$f" | sed 's|^\./||')
   dest="$snapDir/$rel_path"
