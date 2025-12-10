@@ -17,23 +17,42 @@ get_resource_hash() {
   sed -n "${start_line},${end_line}p" "$file_path" 2>/dev/null | md5sum 2>/dev/null | cut -d' ' -f1 || echo ""
 }
 
-# Function to extract Terraform resource instances from a file
+# Function to extract resource instances from a file (Terraform or Dockerfile)
 # Outputs JSON objects (one per line) with: {"type":"...","name":"...","startLine":N,"endLine":M,"hash":"..."}
 # Usage: extract_resources "file_path"
 # 
-# Improvements:
+# For Terraform:
 # - Handles multi-line resource declarations (resource "type" "name" { can span lines)
 # - Skips full-line comments when counting braces (comments don't affect structure)
 # - More robust brace counting
+# For Dockerfiles:
+# - Extracts FROM instructions (build stages) as resources
+# - Each FROM instruction is treated as a resource with type "FROM" or "docker_stage"
 extract_resources() {
   file_path="$1"
   if [ ! -f "$file_path" ]; then return 0; fi
   
-  # Only process Terraform files
-  case "$file_path" in
-    *.tf) ;;
-    *) return 0 ;;
+  # Check file type and route to appropriate extraction function
+  file_basename=$(basename "$file_path")
+  # Check if it's a Terraform file
+  case "$file_basename" in
+    *.tf)
+      extract_terraform_resources "$file_path"
+      return 0
+      ;;
   esac
+  # Check if it's a Dockerfile (case-insensitive check on basename or full path)
+  if echo "$file_basename" | grep -qiE '^(Dockerfile|.*\.dockerfile)$' || echo "$file_path" | grep -qiE 'Dockerfile'; then
+    extract_dockerfile_resources "$file_path"
+    return 0
+  fi
+  # Not a supported file type
+  return 0
+}
+
+# Extract Terraform resources
+extract_terraform_resources() {
+  file_path="$1"
   
   line_num=0
   in_resource=0
@@ -121,5 +140,66 @@ extract_resources() {
       fi
     fi
   done < "$file_path"
+}
+
+# Extract Dockerfile resources (FROM instructions/stages)
+# Each FROM instruction represents a build stage and is treated as a resource
+extract_dockerfile_resources() {
+  file_path="$1"
+  if [ ! -f "$file_path" ]; then return 0; fi
+  
+  line_num=0
+  last_from_line=0
+  last_from_image=""
+  last_from_stage=""
+  total_lines=$(wc -l < "$file_path" 2>/dev/null || echo "0")
+  
+  while IFS= read -r line || [ -n "$line" ]; do
+    line_num=$((line_num + 1))
+    trimmed_line=$(echo "$line" | sed 's/^[[:space:]]*//')
+    
+    # Skip comments and empty lines
+    case "$trimmed_line" in
+      \#*|"") continue ;;
+    esac
+    
+    # Check for FROM instruction (case-insensitive)
+    if echo "$trimmed_line" | grep -qiE '^FROM[[:space:]]+'; then
+      # If we have a previous FROM, output it as a resource
+      if [ $last_from_line -gt 0 ]; then
+        # End line is the line before this FROM (or end of file if this is the last)
+        end_line=$((line_num - 1))
+        if [ $end_line -lt $last_from_line ]; then
+          end_line=$last_from_line
+        fi
+        content_hash=$(get_resource_hash "$file_path" "$last_from_line" "$end_line")
+        type_esc=$(json_escape "docker_stage")
+        name_esc=$(json_escape "${last_from_stage:-${last_from_image:-FROM}}")
+        printf '{"type":"%s","name":"%s","startLine":%d,"endLine":%d,"hash":"%s"}\n' "$type_esc" "$name_esc" "$last_from_line" "$end_line" "$content_hash"
+      fi
+      
+      # Extract image name and optional stage name (AS alias)
+      # FROM image:tag AS stage_name
+      # FROM image:tag
+      last_from_line=$line_num
+      # Extract image (everything after FROM until AS or end of line)
+      last_from_image=$(echo "$trimmed_line" | sed -n 's/^[Ff][Rr][Oo][Mm][[:space:]]\+\([^[:space:]]*\).*/\1/p' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+      # Extract stage name if AS is present
+      last_from_stage=$(echo "$trimmed_line" | sed -n 's/.*[Aa][Ss][[:space:]]\+\([^[:space:]]*\).*/\1/p' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+      # If no stage name, use image name as identifier
+      if [ -z "$last_from_stage" ]; then
+        last_from_stage="$last_from_image"
+      fi
+    fi
+  done < "$file_path"
+  
+  # Output the last FROM instruction if it exists
+  if [ $last_from_line -gt 0 ]; then
+    end_line=$total_lines
+    content_hash=$(get_resource_hash "$file_path" "$last_from_line" "$end_line")
+    type_esc=$(json_escape "docker_stage")
+    name_esc=$(json_escape "${last_from_stage:-${last_from_image:-FROM}}")
+    printf '{"type":"%s","name":"%s","startLine":%d,"endLine":%d,"hash":"%s"}\n' "$type_esc" "$name_esc" "$last_from_line" "$end_line" "$content_hash"
+  fi
 }
 
