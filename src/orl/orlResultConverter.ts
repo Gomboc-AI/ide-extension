@@ -513,61 +513,111 @@ export class OrlResultConverter {
         const fileLines = originalText.split('\n');
         const diffLineIndex = diff.targetLine - 1; // Convert to 0-based index
 
+        // Check if this is a Dockerfile
+        const isDockerfile =
+          actualFilePath.toLowerCase().includes('dockerfile') ||
+          path.basename(actualFilePath).toLowerCase().startsWith('dockerfile');
+
         // Search backwards from the diff line to find the resource definition
         // Also track where this resource block ends to identify the specific instance
         let resourceStartLine = -1;
         let resourceEndLine = -1;
-        for (
-          let lineIdx = Math.min(diffLineIndex, fileLines.length - 1);
-          lineIdx >= 0;
-          lineIdx--
-        ) {
-          const line = fileLines[lineIdx];
-          // Look for Terraform resource definition: resource "type" "name" {
-          const resourceMatch = line.match(/resource\s+"([^"]+)"\s+"([^"]+)"/);
-          if (resourceMatch) {
-            resourceName = resourceMatch[1]; // Resource type (e.g., aws_db_instance)
-            resourceInstanceName = resourceMatch[2]; // Instance name (e.g., my_db)
-            resourceStartLine = lineIdx;
-            // Find the end of this resource block by looking for the closing brace
-            let braceCount = 0;
-            for (let j = lineIdx; j < fileLines.length; j++) {
-              const currentLine = fileLines[j];
-              braceCount += (currentLine.match(/{/g) || []).length;
-              braceCount -= (currentLine.match(/}/g) || []).length;
-              if (braceCount === 0 && j > lineIdx) {
-                resourceEndLine = j;
-                break;
-              }
-            }
-            break;
-          }
-          // Stop searching if we've gone too far back (more than 50 lines)
-          if (diffLineIndex - lineIdx > 50) {
-            break;
-          }
-        }
 
-        // If we didn't find it in the original file, try the modified content
-        if (resourceName === 'Resource') {
-          const modifiedLines = (modifiedContent as string).split('\n');
+        if (isDockerfile) {
+          // For Dockerfiles, look for FROM instructions (build stages)
           for (
-            let lineIdx = Math.min(diffLineIndex, modifiedLines.length - 1);
+            let lineIdx = Math.min(diffLineIndex, fileLines.length - 1);
             lineIdx >= 0;
             lineIdx--
           ) {
-            const line = modifiedLines[lineIdx];
+            const line = fileLines[lineIdx].trim();
+            // Skip comments and empty lines
+            if (!line || line.startsWith('#')) {
+              continue;
+            }
+            // Look for FROM instruction: FROM image[:tag] [AS stage_name]
+            const fromMatch = line.match(
+              /^FROM\s+(?:--[^\s]+\s+)?([^\s]+(?::[^\s]+)?)(?:\s+AS\s+(\S+))?/i,
+            );
+            if (fromMatch) {
+              resourceName = 'docker_stage';
+              resourceInstanceName = fromMatch[2] || fromMatch[1]; // Use stage name if present, otherwise image name
+              resourceStartLine = lineIdx;
+              // For Dockerfiles, the stage ends at the next FROM or end of file
+              resourceEndLine = fileLines.length - 1; // Default to end of file
+              for (let j = lineIdx + 1; j < fileLines.length; j++) {
+                const nextLine = fileLines[j].trim();
+                if (nextLine && !nextLine.startsWith('#')) {
+                  if (nextLine.match(/^FROM\s+/i)) {
+                    resourceEndLine = j - 1;
+                    break;
+                  }
+                }
+              }
+              break;
+            }
+            // Stop searching if we've gone too far back (more than 50 lines)
+            if (diffLineIndex - lineIdx > 50) {
+              break;
+            }
+          }
+
+          // If we didn't find it in the original file, try the modified content
+          if (resourceName === 'Resource') {
+            const modifiedLines = (modifiedContent as string).split('\n');
+            for (
+              let lineIdx = Math.min(diffLineIndex, modifiedLines.length - 1);
+              lineIdx >= 0;
+              lineIdx--
+            ) {
+              const line = modifiedLines[lineIdx].trim();
+              if (!line || line.startsWith('#')) {
+                continue;
+              }
+              const fromMatch = line.match(
+                /^FROM\s+(?:--[^\s]+\s+)?([^\s]+(?::[^\s]+)?)(?:\s+AS\s+(\S+))?/i,
+              );
+              if (fromMatch) {
+                resourceName = 'docker_stage';
+                resourceInstanceName = fromMatch[2] || fromMatch[1];
+                resourceStartLine = lineIdx;
+                resourceEndLine = modifiedLines.length - 1;
+                for (let j = lineIdx + 1; j < modifiedLines.length; j++) {
+                  const nextLine = modifiedLines[j].trim();
+                  if (nextLine && !nextLine.startsWith('#')) {
+                    if (nextLine.match(/^FROM\s+/i)) {
+                      resourceEndLine = j - 1;
+                      break;
+                    }
+                  }
+                }
+                break;
+              }
+              if (diffLineIndex - lineIdx > 50) {
+                break;
+              }
+            }
+          }
+        } else {
+          // For Terraform files, look for resource definitions
+          for (
+            let lineIdx = Math.min(diffLineIndex, fileLines.length - 1);
+            lineIdx >= 0;
+            lineIdx--
+          ) {
+            const line = fileLines[lineIdx];
+            // Look for Terraform resource definition: resource "type" "name" {
             const resourceMatch = line.match(
               /resource\s+"([^"]+)"\s+"([^"]+)"/,
             );
             if (resourceMatch) {
-              resourceName = resourceMatch[1];
-              resourceInstanceName = resourceMatch[2];
+              resourceName = resourceMatch[1]; // Resource type (e.g., aws_db_instance)
+              resourceInstanceName = resourceMatch[2]; // Instance name (e.g., my_db)
               resourceStartLine = lineIdx;
-              // Find the end of this resource block
+              // Find the end of this resource block by looking for the closing brace
               let braceCount = 0;
-              for (let j = lineIdx; j < modifiedLines.length; j++) {
-                const currentLine = modifiedLines[j];
+              for (let j = lineIdx; j < fileLines.length; j++) {
+                const currentLine = fileLines[j];
                 braceCount += (currentLine.match(/{/g) || []).length;
                 braceCount -= (currentLine.match(/}/g) || []).length;
                 if (braceCount === 0 && j > lineIdx) {
@@ -577,8 +627,44 @@ export class OrlResultConverter {
               }
               break;
             }
+            // Stop searching if we've gone too far back (more than 50 lines)
             if (diffLineIndex - lineIdx > 50) {
               break;
+            }
+          }
+
+          // If we didn't find it in the original file, try the modified content
+          if (resourceName === 'Resource') {
+            const modifiedLines = (modifiedContent as string).split('\n');
+            for (
+              let lineIdx = Math.min(diffLineIndex, modifiedLines.length - 1);
+              lineIdx >= 0;
+              lineIdx--
+            ) {
+              const line = modifiedLines[lineIdx];
+              const resourceMatch = line.match(
+                /resource\s+"([^"]+)"\s+"([^"]+)"/,
+              );
+              if (resourceMatch) {
+                resourceName = resourceMatch[1];
+                resourceInstanceName = resourceMatch[2];
+                resourceStartLine = lineIdx;
+                // Find the end of this resource block
+                let braceCount = 0;
+                for (let j = lineIdx; j < modifiedLines.length; j++) {
+                  const currentLine = modifiedLines[j];
+                  braceCount += (currentLine.match(/{/g) || []).length;
+                  braceCount -= (currentLine.match(/}/g) || []).length;
+                  if (braceCount === 0 && j > lineIdx) {
+                    resourceEndLine = j;
+                    break;
+                  }
+                }
+                break;
+              }
+              if (diffLineIndex - lineIdx > 50) {
+                break;
+              }
             }
           }
         }
@@ -647,197 +733,47 @@ export class OrlResultConverter {
             diffLine <= resourceEndLine + 1;
 
           if (resourceContainsDiff && allFileRules.length > 0) {
-            // Normalize resource name for matching (handle variations)
-            const normalizedResource = resourceName
-              .replace(/^hashicorp__/, '')
-              .replace(/^aws-resources-/, '')
-              .replace(/^google-resources-/, '')
-              .replace(/^azurerm-resources-/, '')
-              .replace(/\./g, '_')
-              .replace(/-/g, '_');
-
-            const resourceVariants = [
-              normalizedResource,
-              `hashicorp__aws-resources-${normalizedResource}`,
-              `hashicorp__aws-resources-aws_${normalizedResource}`,
-              `hashicorp__google-resources-${normalizedResource}`,
-              `hashicorp__google-resources-google_${normalizedResource}`,
-              `aws-resources-${normalizedResource}`,
-              `aws-resources-aws_${normalizedResource}`,
-            ];
-
-            // Match rules to this specific resource instance by checking:
-            // 1. Rule name contains the resource type (filters out irrelevant rules)
-            // 2. Rule has this specific resource instance in its resources list
-            // 3. Diff line falls within that resource's line range
-            for (const ruleName of allFileRules) {
-              // First filter by resource type - rule name must contain the resource type
-              const ruleLower = ruleName.toLowerCase();
-              const matchesResourceType = resourceVariants.some(variant =>
-                ruleLower.includes(variant.toLowerCase()),
-              );
-
-              if (!matchesResourceType) {
-                continue; // Skip rules that don't apply to this resource type
-              }
-
-              // Find the rule in diagnostics
-              const rule = result.diagnostics?.rules?.find(
-                r => r.ruleName === ruleName,
-              );
-              if (!rule) {
-                continue;
-              }
-
-              // Check if this rule has this specific resource instance in its resources
-              const ruleFiles = rule.files || [];
-              for (const ruleFile of ruleFiles) {
-                const keys = addFileKeys(ruleFile.path);
-                const fileMatches = keys.some(k => matchKeys.includes(k));
-                if (!fileMatches) {
+            // For Dockerfiles, skip resource type matching and use file-level matching
+            // For Terraform, match by resource type to filter rules
+            if (isDockerfile) {
+              // For Dockerfiles, all rules that touched this file are potential matches
+              // We'll rely on diff content analysis to filter further
+              for (const ruleName of allFileRules) {
+                // Check if rule has resources for this file
+                const rule = result.diagnostics?.rules?.find(
+                  r => r.ruleName === ruleName,
+                );
+                if (!rule) {
                   continue;
                 }
 
-                const resources = (ruleFile as any).resources || [];
-                // Check if this specific resource instance is in the rule's resources
-                // AND the diff line falls within that resource's line range
-                const matchingResource = resources.find(
-                  (r: any) =>
-                    r.type === resourceName &&
-                    r.name === resourceInstanceName &&
-                    diffLine >= r.startLine &&
-                    diffLine <= r.endLine,
-                );
-
-                if (matchingResource) {
-                  // Additional filtering: Use diff content to verify this rule actually applies
-                  // This prevents false positives when multiple rules have the same resource in their list
-                  const diffProperties = analysis.properties || [];
-                  const diffContent = diff.newLines.join('\n').toLowerCase();
-                  const ruleLower = ruleName.toLowerCase();
-
-                  // Extract key terms from rule name that indicate what it changes
-                  const ruleTerms = ruleLower
-                    .split(/[_\-\s]+/)
-                    .filter(term => term.length > 3)
-                    .filter(
-                      term =>
-                        ![
-                          'for',
-                          'hashicorp',
-                          'aws',
-                          'resources',
-                          'ensure',
-                          'that',
-                          'the',
-                          'is',
-                          'are',
-                          'and',
-                          'or',
-                        ].includes(term),
+                const ruleFiles = rule.files || [];
+                for (const ruleFile of ruleFiles) {
+                  const keys = addFileKeys(ruleFile.path);
+                  const fileMatches = keys.some(k => matchKeys.includes(k));
+                  if (fileMatches) {
+                    // For Dockerfiles, check if diff line falls within any resource range
+                    const resources = (ruleFile as any).resources || [];
+                    const matchingResource = resources.find(
+                      (r: any) =>
+                        r.type === resourceName &&
+                        diffLine >= r.startLine &&
+                        diffLine <= r.endLine,
                     );
 
-                  // Check if the diff content matches what this rule would change
-                  let matchesDiffContent = false;
-                  if (ruleTerms.length > 0) {
-                    matchesDiffContent = ruleTerms.some(term => {
-                      // Check if term appears in diff content
-                      if (diffContent.includes(term)) {
-                        return true;
+                    if (matchingResource || resources.length === 0) {
+                      // If we have resource info, use it; otherwise accept file-level match
+                      if (!matchingRules.includes(ruleName)) {
+                        matchingRules.push(ruleName);
                       }
-                      // Check if term appears in property names
-                      if (
-                        diffProperties.some(prop =>
-                          prop.toLowerCase().includes(term),
-                        )
-                      ) {
-                        return true;
-                      }
-                      // Check for common property name patterns
-                      const propertyPatterns: Record<string, string[]> = {
-                        automatic: [
-                          'auto_minor_version_upgrade',
-                          'auto_minor',
-                          'automatic',
-                        ],
-                        updates: ['auto_minor_version_upgrade', 'auto_minor'],
-                        patching: ['auto_minor_version_upgrade', 'maintenance'],
-                        encryption: [
-                          'encryption',
-                          'encrypted',
-                          'kms',
-                          'at_rest_encryption_enabled',
-                          'storage_encrypted',
-                        ],
-                        data: [
-                          'at_rest_encryption',
-                          'encryption',
-                          'at_rest_encryption_enabled',
-                        ],
-                        rest: [
-                          'at_rest_encryption',
-                          'storage_encrypted',
-                          'at_rest_encryption_enabled',
-                        ],
-                      };
-
-                      for (const [key, patterns] of Object.entries(
-                        propertyPatterns,
-                      )) {
-                        if (term.includes(key) || key.includes(term)) {
-                          if (
-                            patterns.some(
-                              pattern =>
-                                diffContent.includes(pattern) ||
-                                diffProperties.some(prop =>
-                                  prop.toLowerCase().includes(pattern),
-                                ),
-                            )
-                          ) {
-                            return true;
-                          }
-                        }
-                      }
-                      return false;
-                    });
-                  } else {
-                    // If no meaningful terms, assume it matches (conservative approach)
-                    matchesDiffContent = true;
-                  }
-
-                  // Only add the rule if diff content matches
-                  if (matchesDiffContent && !matchingRules.includes(ruleName)) {
-                    logger.debug('Matched rule using instance-level matching', {
-                      ruleName,
-                      resourceType: resourceName,
-                      resourceInstance: resourceInstanceName,
-                      diffLine,
-                      resourceRange: `${matchingResource.startLine}-${matchingResource.endLine}`,
-                      diffProperties,
-                      matchedTerms: ruleTerms.filter(
-                        term =>
-                          diffContent.includes(term) ||
-                          diffProperties.some(prop =>
-                            prop.toLowerCase().includes(term),
-                          ),
-                      ),
-                    });
-                    matchingRules.push(ruleName);
-                    break; // Found a match for this rule, no need to check other files
+                      break;
+                    }
                   }
                 }
               }
-            }
-
-            // If no instance-level match found, fall back to diff content analysis
-            // This should be rare now that we use hash comparison in non-dry-run mode,
-            // but kept as a safety net in case hash comparison fails
-            if (matchingRules.length === 0) {
-              // Extract properties from the diff to help match rules
-              const diffProperties = analysis.properties || [];
-              const diffContent = diff.newLines.join('\n').toLowerCase();
-
-              // Normalize resource name for matching
+            } else {
+              // For Terraform files, use resource type matching
+              // Normalize resource name for matching (handle variations)
               const normalizedResource = resourceName
                 .replace(/^hashicorp__/, '')
                 .replace(/^aws-resources-/, '')
@@ -856,129 +792,297 @@ export class OrlResultConverter {
                 `aws-resources-aws_${normalizedResource}`,
               ];
 
+              // Match rules to this specific resource instance by checking:
+              // 1. Rule name contains the resource type (filters out irrelevant rules)
+              // 2. Rule has this specific resource instance in its resources list
+              // 3. Diff line falls within that resource's line range
               for (const ruleName of allFileRules) {
+                // First filter by resource type - rule name must contain the resource type
                 const ruleLower = ruleName.toLowerCase();
-
-                // First check if rule matches resource type
                 const matchesResourceType = resourceVariants.some(variant =>
                   ruleLower.includes(variant.toLowerCase()),
                 );
 
                 if (!matchesResourceType) {
+                  continue; // Skip rules that don't apply to this resource type
+                }
+
+                // Find the rule in diagnostics
+                const rule = result.diagnostics?.rules?.find(
+                  r => r.ruleName === ruleName,
+                );
+                if (!rule) {
                   continue;
                 }
 
-                // Then check if the diff content matches what this rule would change
-                // This helps distinguish between rules that apply to the same resource type
-                // For example, "auto_minor_version_upgrade" vs "at_rest_encryption_enabled"
-                let matchesDiffContent = false;
+                // Check if this rule has this specific resource instance in its resources
+                const ruleFiles = rule.files || [];
+                for (const ruleFile of ruleFiles) {
+                  const keys = addFileKeys(ruleFile.path);
+                  const fileMatches = keys.some(k => matchKeys.includes(k));
+                  if (!fileMatches) {
+                    continue;
+                  }
 
-                // Extract key terms from rule name that might appear in the diff
-                // Rules often have descriptive names that hint at what they change
-                const ruleTerms = ruleLower
-                  .split(/[_\-\s]+/)
-                  .filter(term => term.length > 3) // Only meaningful terms
-                  .filter(
-                    term =>
-                      ![
-                        'for',
-                        'hashicorp',
-                        'aws',
-                        'resources',
-                        'ensure',
-                        'that',
-                        'the',
-                        'is',
-                        'are',
-                        'and',
-                        'or',
-                      ].includes(term),
+                  const resources = (ruleFile as any).resources || [];
+                  // Check if this specific resource instance is in the rule's resources
+                  // AND the diff line falls within that resource's line range
+                  const matchingResource = resources.find(
+                    (r: any) =>
+                      r.type === resourceName &&
+                      r.name === resourceInstanceName &&
+                      diffLine >= r.startLine &&
+                      diffLine <= r.endLine,
                   );
 
-                // Check if any rule term appears in the diff content or properties
-                // This helps match rules to the specific changes they make
-                if (ruleTerms.length > 0) {
-                  matchesDiffContent = ruleTerms.some(term => {
-                    // Check if term appears in diff content
-                    if (diffContent.includes(term)) {
-                      return true;
-                    }
-                    // Check if term appears in property names
-                    if (
-                      diffProperties.some(prop =>
-                        prop.toLowerCase().includes(term),
-                      )
-                    ) {
-                      return true;
-                    }
-                    // Check for common property name patterns
-                    // e.g., "automatic" -> "auto_minor_version_upgrade"
-                    // e.g., "encryption" -> "at_rest_encryption_enabled"
-                    const propertyPatterns: Record<string, string[]> = {
-                      automatic: [
-                        'auto_minor_version_upgrade',
-                        'auto_minor',
-                        'automatic',
-                      ],
-                      updates: ['auto_minor_version_upgrade', 'auto_minor'],
-                      patching: ['auto_minor_version_upgrade', 'maintenance'],
-                      encryption: [
-                        'encryption',
-                        'encrypted',
-                        'kms',
-                        'at_rest_encryption_enabled',
-                        'storage_encrypted',
-                      ],
-                      data: [
-                        'at_rest_encryption',
-                        'encryption',
-                        'at_rest_encryption_enabled',
-                      ],
-                      rest: [
-                        'at_rest_encryption',
-                        'storage_encrypted',
-                        'at_rest_encryption_enabled',
-                      ],
-                    };
+                  if (matchingResource) {
+                    // Additional filtering: Use diff content to verify this rule actually applies
+                    // This prevents false positives when multiple rules have the same resource in their list
+                    const diffProperties = analysis.properties || [];
+                    const diffContent = diff.newLines.join('\n').toLowerCase();
+                    const ruleLower = ruleName.toLowerCase();
 
-                    for (const [key, patterns] of Object.entries(
-                      propertyPatterns,
-                    )) {
-                      if (term.includes(key) || key.includes(term)) {
+                    // Extract key terms from rule name that indicate what it changes
+                    const ruleTerms = ruleLower
+                      .split(/[_\-\s]+/)
+                      .filter(term => term.length > 3)
+                      .filter(
+                        term =>
+                          ![
+                            'for',
+                            'hashicorp',
+                            'aws',
+                            'resources',
+                            'ensure',
+                            'that',
+                            'the',
+                            'is',
+                            'are',
+                            'and',
+                            'or',
+                          ].includes(term),
+                      );
+
+                    // Check if the diff content matches what this rule would change
+                    let matchesDiffContent = false;
+                    if (ruleTerms.length > 0) {
+                      matchesDiffContent = ruleTerms.some(term => {
+                        // Check if term appears in diff content
+                        if (diffContent.includes(term)) {
+                          return true;
+                        }
+                        // Check if term appears in property names
                         if (
-                          patterns.some(
-                            pattern =>
-                              diffContent.includes(pattern) ||
-                              diffProperties.some(prop =>
-                                prop.toLowerCase().includes(pattern),
-                              ),
+                          diffProperties.some(prop =>
+                            prop.toLowerCase().includes(term),
                           )
                         ) {
                           return true;
                         }
-                      }
+                        // Generic matching: if term appears anywhere in diff content or properties, it's a match
+                        // No need for hardcoded property patterns - rely on semantic matching
+                        return false;
+                      });
+                    } else {
+                      // If no meaningful terms, assume it matches (conservative approach)
+                      matchesDiffContent = true;
                     }
-                    return false;
-                  });
-                } else {
-                  // If no meaningful terms, don't match (be conservative)
-                  // This prevents false positives when we can't determine what changed
-                  matchesDiffContent = false;
-                }
 
-                if (matchesDiffContent && !matchingRules.includes(ruleName)) {
-                  matchingRules.push(ruleName);
+                    // Only add the rule if diff content matches
+                    if (
+                      matchesDiffContent &&
+                      !matchingRules.includes(ruleName)
+                    ) {
+                      logger.debug(
+                        'Matched rule using instance-level matching',
+                        {
+                          ruleName,
+                          resourceType: resourceName,
+                          resourceInstance: resourceInstanceName,
+                          diffLine,
+                          resourceRange: `${matchingResource.startLine}-${matchingResource.endLine}`,
+                          diffProperties,
+                          matchedTerms: ruleTerms.filter(
+                            term =>
+                              diffContent.includes(term) ||
+                              diffProperties.some(prop =>
+                                prop.toLowerCase().includes(term),
+                              ),
+                          ),
+                        },
+                      );
+                      matchingRules.push(ruleName);
+                      break; // Found a match for this rule, no need to check other files
+                    }
+                  }
                 }
               }
 
-              logger.debug('Matched rules using diff content analysis', {
-                resourceType: resourceName,
-                resourceInstance: resourceInstanceName,
-                diffLine,
-                diffProperties,
-                diffContent: diffContent.slice(0, 100),
-                matchingRules,
-              });
+              // If no instance-level match found, fall back to diff content analysis
+              // This should be rare now that we use hash comparison in non-dry-run mode,
+              // but kept as a safety net in case hash comparison fails
+              if (matchingRules.length === 0) {
+                // Extract properties from the diff to help match rules
+                const diffProperties = analysis.properties || [];
+                const diffContent = diff.newLines.join('\n').toLowerCase();
+
+                // For Dockerfiles, skip resource type matching and use all file rules
+                // For Terraform, match by resource type first
+                if (isDockerfile) {
+                  // For Dockerfiles, use all rules that touched this file
+                  // and match based on diff content
+                  for (const ruleName of allFileRules) {
+                    const ruleLower = ruleName.toLowerCase();
+                    // Extract key terms from rule name
+                    const ruleTerms = ruleLower
+                      .split(/[_\-\s]+/)
+                      .filter(term => term.length > 3)
+                      .filter(
+                        term =>
+                          ![
+                            'for',
+                            'hashicorp',
+                            'aws',
+                            'resources',
+                            'ensure',
+                            'that',
+                            'the',
+                            'is',
+                            'are',
+                            'and',
+                            'or',
+                            'docker',
+                          ].includes(term),
+                      );
+
+                    // Check if diff content matches rule terms
+                    let matchesDiffContent = false;
+                    if (ruleTerms.length > 0) {
+                      matchesDiffContent = ruleTerms.some(term => {
+                        return (
+                          diffContent.includes(term) ||
+                          diffProperties.some(prop =>
+                            prop.toLowerCase().includes(term),
+                          )
+                        );
+                      });
+                    } else {
+                      // If no meaningful terms, accept the match (conservative)
+                      matchesDiffContent = true;
+                    }
+
+                    if (
+                      matchesDiffContent &&
+                      !matchingRules.includes(ruleName)
+                    ) {
+                      matchingRules.push(ruleName);
+                    }
+                  }
+                } else {
+                  // For Terraform files, use resource type matching
+                  // Normalize resource name for matching
+                  const normalizedResource = resourceName
+                    .replace(/^hashicorp__/, '')
+                    .replace(/^aws-resources-/, '')
+                    .replace(/^google-resources-/, '')
+                    .replace(/^azurerm-resources-/, '')
+                    .replace(/\./g, '_')
+                    .replace(/-/g, '_');
+
+                  const resourceVariants = [
+                    normalizedResource,
+                    `hashicorp__aws-resources-${normalizedResource}`,
+                    `hashicorp__aws-resources-aws_${normalizedResource}`,
+                    `hashicorp__google-resources-${normalizedResource}`,
+                    `hashicorp__google-resources-google_${normalizedResource}`,
+                    `aws-resources-${normalizedResource}`,
+                    `aws-resources-aws_${normalizedResource}`,
+                  ];
+
+                  for (const ruleName of allFileRules) {
+                    const ruleLower = ruleName.toLowerCase();
+
+                    // First check if rule matches resource type
+                    const matchesResourceType = resourceVariants.some(variant =>
+                      ruleLower.includes(variant.toLowerCase()),
+                    );
+
+                    if (!matchesResourceType) {
+                      continue;
+                    }
+
+                    // Then check if the diff content matches what this rule would change
+                    // This helps distinguish between rules that apply to the same resource type
+                    // For example, "auto_minor_version_upgrade" vs "at_rest_encryption_enabled"
+                    let matchesDiffContent = false;
+
+                    // Extract key terms from rule name that might appear in the diff
+                    // Rules often have descriptive names that hint at what they change
+                    const ruleTerms = ruleLower
+                      .split(/[_\-\s]+/)
+                      .filter(term => term.length > 3) // Only meaningful terms
+                      .filter(
+                        term =>
+                          ![
+                            'for',
+                            'hashicorp',
+                            'aws',
+                            'resources',
+                            'ensure',
+                            'that',
+                            'the',
+                            'is',
+                            'are',
+                            'and',
+                            'or',
+                          ].includes(term),
+                      );
+
+                    // Check if any rule term appears in the diff content or properties
+                    // This helps match rules to the specific changes they make
+                    if (ruleTerms.length > 0) {
+                      matchesDiffContent = ruleTerms.some(term => {
+                        // Check if term appears in diff content
+                        if (diffContent.includes(term)) {
+                          return true;
+                        }
+                        // Check if term appears in property names
+                        if (
+                          diffProperties.some(prop =>
+                            prop.toLowerCase().includes(term),
+                          )
+                        ) {
+                          return true;
+                        }
+                        // Generic matching: if term appears anywhere in diff content or properties, it's a match
+                        // No need for hardcoded property patterns - rely on semantic matching
+                        return false;
+                      });
+                    } else {
+                      // If no meaningful terms, don't match (be conservative)
+                      // This prevents false positives when we can't determine what changed
+                      matchesDiffContent = false;
+                    }
+
+                    if (
+                      matchesDiffContent &&
+                      !matchingRules.includes(ruleName)
+                    ) {
+                      matchingRules.push(ruleName);
+                    }
+                  }
+                }
+              }
+
+              // Log matched rules
+              if (matchingRules.length > 0) {
+                logger.debug('Matched rules using diff content analysis', {
+                  resourceType: resourceName,
+                  resourceInstance: resourceInstanceName,
+                  diffLine,
+                  matchingRules: matchingRules.slice(0, 3),
+                });
+              }
             }
 
             logger.debug('Matched rules for resource', {
@@ -1119,13 +1223,24 @@ export class OrlResultConverter {
         // Format: Resource Name followed by descriptions
         // Use Markdown formatting for better structure and sections
         let descriptionText: string;
+        // Format resource name for display
+        let displayResourceName = resourceName;
+        if (resourceName === 'docker_stage') {
+          // For Dockerfiles, show the stage name or image name
+          displayResourceName = resourceInstanceName
+            ? `Docker Stage: ${resourceInstanceName}`
+            : 'Docker Stage';
+        } else if (resourceInstanceName) {
+          // For Terraform, show resource type and instance name
+          displayResourceName = `${resourceName}.${resourceInstanceName}`;
+        }
         if (aggregatedDescriptions.length > 0) {
           // Format as: Resource Name\nDescription1\nDescription2 (single newlines, no extra spacing)
           const descriptions = aggregatedDescriptions.slice(0, 5).join('\n');
-          descriptionText = `${resourceName}\n${descriptions}`;
+          descriptionText = `${displayResourceName}\n${descriptions}`;
         } else {
           // Fallback if no descriptions found
-          descriptionText = `${resourceName}\n${analysis.description || 'ORL remediation'}`;
+          descriptionText = `${displayResourceName}\n${analysis.description || 'Update configuration for resource'}`;
         }
 
         // Note: VS Code Diagnostic messages support MarkdownString for rich formatting
@@ -1166,8 +1281,13 @@ export class OrlResultConverter {
           fixes: [fix],
           codeObservation: {
             codeResourceInstance: {
-              name: path.basename(actualFilePath),
-              type: filetype === 'tf' ? 'terraform' : 'cloudformation',
+              name: resourceInstanceName || path.basename(actualFilePath),
+              type:
+                filetype === 'tf'
+                  ? 'terraform'
+                  : isDockerfile
+                    ? 'docker'
+                    : 'cloudformation',
               filepath: actualFilePath,
               line: diff.targetLine,
             },
