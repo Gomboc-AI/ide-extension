@@ -879,54 +879,8 @@ export class OrlResultConverter {
                         ) {
                           return true;
                         }
-                        // Check for common property name patterns
-                        const propertyPatterns: Record<string, string[]> = {
-                          automatic: [
-                            'auto_minor_version_upgrade',
-                            'auto_minor',
-                            'automatic',
-                          ],
-                          updates: ['auto_minor_version_upgrade', 'auto_minor'],
-                          patching: [
-                            'auto_minor_version_upgrade',
-                            'maintenance',
-                          ],
-                          encryption: [
-                            'encryption',
-                            'encrypted',
-                            'kms',
-                            'at_rest_encryption_enabled',
-                            'storage_encrypted',
-                          ],
-                          data: [
-                            'at_rest_encryption',
-                            'encryption',
-                            'at_rest_encryption_enabled',
-                          ],
-                          rest: [
-                            'at_rest_encryption',
-                            'storage_encrypted',
-                            'at_rest_encryption_enabled',
-                          ],
-                        };
-
-                        for (const [key, patterns] of Object.entries(
-                          propertyPatterns,
-                        )) {
-                          if (term.includes(key) || key.includes(term)) {
-                            if (
-                              patterns.some(
-                                pattern =>
-                                  diffContent.includes(pattern) ||
-                                  diffProperties.some(prop =>
-                                    prop.toLowerCase().includes(pattern),
-                                  ),
-                              )
-                            ) {
-                              return true;
-                            }
-                          }
-                        }
+                        // Generic matching: if term appears anywhere in diff content or properties, it's a match
+                        // No need for hardcoded property patterns - rely on semantic matching
                         return false;
                       });
                     } else {
@@ -1100,56 +1054,8 @@ export class OrlResultConverter {
                         ) {
                           return true;
                         }
-                        // Check for common property name patterns
-                        // e.g., "automatic" -> "auto_minor_version_upgrade"
-                        // e.g., "encryption" -> "at_rest_encryption_enabled"
-                        const propertyPatterns: Record<string, string[]> = {
-                          automatic: [
-                            'auto_minor_version_upgrade',
-                            'auto_minor',
-                            'automatic',
-                          ],
-                          updates: ['auto_minor_version_upgrade', 'auto_minor'],
-                          patching: [
-                            'auto_minor_version_upgrade',
-                            'maintenance',
-                          ],
-                          encryption: [
-                            'encryption',
-                            'encrypted',
-                            'kms',
-                            'at_rest_encryption_enabled',
-                            'storage_encrypted',
-                          ],
-                          data: [
-                            'at_rest_encryption',
-                            'encryption',
-                            'at_rest_encryption_enabled',
-                          ],
-                          rest: [
-                            'at_rest_encryption',
-                            'storage_encrypted',
-                            'at_rest_encryption_enabled',
-                          ],
-                        };
-
-                        for (const [key, patterns] of Object.entries(
-                          propertyPatterns,
-                        )) {
-                          if (term.includes(key) || key.includes(term)) {
-                            if (
-                              patterns.some(
-                                pattern =>
-                                  diffContent.includes(pattern) ||
-                                  diffProperties.some(prop =>
-                                    prop.toLowerCase().includes(pattern),
-                                  ),
-                              )
-                            ) {
-                              return true;
-                            }
-                          }
-                        }
+                        // Generic matching: if term appears anywhere in diff content or properties, it's a match
+                        // No need for hardcoded property patterns - rely on semantic matching
                         return false;
                       });
                     } else {
