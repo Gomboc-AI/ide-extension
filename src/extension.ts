@@ -95,6 +95,7 @@ export async function activate(context: vscode.ExtensionContext) {
         { language: 'json', scheme: 'file' },
         { language: 'yaml', scheme: 'file' },
         { language: 'plaintext', scheme: 'file' },
+        { language: 'dockerfile', scheme: 'file' },
       ],
       new CodeActionProvider(),
     ),

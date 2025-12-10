@@ -561,6 +561,7 @@ export type IndividualRemediation = {
 
 export enum InfrastructureTool {
   Cloudformation = 'CLOUDFORMATION',
+  Docker = 'DOCKER',
   Terraform = 'TERRAFORM',
 }
 
