@@ -142,6 +142,126 @@ function extractErrorDetails(error: unknown): unknown {
 }
 
 /**
+ * Prepare error-only request body for integrations service
+ */
+function prepareErrorRequestBody(
+  repoPath: string | null,
+  branch: string | null,
+  errorMessage: string,
+  statusCode: number,
+  errorContext?: string,
+): {
+  version: number;
+  requestOrigin: string;
+  reports: Array<{
+    path?: string;
+    branch?: string;
+  }>;
+  errors: Array<{ status: number; message: string }>;
+} {
+  const errorMessageWithContext = errorContext
+    ? `${errorContext}: ${errorMessage}`
+    : errorMessage;
+
+  return {
+    version: 1.0,
+    requestOrigin: 'ide-extension',
+    reports: [
+      {
+        ...(repoPath && { path: repoPath }),
+        ...(branch && { branch }),
+      },
+    ],
+    errors: [{ status: statusCode, message: errorMessageWithContext }],
+  };
+}
+
+/**
+ * Send error to integrations service (when no ORL report is available)
+ * Non-blocking and will not throw errors
+ *
+ * @param workspacePath - The directory path that was being scanned
+ * @param language - The language being scanned (optional)
+ * @param errorMessage - The error message to report
+ * @param statusCode - HTTP status code (400 for validation errors, 500 for execution errors)
+ * @param errorContext - Optional context about where the error occurred
+ */
+export async function sendErrorToIntegrations(
+  workspacePath: string,
+  language: string | undefined,
+  errorMessage: string,
+  statusCode: number,
+  errorContext?: string,
+): Promise<void> {
+  try {
+    const { integrationsServiceUrl, apiKey } = getIntegrationsConfig();
+
+    // Skip if integrations service URL is not configured
+    if (!integrationsServiceUrl) {
+      logger.debug(
+        'Integrations service URL not configured, skipping error submission',
+      );
+      return;
+    }
+
+    // Skip if API key is not configured
+    if (!apiKey) {
+      logger.debug('API key not configured, skipping error submission');
+      return;
+    }
+
+    // Get git repository information
+    const [repoPath, branch] = await Promise.all([
+      getRepoRelativePath(workspacePath),
+      getGitBranch(workspacePath),
+    ]);
+
+    // Prepare request body with error only
+    const requestBody = prepareErrorRequestBody(
+      repoPath,
+      branch,
+      errorMessage,
+      statusCode,
+      errorContext,
+    );
+
+    logger.info('Sending error to integrations service', {
+      integrationsServiceUrl,
+      repoPath: repoPath ?? 'unknown',
+      branch: branch ?? 'unknown',
+      language: language ?? 'unknown',
+      statusCode,
+      errorContext: errorContext ?? 'none',
+    });
+
+    // Send request (non-blocking, errors are caught and logged)
+    await axios.post(
+      `${integrationsServiceUrl}/reporting/orl-external`,
+      requestBody,
+      {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000, // 10 second timeout
+      },
+    );
+
+    logger.info('Successfully sent error to integrations service');
+  } catch (error) {
+    // Log error but don't throw - this should not break the remediation workflow
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    const errorDetails = extractErrorDetails(error);
+
+    logger.error('Failed to send error to integrations service', {
+      error: errorMessage,
+      errorDetails,
+    });
+  }
+}
+
+/**
  * Send ORL report to integrations service
  * \non-blocking and will not throw errors
  */
