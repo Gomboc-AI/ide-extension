@@ -18,7 +18,11 @@ async function getGitRoot(workspacePath: string): Promise<string | null> {
       cwd: workspacePath,
     });
     return stdout.trim();
-  } catch {
+  } catch (error) {
+    // Silently handle errors - not in a git repo or git command failed
+    logger.debug('Failed to get git root', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
     return null;
   }
 }
@@ -32,7 +36,11 @@ async function getGitBranch(workspacePath: string): Promise<string | null> {
       cwd: workspacePath,
     });
     return stdout.trim() || null;
-  } catch {
+  } catch (error) {
+    // Silently handle errors - not in a git repo or git command failed
+    logger.debug('Failed to get git branch', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
     return null;
   }
 }
@@ -68,6 +76,72 @@ async function getRepoRelativePath(
 }
 
 /**
+ * Get configuration values for integrations service
+ */
+function getIntegrationsConfig(): {
+  integrationsServiceUrl: string | undefined;
+  apiKey: string | undefined;
+} {
+  const config = vscode.workspace.getConfiguration('gomboc-vscode-extension');
+  return {
+    integrationsServiceUrl: config.get('integrationsServiceUrl') as
+      | string
+      | undefined,
+    apiKey: config.get('apiKey') as string | undefined,
+  };
+}
+
+/**
+ * Prepare request body for ORL report submission
+ */
+function prepareRequestBody(
+  orlReport: unknown,
+  repoPath: string | null,
+  branch: string | null,
+  result: OrlResult,
+): {
+  version: number;
+  requestOrigin: string;
+  reports: Array<{
+    path?: string;
+    branch?: string;
+    orlReport: unknown;
+  }>;
+  errors: Array<{ status: number; message: string }>;
+} {
+  const errors = result.error ? [{ status: 500, message: result.error }] : [];
+
+  return {
+    version: 1.0,
+    requestOrigin: 'ide-extension',
+    reports: [
+      {
+        ...(repoPath && { path: repoPath }),
+        ...(branch && { branch }),
+        orlReport,
+      },
+    ],
+    errors,
+  };
+}
+
+/**
+ * Extract error details from axios error response
+ */
+function extractErrorDetails(error: unknown): unknown {
+  if (
+    error instanceof Error &&
+    'response' in error &&
+    typeof error.response === 'object' &&
+    error.response !== null &&
+    'data' in error.response
+  ) {
+    return (error.response as { data: unknown }).data;
+  }
+  return undefined;
+}
+
+/**
  * Send ORL report to integrations service
  * \non-blocking and will not throw errors
  */
@@ -77,11 +151,7 @@ export async function sendOrlReportToIntegrations(
   language: string,
 ): Promise<void> {
   try {
-    const config = vscode.workspace.getConfiguration('gomboc-vscode-extension');
-    const integrationsServiceUrl = config.get('integrationsServiceUrl') as
-      | string
-      | undefined;
-    const apiKey = config.get('apiKey') as string | undefined;
+    const { integrationsServiceUrl, apiKey } = getIntegrationsConfig();
 
     // Skip if integrations service URL is not configured
     if (!integrationsServiceUrl) {
@@ -110,30 +180,16 @@ export async function sendOrlReportToIntegrations(
       getGitBranch(workspacePath),
     ]);
 
-    // Prepare errors array
-    const errors = result.error ? [{ status: 500, message: result.error }] : [];
-
     // Prepare request body with new v1.0 schema
-    const requestBody = {
-      version: 1.0,
-      requestOrigin: 'ide-extension',
-      reports: [
-        {
-          ...(repoPath && { path: repoPath }),
-          ...(branch && { branch }),
-          orlReport,
-        },
-      ],
-      errors,
-    };
+    const requestBody = prepareRequestBody(orlReport, repoPath, branch, result);
 
     logger.info('Sending ORL report to integrations service', {
       integrationsServiceUrl,
-      repoPath: repoPath || 'unknown',
-      branch: branch || 'unknown',
+      repoPath: repoPath ?? 'unknown',
+      branch: branch ?? 'unknown',
       language,
       reportsCount: 1,
-      errorsCount: errors.length,
+      errorsCount: requestBody.errors.length,
     });
 
     // Send request (non-blocking, errors are caught and logged)
@@ -152,12 +208,13 @@ export async function sendOrlReportToIntegrations(
     logger.info('Successfully sent ORL report to integrations service');
   } catch (error) {
     // Log error but don't throw - this should not break the remediation workflow
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
+    const errorDetails = extractErrorDetails(error);
+
     logger.error('Failed to send ORL report to integrations service', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      errorDetails:
-        error instanceof Error && 'response' in error
-          ? (error as any).response?.data
-          : undefined,
+      error: errorMessage,
+      errorDetails,
     });
   }
 }
