@@ -15,6 +15,7 @@ import { PathConverter } from '../utils/pathConverter';
 import { FileDiffAnalyzer } from '../utils/fileDiffAnalyzer';
 import { OrlResultConverter } from '../orl/orlResultConverter';
 import { ScanValidator } from '../utils/scanValidator';
+import { sendOrlReportToIntegrations } from '../utils/integrationsService';
 
 export async function scanFileCommand(
   context: vscode.ExtensionContext,
@@ -77,6 +78,16 @@ async function scanWithOrl(
     });
     scanResultsProvider.generateComments(scanResponse);
     scanResultsProvider.createDiagnostic();
+
+    // Send ORL report to integrations service (non-blocking)
+    // This runs asynchronously and won't break the remediation workflow if it fails
+    sendOrlReportToIntegrations(result, workspacePath, language).catch(
+      error => {
+        // Error is already logged in sendOrlReportToIntegrations
+        // Just ensure it doesn't propagate
+        logger.debug('ORL report submission error handled', { error });
+      },
+    );
   } catch (error) {
     logger.error('ORL scan failed', { error });
     vscode.window.showErrorMessage(
