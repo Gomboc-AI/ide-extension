@@ -126,6 +126,108 @@ function prepareRequestBody(
 }
 
 /**
+ * Normalize ORL report to the shape expected by integrations (coerce numbers/booleans,
+ * ensure required fields/arrays exist, and fill workspace/language).
+ */
+function normalizeOrlReport(
+  raw: unknown,
+  workspacePath: string,
+  language: string,
+): any {
+  const toNumber = (val: any, fallback = 0): number => {
+    if (typeof val === 'number' && Number.isFinite(val)) {
+      return val;
+    }
+    const n = Number(val);
+    return Number.isFinite(n) ? n : fallback;
+  };
+
+  const toBoolean = (val: any, fallback = false): boolean => {
+    if (typeof val === 'boolean') {
+      return val;
+    }
+    if (typeof val === 'string') {
+      const v = val.trim().toLowerCase();
+      if (v === 'true') {
+        return true;
+      }
+      if (v === 'false') {
+        return false;
+      }
+    }
+    return fallback;
+  };
+
+  const ensureArray = <T>(val: any, fallback: T[] = []): T[] =>
+    Array.isArray(val) ? val : fallback;
+
+  const report = (raw && typeof raw === 'object' ? raw : {}) as any;
+  const metadata =
+    report.metadata && typeof report.metadata === 'object'
+      ? report.metadata
+      : {};
+
+  const rules = ensureArray(report.rules).map((r: any) => {
+    const rMeta =
+      r && typeof r === 'object' && typeof r.metadata === 'object'
+        ? r.metadata
+        : {};
+    const files = ensureArray(r.files)
+      .map((f: any) =>
+        f && typeof f === 'object' && typeof f.path === 'string'
+          ? { path: f.path }
+          : null,
+      )
+      .filter(Boolean) as Array<{ path: string }>;
+
+    return {
+      metadata: {
+        name: rMeta.name || r.name || 'unknown',
+        description: rMeta.description,
+        priority:
+          rMeta.priority !== undefined
+            ? toNumber(rMeta.priority, undefined as any)
+            : undefined,
+        skip: rMeta.skip !== undefined ? toBoolean(rMeta.skip) : undefined,
+        required_contexts: ensureArray(rMeta.required_contexts),
+        annotations: rMeta.annotations,
+        classifications: ensureArray(rMeta.classifications),
+      },
+      name: r.name || rMeta.name || 'unknown',
+      findings: toNumber(r.findings),
+      fixes: toNumber(r.fixes),
+      changes: toNumber(r.changes),
+      errors: ensureArray(r.errors),
+      files,
+    };
+  });
+
+  return {
+    type: 'Report',
+    version: 'v1',
+    metadata: {
+      name: metadata.name || 'unknown',
+      description: metadata.description,
+      priority:
+        metadata.priority !== undefined
+          ? toNumber(metadata.priority, undefined as any)
+          : undefined,
+      skip: metadata.skip !== undefined ? toBoolean(metadata.skip) : undefined,
+      required_contexts: ensureArray(metadata.required_contexts),
+      annotations: metadata.annotations,
+    },
+    workspace: report.workspace || workspacePath || '',
+    language: report.language || language || '',
+    rules_applied: toNumber(report.rules_applied),
+    findings: toNumber(report.findings),
+    fixes: toNumber(report.fixes),
+    changes: toNumber(report.changes),
+    errors: ensureArray(report.errors),
+    rules,
+  };
+}
+
+/**
  * Extract error details from axios error response
  */
 function extractErrorDetails(error: unknown): unknown {
@@ -300,8 +402,20 @@ export async function sendOrlReportToIntegrations(
       getGitBranch(workspacePath),
     ]);
 
+    // Normalize report to expected schema
+    const normalizedReport = normalizeOrlReport(
+      orlReport,
+      workspacePath,
+      language,
+    );
+
     // Prepare request body with new v1.0 schema
-    const requestBody = prepareRequestBody(orlReport, repoPath, branch, result);
+    const requestBody = prepareRequestBody(
+      normalizedReport,
+      repoPath,
+      branch,
+      result,
+    );
 
     logger.info('Sending ORL report to integrations service', {
       integrationsServiceUrl,
