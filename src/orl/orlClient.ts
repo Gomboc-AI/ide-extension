@@ -185,7 +185,10 @@ export class OrlClient {
     // All hooks loaded successfully - write them to temp workspace
     // Note: We fail fast if any hooks are missing (checked above), ensuring proper deployment
     for (const [name, content] of Object.entries(scripts)) {
-      const file = path.join(hooksDir, name);
+      // Hook entry files are invoked without extension (e.g., pre_remediate),
+      // but support file is sourced as common.sh by the hooks. Preserve that name.
+      const fileName = name === 'common' ? 'common.sh' : name;
+      const file = path.join(hooksDir, fileName);
       await fs.promises.writeFile(file, content, {
         encoding: 'utf8',
         mode: 0o755,
@@ -331,9 +334,10 @@ export class OrlClient {
           );
         }
 
-        // ORL returns exit code 2 when it finds violations (even if it fixes some)
-        // This is normal behavior, not an error
-        if (error.code === 2 && error.stdout) {
+        // ORL non-zero exit codes semantics:
+        // - code 1: fixes < findings (partial remediation) -> treat as success
+        // - code 2: violations found (legacy behavior)     -> treat as success
+        if ((error.code === 1 || error.code === 2) && error.stdout) {
           logger.info('ORL found violations (exit code 2)', {
             stdout: error.stdout,
             stderr: error.stderr,
@@ -348,9 +352,13 @@ export class OrlClient {
           // Clean up temp directory
           await fs.promises.rm(tempDir, { recursive: true, force: true });
 
-          logger.info('ORL remediation completed with violations', {
-            filesModified: Object.keys(modifiedFiles).length,
-          });
+          logger.info(
+            'ORL remediation completed with non-zero exit (expected)',
+            {
+              filesModified: Object.keys(modifiedFiles).length,
+              exitCode: error.code,
+            },
+          );
 
           return {
             success: true,
