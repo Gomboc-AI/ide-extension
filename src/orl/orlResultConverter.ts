@@ -371,6 +371,13 @@ export class OrlResultConverter {
     logger.info('Extracted rule descriptions', {
       count: Object.keys(descriptions).length,
       sampleRules: Object.keys(descriptions).slice(0, 5),
+      allRuleNames: Object.keys(descriptions),
+      sampleDescriptions: Object.entries(descriptions)
+        .slice(0, 3)
+        .map(([name, desc]) => ({
+          name,
+          descriptionPreview: desc.substring(0, 100),
+        })),
     });
 
     return descriptions;
@@ -447,7 +454,8 @@ export class OrlResultConverter {
 
     logger.info('Rule descriptions extracted', {
       count: Object.keys(ruleDescriptions).length,
-      sampleRules: Object.keys(ruleDescriptions).slice(0, 3),
+      sampleRules: Object.keys(ruleDescriptions).slice(0, 5),
+      allRuleNames: Object.keys(ruleDescriptions),
       hasReport: !!result.report,
       reportLength: result.report?.length || 0,
     });
@@ -517,6 +525,13 @@ export class OrlResultConverter {
         const isDockerfile =
           actualFilePath.toLowerCase().includes('dockerfile') ||
           path.basename(actualFilePath).toLowerCase().startsWith('dockerfile');
+
+        // Check if this is a Kubernetes YAML file
+        // Kubernetes manifests have both kind: and apiVersion: at the top level
+        const isKubernetes =
+          (filetype === 'yaml' || filetype === 'yml') &&
+          originalText.includes('kind:') &&
+          originalText.includes('apiVersion:');
 
         // Search backwards from the diff line to find the resource definition
         // Also track where this resource block ends to identify the specific instance
@@ -595,6 +610,214 @@ export class OrlResultConverter {
               }
               if (diffLineIndex - lineIdx > 50) {
                 break;
+              }
+            }
+          }
+        } else if (isKubernetes) {
+          // For Kubernetes YAML files, look for kind: and metadata.name:
+          // Kubernetes resources have:
+          //   apiVersion: v1
+          //   kind: Deployment
+          //   metadata:
+          //     name: my-app
+          // Strategy: Search backwards to find kind:, then search forwards from kind: to find metadata.name:
+
+          // First, find kind: by searching backwards
+          let kindLineIdx = -1;
+          for (
+            let lineIdx = Math.min(diffLineIndex, fileLines.length - 1);
+            lineIdx >= 0;
+            lineIdx--
+          ) {
+            const line = fileLines[lineIdx];
+            const trimmed = line.trim();
+            const indent = line.match(/^(\s*)/)?.[1]?.length ?? 0;
+
+            // Skip empty lines and comments
+            if (!trimmed || trimmed.startsWith('#')) {
+              continue;
+            }
+
+            // Look for kind: (must be at top level, indent 0)
+            if (indent === 0 && trimmed.startsWith('kind:')) {
+              const kindMatch = trimmed.match(/^kind:\s*(.+)$/);
+              if (kindMatch) {
+                resourceName = kindMatch[1].trim();
+                resourceStartLine = lineIdx;
+                kindLineIdx = lineIdx;
+                break; // Found kind, now search forwards for metadata.name
+              }
+            }
+
+            // Stop searching if we've gone too far back (more than 100 lines for K8s)
+            if (diffLineIndex - lineIdx > 100) {
+              break;
+            }
+          }
+
+          // If we found kind:, search forwards to find metadata.name:
+          if (kindLineIdx >= 0) {
+            let inMetadata = false;
+            let metadataIndent = 0;
+
+            for (
+              let lineIdx = kindLineIdx + 1;
+              lineIdx < fileLines.length;
+              lineIdx++
+            ) {
+              const line = fileLines[lineIdx];
+              const trimmed = line.trim();
+              const indent = line.match(/^(\s*)/)?.[1]?.length ?? 0;
+
+              // Skip empty lines and comments
+              if (!trimmed || trimmed.startsWith('#')) {
+                continue;
+              }
+
+              // Look for metadata: section
+              if (trimmed.startsWith('metadata:')) {
+                inMetadata = true;
+                metadataIndent = indent;
+                continue;
+              }
+
+              // If we're in metadata section, look for name:
+              if (inMetadata && indent > metadataIndent) {
+                if (trimmed.startsWith('name:')) {
+                  const nameMatch = trimmed.match(/^name:\s*(.+)$/);
+                  if (nameMatch) {
+                    resourceInstanceName = nameMatch[1]
+                      .trim()
+                      .replace(/^["']|["']$/g, '');
+                    // Found both kind and name, now find the end of this resource
+                    resourceEndLine = fileLines.length - 1;
+                    for (let j = lineIdx + 1; j < fileLines.length; j++) {
+                      const nextLine = fileLines[j];
+                      const nextTrimmed = nextLine.trim();
+                      const nextIndent =
+                        nextLine.match(/^(\s*)/)?.[1]?.length ?? 0;
+                      // Next resource starts with --- separator or apiVersion: at top level
+                      if (
+                        nextTrimmed === '---' ||
+                        (nextIndent === 0 &&
+                          nextTrimmed.startsWith('apiVersion:'))
+                      ) {
+                        resourceEndLine = j - 1;
+                        break;
+                      }
+                    }
+                    break; // Found everything we need
+                  }
+                }
+                // If we hit a key at same indent as metadata, we've left metadata section
+                if (indent === metadataIndent && trimmed.includes(':')) {
+                  inMetadata = false;
+                }
+              } else if (inMetadata && indent <= metadataIndent) {
+                // We've left the metadata section
+                inMetadata = false;
+              }
+
+              // Stop searching if we've gone too far forward (more than 200 lines)
+              if (lineIdx - kindLineIdx > 200) {
+                break;
+              }
+            }
+          }
+
+          // If we didn't find it in the original file, try the modified content
+          if (resourceName === 'Resource' || resourceInstanceName === null) {
+            const modifiedLines = (modifiedContent as string).split('\n');
+
+            // First, find kind: by searching backwards
+            let kindLineIdx = -1;
+            for (
+              let lineIdx = Math.min(diffLineIndex, modifiedLines.length - 1);
+              lineIdx >= 0;
+              lineIdx--
+            ) {
+              const line = modifiedLines[lineIdx];
+              const trimmed = line.trim();
+              const indent = line.match(/^(\s*)/)?.[1]?.length ?? 0;
+
+              if (!trimmed || trimmed.startsWith('#')) {
+                continue;
+              }
+
+              if (indent === 0 && trimmed.startsWith('kind:')) {
+                const kindMatch = trimmed.match(/^kind:\s*(.+)$/);
+                if (kindMatch) {
+                  resourceName = kindMatch[1].trim();
+                  resourceStartLine = lineIdx;
+                  kindLineIdx = lineIdx;
+                  break;
+                }
+              }
+
+              if (diffLineIndex - lineIdx > 100) {
+                break;
+              }
+            }
+
+            // If we found kind:, search forwards to find metadata.name:
+            if (kindLineIdx >= 0) {
+              let inMetadata = false;
+              let metadataIndent = 0;
+
+              for (
+                let lineIdx = kindLineIdx + 1;
+                lineIdx < modifiedLines.length;
+                lineIdx++
+              ) {
+                const line = modifiedLines[lineIdx];
+                const trimmed = line.trim();
+                const indent = line.match(/^(\s*)/)?.[1]?.length ?? 0;
+
+                if (!trimmed || trimmed.startsWith('#')) {
+                  continue;
+                }
+
+                if (trimmed.startsWith('metadata:')) {
+                  inMetadata = true;
+                  metadataIndent = indent;
+                  continue;
+                }
+
+                if (inMetadata && indent > metadataIndent) {
+                  if (trimmed.startsWith('name:')) {
+                    const nameMatch = trimmed.match(/^name:\s*(.+)$/);
+                    if (nameMatch) {
+                      resourceInstanceName = nameMatch[1]
+                        .trim()
+                        .replace(/^["']|["']$/g, '');
+                      resourceEndLine = modifiedLines.length - 1;
+                      for (let j = lineIdx + 1; j < modifiedLines.length; j++) {
+                        const nextLine = modifiedLines[j];
+                        const nextTrimmed = nextLine.trim();
+                        const nextIndent =
+                          nextLine.match(/^(\s*)/)?.[1]?.length ?? 0;
+                        if (
+                          nextTrimmed === '---' ||
+                          (nextIndent === 0 &&
+                            nextTrimmed.startsWith('apiVersion:'))
+                        ) {
+                          resourceEndLine = j - 1;
+                          break;
+                        }
+                      }
+                      break;
+                    }
+                  }
+                  if (indent === metadataIndent && trimmed.includes(':')) {
+                    inMetadata = false;
+                  }
+                } else if (inMetadata && indent <= metadataIndent) {
+                  inMetadata = false;
+                }
+
+                if (lineIdx - kindLineIdx > 200) {
+                  break;
+                }
               }
             }
           }
@@ -733,9 +956,9 @@ export class OrlResultConverter {
             diffLine <= resourceEndLine + 1;
 
           if (resourceContainsDiff && allFileRules.length > 0) {
-            // For Dockerfiles, skip resource type matching and use file-level matching
+            // For Dockerfiles and Kubernetes, skip resource type matching and use file-level matching
             // For Terraform, match by resource type to filter rules
-            if (isDockerfile) {
+            if (isDockerfile || isKubernetes) {
               // For Dockerfiles, all rules that touched this file are potential matches
               // We'll rely on diff content analysis to filter further
               for (const ruleName of allFileRules) {
@@ -752,7 +975,7 @@ export class OrlResultConverter {
                   const keys = addFileKeys(ruleFile.path);
                   const fileMatches = keys.some(k => matchKeys.includes(k));
                   if (fileMatches) {
-                    // For Dockerfiles, check if diff line falls within any resource range
+                    // For Dockerfiles and Kubernetes, check if diff line falls within any resource range
                     const resources = (ruleFile as any).resources || [];
                     const matchingResource = resources.find(
                       (r: any) =>
@@ -926,9 +1149,9 @@ export class OrlResultConverter {
                 const diffProperties = analysis.properties || [];
                 const diffContent = diff.newLines.join('\n').toLowerCase();
 
-                // For Dockerfiles, skip resource type matching and use all file rules
+                // For Dockerfiles and Kubernetes, skip resource type matching and use all file rules
                 // For Terraform, match by resource type first
-                if (isDockerfile) {
+                if (isDockerfile || isKubernetes) {
                   // For Dockerfiles, use all rules that touched this file
                   // and match based on diff content
                   for (const ruleName of allFileRules) {
@@ -1163,6 +1386,19 @@ export class OrlResultConverter {
         if (matchingRules.length > 0) {
           primaryRule = matchingRules[0];
           const descs: string[] = [];
+
+          // Helper function to normalize rule names for matching
+          // Handles differences between underscores and dashes, case, special chars
+          const normalizeRuleName = (name: string): string => {
+            return name
+              .toLowerCase()
+              .replace(/[0-9]+$/, '') // Remove trailing numeric suffixes
+              .replace(/[^a-z0-9\/]/g, '-') // Replace ALL special chars (including underscores) with dashes
+              .replace(/-+/g, '-') // Collapse multiple dashes (-- becomes -)
+              .replace(/^-|-$/g, '') // Remove leading/trailing dashes
+              .replace(/\/$/, ''); // Remove trailing slash
+          };
+
           for (const ruleName of matchingRules) {
             // Try exact match first
             let d = ruleDescriptions[ruleName];
@@ -1186,15 +1422,39 @@ export class OrlResultConverter {
               }
             }
 
+            // If still no match, try normalized matching (handles special chars, case, etc.)
+            if (!d) {
+              const normalizedRuleName = normalizeRuleName(ruleName);
+              for (const [reportRuleName, desc] of Object.entries(
+                ruleDescriptions,
+              )) {
+                const normalizedReportName = normalizeRuleName(reportRuleName);
+                // Check if normalized names match (exact or contains)
+                if (
+                  normalizedRuleName === normalizedReportName ||
+                  normalizedRuleName.includes(normalizedReportName) ||
+                  normalizedReportName.includes(normalizedRuleName)
+                ) {
+                  d = desc;
+                  break;
+                }
+              }
+            }
+
             // If still no match, try matching the core rule name (after last /)
             if (!d) {
               const coreName = ruleName.split('/').pop() || ruleName;
+              const normalizedCoreName = normalizeRuleName(coreName);
               for (const [reportRuleName, desc] of Object.entries(
                 ruleDescriptions,
               )) {
                 const reportCore =
                   reportRuleName.split('/').pop() || reportRuleName;
+                const normalizedReportCore = normalizeRuleName(reportCore);
                 if (
+                  normalizedCoreName === normalizedReportCore ||
+                  normalizedCoreName.includes(normalizedReportCore) ||
+                  normalizedReportCore.includes(normalizedCoreName) ||
                   coreName.includes(reportCore) ||
                   reportCore.includes(coreName)
                 ) {
@@ -1212,10 +1472,32 @@ export class OrlResultConverter {
 
           // Debug logging
           if (aggregatedDescriptions.length === 0) {
+            const sampleRule = matchingRules[0] || '';
             logger.warn('No descriptions found for matching rules', {
+              matchingRules: matchingRules.slice(0, 5),
+              matchingRulesCount: matchingRules.length,
+              availableRuleNames: Object.keys(ruleDescriptions),
+              availableRuleNamesCount: Object.keys(ruleDescriptions).length,
+              sampleDiagnosticRule: sampleRule,
+              normalizedSample: normalizeRuleName(sampleRule),
+              normalizedAvailable: Object.keys(ruleDescriptions).map(n => ({
+                original: n,
+                normalized: normalizeRuleName(n),
+              })),
+              // Try to find any partial matches for debugging
+              partialMatches: Object.keys(ruleDescriptions).filter(rn => {
+                const normRn = normalizeRuleName(rn);
+                const normSample = normalizeRuleName(sampleRule);
+                return (
+                  normRn.includes(normSample) || normSample.includes(normRn)
+                );
+              }),
+            });
+          } else {
+            logger.debug('Successfully matched rule descriptions', {
               matchingRules: matchingRules.slice(0, 3),
-              availableRuleNames: Object.keys(ruleDescriptions).slice(0, 10),
-              sampleDiagnosticRule: matchingRules[0],
+              descriptionsCount: aggregatedDescriptions.length,
+              sampleDescription: aggregatedDescriptions[0]?.substring(0, 100),
             });
           }
         }
@@ -1230,6 +1512,9 @@ export class OrlResultConverter {
           displayResourceName = resourceInstanceName
             ? `Docker Stage: ${resourceInstanceName}`
             : 'Docker Stage';
+        } else if (isKubernetes && resourceInstanceName) {
+          // For Kubernetes, show kind/name format (e.g., "Deployment/my-app")
+          displayResourceName = `${resourceName}/${resourceInstanceName}`;
         } else if (resourceInstanceName) {
           // For Terraform, show resource type and instance name
           displayResourceName = `${resourceName}.${resourceInstanceName}`;
@@ -1287,7 +1572,9 @@ export class OrlResultConverter {
                   ? 'terraform'
                   : isDockerfile
                     ? 'docker'
-                    : 'cloudformation',
+                    : isKubernetes
+                      ? 'kubernetes'
+                      : 'cloudformation',
               filepath: actualFilePath,
               line: diff.targetLine,
             },
