@@ -1085,14 +1085,32 @@ export class OrlResultConverter {
                 .replace(/\./g, '_')
                 .replace(/-/g, '_');
 
+              // Extract core resource name (without aws_/google_/azurerm_ prefix) for flexible matching
+              // e.g., aws_neptune_cluster -> neptune_cluster -> neptune-cluster
+              const coreResource = normalizedResource.replace(
+                /^(aws_|google_|azurerm_)/,
+                '',
+              );
+              const coreResourceWithDashes = coreResource.replace(/_/g, '-');
+              const normalizedResourceWithDashes = normalizedResource.replace(
+                /_/g,
+                '-',
+              );
+
               const resourceVariants = [
                 normalizedResource,
+                coreResource,
+                coreResourceWithDashes,
+                normalizedResourceWithDashes,
                 `hashicorp__aws-resources-${normalizedResource}`,
                 `hashicorp__aws-resources-aws_${normalizedResource}`,
                 `hashicorp__google-resources-${normalizedResource}`,
                 `hashicorp__google-resources-google_${normalizedResource}`,
                 `aws-resources-${normalizedResource}`,
                 `aws-resources-aws_${normalizedResource}`,
+                // Also try with dashes
+                `hashicorp__aws-resources-${normalizedResourceWithDashes}`,
+                `aws-resources-${normalizedResourceWithDashes}`,
               ];
 
               // Match rules to this specific resource instance by checking:
@@ -1425,15 +1443,33 @@ export class OrlResultConverter {
               .replace(/\./g, '_')
               .replace(/-/g, '_');
 
+            // Extract core resource name (without aws_/google_/azurerm_ prefix) for flexible matching
+            // e.g., aws_neptune_cluster -> neptune_cluster -> neptune-cluster
+            const coreResource = normalizedResource.replace(
+              /^(aws_|google_|azurerm_)/,
+              '',
+            );
+            const coreResourceWithDashes = coreResource.replace(/_/g, '-');
+            const normalizedResourceWithDashes = normalizedResource.replace(
+              /_/g,
+              '-',
+            );
+
             // Also try with hashicorp__ prefix variations
             const resourceVariants = [
               normalizedResource,
+              coreResource,
+              coreResourceWithDashes,
+              normalizedResourceWithDashes,
               `hashicorp__aws-resources-${normalizedResource}`,
               `hashicorp__aws-resources-aws_${normalizedResource}`,
               `hashicorp__google-resources-${normalizedResource}`,
               `hashicorp__google-resources-google_${normalizedResource}`,
               `aws-resources-${normalizedResource}`,
               `aws-resources-aws_${normalizedResource}`,
+              // Also try with dashes
+              `hashicorp__aws-resources-${normalizedResourceWithDashes}`,
+              `aws-resources-${normalizedResourceWithDashes}`,
             ];
 
             for (const ruleName of allFileRules) {
@@ -1474,34 +1510,94 @@ export class OrlResultConverter {
         }
 
         // Ultimate fallback: if diagnostics don't have file mappings but we have rule descriptions,
-        // use all rules from the report for Kubernetes/Docker files
+        // use rules from diagnostics (which are the actual rules that were executed)
         if (
           matchingRules.length === 0 &&
-          (isKubernetes || isDockerfile) &&
           allFileRules.length === 0 &&
-          Object.keys(ruleDescriptions).length > 0
+          result.diagnostics?.rules &&
+          result.diagnostics.rules.length > 0
         ) {
-          // Use all rules from the report as a last resort for Kubernetes/Docker files
-          const allReportRules = Object.keys(ruleDescriptions);
-          for (const ruleName of allReportRules) {
-            // Filter out the "kube-apiserver" type entries (those are metadata names, not rule names)
-            if (!ruleName.includes('/') && ruleName !== 'kube-apiserver') {
-              continue;
+          const diagnosticsRules = result.diagnostics.rules;
+
+          if (isKubernetes || isDockerfile) {
+            // For Kubernetes/Docker files, use all rules from diagnostics
+            // (file-level matching is sufficient)
+            for (const rule of diagnosticsRules) {
+              if (!matchingRules.includes(rule.ruleName)) {
+                matchingRules.push(rule.ruleName);
+              }
             }
-            if (!matchingRules.includes(ruleName)) {
-              matchingRules.push(ruleName);
+            logger.debug(
+              'Using all diagnostics rules as ultimate fallback for Kubernetes/Docker',
+              {
+                file: actualFilePath,
+                resourceType: resourceName,
+                matchingRulesCount: matchingRules.length,
+                matchingRules: matchingRules.slice(0, 3),
+                diagnosticsRulesCount: diagnosticsRules.length,
+              },
+            );
+          } else if (resourceName !== 'Resource') {
+            // For Terraform files, filter by resource type to avoid false positives
+            // Normalize resource name for matching (handle variations)
+            const normalizedResource = resourceName
+              .replace(/^hashicorp__/, '')
+              .replace(/^aws-resources-/, '')
+              .replace(/^google-resources-/, '')
+              .replace(/^azurerm-resources-/, '')
+              .replace(/\./g, '_')
+              .replace(/-/g, '_');
+
+            // Extract core resource name (without aws_/google_/azurerm_ prefix) for flexible matching
+            // e.g., aws_neptune_cluster -> neptune_cluster -> neptune-cluster
+            const coreResource = normalizedResource.replace(
+              /^(aws_|google_|azurerm_)/,
+              '',
+            );
+            const coreResourceWithDashes = coreResource.replace(/_/g, '-');
+            const normalizedResourceWithDashes = normalizedResource.replace(
+              /_/g,
+              '-',
+            );
+
+            const resourceVariants = [
+              normalizedResource,
+              coreResource,
+              coreResourceWithDashes,
+              normalizedResourceWithDashes,
+              `hashicorp__aws-resources-${normalizedResource}`,
+              `hashicorp__aws-resources-aws_${normalizedResource}`,
+              `hashicorp__google-resources-${normalizedResource}`,
+              `hashicorp__google-resources-google_${normalizedResource}`,
+              `aws-resources-${normalizedResource}`,
+              `aws-resources-aws_${normalizedResource}`,
+              // Also try with dashes
+              `hashicorp__aws-resources-${normalizedResourceWithDashes}`,
+              `aws-resources-${normalizedResourceWithDashes}`,
+            ];
+
+            for (const rule of diagnosticsRules) {
+              const ruleLower = rule.ruleName.toLowerCase();
+              const matches = resourceVariants.some(variant =>
+                ruleLower.includes(variant.toLowerCase()),
+              );
+
+              if (matches && !matchingRules.includes(rule.ruleName)) {
+                matchingRules.push(rule.ruleName);
+              }
             }
+            logger.debug(
+              'Using diagnostics rules filtered by resource type as ultimate fallback for Terraform',
+              {
+                file: actualFilePath,
+                resourceType: resourceName,
+                normalizedResource,
+                matchingRulesCount: matchingRules.length,
+                matchingRules: matchingRules.slice(0, 3),
+                diagnosticsRulesCount: diagnosticsRules.length,
+              },
+            );
           }
-          logger.debug(
-            'Using all report rules as ultimate fallback for Kubernetes/Docker',
-            {
-              file: actualFilePath,
-              resourceType: resourceName,
-              matchingRulesCount: matchingRules.length,
-              matchingRules: matchingRules.slice(0, 3),
-              allReportRulesCount: allReportRules.length,
-            },
-          );
         }
 
         // If no resource-specific rules found, don't show any rules
