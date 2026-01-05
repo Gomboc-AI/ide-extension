@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -24,9 +24,220 @@ export interface OrlResult {
 
 export class OrlClient {
   private config: OrlConfig;
+  private static readonly reportFileCandidates = [
+    // Preferred location (we pass --out /workspace/.orl/report.yaml)
+    path.join('.orl', 'report.yaml'),
+    // Fallbacks for safety across potential naming changes
+    path.join('.orl', 'report.yml'),
+    path.join('.orl', 'report', 'report.yaml'),
+    path.join('.orl', 'report', 'report.yml'),
+    'report.yaml',
+    'report.yml',
+  ];
+
+  /**
+   * Temporary safety valve: exclude known-problematic rulesets that can hang remediation.
+   *
+   * IMPORTANT: ORL expands Rulesets into per-rule names by appending a numeric suffix (%03d),
+   * e.g. `...aws_iam_access_key` becomes `...aws_iam_access_key000`, `...001`, etc.
+   *
+   * The rules-service stores/pulls the ruleset under the *base* name (no numeric suffix),
+   * so we must exclude by base name to be effective at rules-pull time.
+   */
+  private static readonly excludedRuleNames: string[] = [
+    // User-observed expanded rule name (suffix will be stripped automatically)
+    'gomboc-ai/ensure_credentials_unused_for_45_days_or_more_are_disabled_for_hashicorp__aws-resources-aws_iam_access_key000',
+  ];
+
+  private static excludedRuleBases(): string[] {
+    const stripSuffix = (s: string) => s.replace(/[0-9]+$/, '');
+    return Array.from(new Set(OrlClient.excludedRuleNames.map(stripSuffix)));
+  }
 
   constructor(config: OrlConfig) {
     this.config = config;
+  }
+
+  private getRulesCacheDir(workspacePath: string): string {
+    // Cache rules per channel so large workspaces don't repull everything.
+    // Keep this outside /workspace mount to avoid hooks traversing it.
+    const safe = (s: string) => s.replace(/[^a-zA-Z0-9._-]+/g, '_');
+    const channel = safe(this.config.channel || 'default');
+    return path.join(workspacePath, '.orl-cache', 'rules', channel);
+  }
+
+  private async ensureRulesPresent(workspacePath: string): Promise<string> {
+    const rulesDir = this.getRulesCacheDir(workspacePath);
+    await fs.promises.mkdir(rulesDir, { recursive: true });
+
+    // Simple freshness heuristic: if it was pulled recently, reuse.
+    const stampPath = path.join(rulesDir, '.pulled-at');
+    const ttlMs = 6 * 60 * 60 * 1000; // 6 hours
+    try {
+      const stat = await fs.promises.stat(stampPath);
+      const age = Date.now() - stat.mtimeMs;
+      if (age >= 0 && age < ttlMs) {
+        logger.info('Reusing cached rules', { rulesDir });
+        await this.pruneRulesByName(rulesDir, OrlClient.excludedRuleBases());
+        return rulesDir;
+      }
+    } catch {
+      // missing stamp => repull
+    }
+
+    logger.info('Pulling rules (cache miss or stale)', { rulesDir });
+    await this.pullRulesUsingOrl(rulesDir);
+    await this.pruneRulesByName(rulesDir, OrlClient.excludedRuleBases());
+    await fs.promises.writeFile(stampPath, new Date().toISOString(), 'utf8');
+    return rulesDir;
+  }
+
+  private async pruneRulesByName(
+    rulesDir: string,
+    ruleNames: string[],
+  ): Promise<void> {
+    if (!ruleNames || ruleNames.length === 0) {
+      return;
+    }
+
+    const exts = new Set(['.orl', '.yaml', '.yml', '.json']);
+    const targets = new Set(ruleNames);
+    let removed = 0;
+
+    const walk = async (dir: string): Promise<void> => {
+      const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          await walk(full);
+          continue;
+        }
+        if (!entry.isFile()) {
+          continue;
+        }
+        const ext = path.extname(entry.name).toLowerCase();
+        if (!exts.has(ext)) {
+          continue;
+        }
+        let content: string;
+        try {
+          content = await fs.promises.readFile(full, 'utf8');
+        } catch {
+          continue;
+        }
+        // Look for rule name occurrences in common fields.
+        // Rulesets typically have `name: <baseName>` under metadata.
+        for (const rn of targets) {
+          if (
+            content.includes(`name: ${rn}`) ||
+            content.includes(`name: "${rn}"`) ||
+            content.includes(`name: '${rn}'`) ||
+            content.includes(`"name": "${rn}"`) ||
+            content.includes(`"name":"${rn}"`)
+          ) {
+            try {
+              await fs.promises.rename(full, `${full}.disabled`);
+              removed++;
+              logger.warn('Disabled rule file due to exclusion', {
+                ruleName: rn,
+                file: full,
+              });
+            } catch (e) {
+              logger.warn('Failed to disable rule file (ignored)', {
+                ruleName: rn,
+                file: full,
+                e,
+              });
+            }
+            break;
+          }
+        }
+      }
+    };
+
+    try {
+      await walk(rulesDir);
+      if (removed > 0) {
+        logger.warn('Excluded rule(s) removed from rulespace', {
+          rulesDir,
+          removed,
+          excluded: ruleNames,
+        });
+      }
+    } catch (e) {
+      logger.warn('Failed to prune rules by name (ignored)', {
+        rulesDir,
+        excluded: ruleNames,
+        e,
+      });
+    }
+  }
+
+  /**
+   * Run a command while streaming stdout/stderr to avoid child_process.exec maxBuffer limits.
+   * Captures only a tail window of output for logging/debugging.
+   */
+  private async execStreaming(
+    command: string,
+    opts: { cwd?: string; timeoutMs?: number; captureLimitBytes?: number } = {},
+  ): Promise<{
+    stdout: string;
+    stderr: string;
+    exitCode: number | null;
+    signal: NodeJS.Signals | null;
+  }> {
+    const timeoutMs = opts.timeoutMs ?? 10 * 60_000; // 10 minutes
+    const captureLimitBytes = opts.captureLimitBytes ?? 512 * 1024; // 512KB per stream
+
+    return await new Promise((resolve, reject) => {
+      const child = spawn(command, {
+        cwd: opts.cwd,
+        shell: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      const appendCapped = (current: string, chunk: Buffer): string => {
+        const next = current + chunk.toString('utf8');
+        if (Buffer.byteLength(next, 'utf8') <= captureLimitBytes) {
+          return next;
+        }
+        // keep the tail
+        const buf = Buffer.from(next, 'utf8');
+        return buf.subarray(buf.length - captureLimitBytes).toString('utf8');
+      };
+
+      const timer = setTimeout(() => {
+        logger.warn('Command timed out; sending SIGTERM', {
+          command,
+          timeoutMs,
+        });
+        try {
+          child.kill('SIGTERM');
+        } catch {
+          // ignore
+        }
+      }, timeoutMs);
+
+      child.stdout?.on('data', (chunk: Buffer) => {
+        stdout = appendCapped(stdout, chunk);
+      });
+      child.stderr?.on('data', (chunk: Buffer) => {
+        stderr = appendCapped(stderr, chunk);
+      });
+
+      child.on('error', err => {
+        clearTimeout(timer);
+        reject(err);
+      });
+
+      child.on('close', (code, signal) => {
+        clearTimeout(timer);
+        resolve({ stdout, stderr, exitCode: code, signal });
+      });
+    });
   }
 
   /**
@@ -226,6 +437,38 @@ export class OrlClient {
       return undefined;
     }
   }
+
+  /**
+   * Read remediation report emitted by ORL into the temp workspace.
+   *
+   * ORL historically printed the YAML report to stdout. Newer versions can
+   * write the report to a file (via --out) and omit it from stdout. We prefer
+   * reading the file to avoid parse failures and very large stdout payloads.
+   */
+  private async readReport(tempDir: string): Promise<string | undefined> {
+    for (const rel of OrlClient.reportFileCandidates) {
+      const reportPath = path.join(tempDir, rel);
+      try {
+        await fs.promises.access(reportPath, fs.constants.F_OK);
+        const raw = await fs.promises.readFile(reportPath, 'utf8');
+        if (raw && raw.trim()) {
+          logger.debug('Read ORL report from temp directory', {
+            reportPath,
+            length: raw.length,
+          });
+          return raw;
+        }
+      } catch {
+        // ignore; try next candidate
+      }
+    }
+
+    logger.debug('ORL report file not found in temp directory', {
+      tempDir,
+      candidates: OrlClient.reportFileCandidates,
+    });
+    return undefined;
+  }
   /**
    * Execute ORL remediation on the current workspace
    */
@@ -247,10 +490,12 @@ export class OrlClient {
       await this.writeHooksToTempWorkspace(tempDir);
 
       // Step 1: Pull rules using ORL's built-in rules pull command
-      const rulesDir = path.join(tempDir, 'rules');
-      await fs.promises.mkdir(rulesDir, { recursive: true });
-
-      await this.pullRulesUsingOrl(rulesDir);
+      //
+      // IMPORTANT: Do NOT place the rules directory under tempDir (/workspace in the container).
+      // Our hook scripts `find` through /workspace to snapshot IaC files per-rule; if the
+      // pulled rules live under /workspace, hooks can end up walking/copying thousands of
+      // rule YAML/ORL files which makes large scans appear "hung" (100% CPU for minutes).
+      const rulesDir = await this.ensureRulesPresent(workspacePath);
 
       // Step 2: Execute ORL remediation with pulled rules
       const dockerCommand = this.buildDockerCommand(
@@ -261,11 +506,32 @@ export class OrlClient {
       logger.info('Executing Docker command', { command: dockerCommand });
 
       try {
-        const { stdout, stderr } = await execAsync(dockerCommand, {
-          timeout: 90000, // 90 second timeout - hooks add overhead but shouldn't take this long
-          maxBuffer: 10 * 1024 * 1024, // 10MB buffer (default is 1MB, hooks produce more output)
-          cwd: workspacePath,
-        });
+        const { stdout, stderr, exitCode, signal } = await this.execStreaming(
+          dockerCommand,
+          {
+            cwd: workspacePath,
+          },
+        );
+
+        // Handle non-zero exit codes with ORL semantics below (1/2 can still be "success")
+        if (signal) {
+          const err: any = new Error(
+            `ORL process exited with signal ${signal}`,
+          );
+          err.signal = signal;
+          err.stdout = stdout;
+          err.stderr = stderr;
+          throw err;
+        }
+        if (exitCode !== 0) {
+          const err: any = new Error(
+            `ORL process exited with code ${exitCode}`,
+          );
+          err.code = exitCode;
+          err.stdout = stdout;
+          err.stderr = stderr;
+          throw err;
+        }
 
         if (stderr && !stderr.includes('WARN')) {
           logger.warn('ORL execution warnings', { stderr });
@@ -278,6 +544,9 @@ export class OrlClient {
         // Attempt to read aggregated diagnostics generated by hooks
         const diagnostics = await this.readDiagnostics(tempDir);
 
+        // Prefer reading the YAML report from file (newer ORL versions may omit it from stdout)
+        const report = (await this.readReport(tempDir)) || stdout;
+
         // Clean up temp directory
         await fs.promises.rm(tempDir, { recursive: true, force: true });
 
@@ -288,7 +557,7 @@ export class OrlClient {
         return {
           success: true,
           modifiedFiles,
-          report: stdout,
+          report,
           // @ts-ignore add diagnostics for downstream usage
           diagnostics,
         };
@@ -305,6 +574,7 @@ export class OrlClient {
           // Try to read modified files anyway - ORL might have completed before the pipe closed
           const modifiedFiles = await this.readModifiedFilesFromTemp(tempDir);
           const diagnostics = await this.readDiagnostics(tempDir);
+          const report = (await this.readReport(tempDir)) || error.stdout || '';
 
           // If we got some results, treat it as success
           if (Object.keys(modifiedFiles).length > 0) {
@@ -321,7 +591,7 @@ export class OrlClient {
             return {
               success: true,
               modifiedFiles,
-              report: error.stdout || '',
+              report,
               // @ts-ignore add diagnostics for downstream usage
               diagnostics,
             };
@@ -349,6 +619,9 @@ export class OrlClient {
           // Attempt to read aggregated diagnostics generated by hooks
           const diagnostics = await this.readDiagnostics(tempDir);
 
+          // Prefer reading the YAML report from file (newer ORL versions may omit it from stdout)
+          const report = (await this.readReport(tempDir)) || error.stdout;
+
           // Clean up temp directory
           await fs.promises.rm(tempDir, { recursive: true, force: true });
 
@@ -363,7 +636,7 @@ export class OrlClient {
           return {
             success: true,
             modifiedFiles,
-            report: error.stdout,
+            report,
             // @ts-ignore add diagnostics for downstream usage
             diagnostics,
           };
@@ -416,30 +689,31 @@ export class OrlClient {
 
     // reuse ORL's rules pull command
     // Note: We don't force --platform to allow Docker to use native architecture
-    const commandParts = ['docker run --rm'];
-    commandParts.push(
+    const pullCommandParts = [
+      'docker run --rm',
       `-v '${rulesDir}:/output'`,
       `-e RULE_SERVICE_TOKEN='${rulesServiceToken}'`,
       `${this.config.containerImage} rules pull --url='${rulesServiceUrl}' --out=/output --channel='${channel}'`,
-    );
-    const pullCommand = commandParts.join(' \\\n      ');
+    ];
 
+    // Exclude problematic rulesets at pull-time (filters are subtractive: exclude matches).
+    // Use $.name (rule/ruleset name in rules-service). Exclude by BASE name (no numeric suffix).
+    for (const base of OrlClient.excludedRuleBases()) {
+      pullCommandParts[pullCommandParts.length - 1] +=
+        ` --filter='(eq $.name "${base}")'`;
+    }
+
+    const pullCommand = pullCommandParts.join(' \\\n      ');
     logger.info('Pulling rules using ORL', { command: pullCommand });
 
-    try {
-      const result = await execAsync(pullCommand, {
-        maxBuffer: 10 * 1024 * 1024, // 10MB buffer for verbose output
-      });
-      logger.info('Rules pulled successfully', {
-        stdout: result.stdout,
-        stderr: result.stderr,
-      });
-    } catch (error) {
-      logger.error('Failed to pull rules using ORL', { error });
-      throw new Error(
-        `Failed to pull rules: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
+    const { stdout, stderr, exitCode, signal } = await this.execStreaming(
+      pullCommand,
+      { timeoutMs: 5 * 60_000 },
+    );
+    if (signal || (exitCode ?? 0) !== 0) {
+      throw new Error(`rules pull failed (${signal ?? `exit ${exitCode}`})`);
     }
+    logger.info('Rules pulled successfully', { stdout, stderr });
   }
 
   /**
@@ -464,14 +738,20 @@ export class OrlClient {
 
     // Add rulespace if rules directory exists
     if (rulesDir) {
+      // Mount rules outside /workspace to keep hooks from traversing them
+      command.splice(1, 0, `-v '${rulesDir}:/rules'`);
       command[command.length - 1] =
-        'remediate /workspace --rulespace /workspace/rules --hooks-dir /workspace/.orl/hooks';
+        'remediate /workspace --rulespace /rules --hooks-dir /workspace/.orl/hooks';
     }
 
     // Add language if specified
     if (language) {
       command[command.length - 1] += ` --language ${language}`;
     }
+
+    // Write the remediation report to a file inside the workspace.
+    // This avoids relying on stdout (which can be omitted or very large).
+    command[command.length - 1] += ' --out /workspace/.orl/report.yaml';
 
     return command.join(' ');
   }
@@ -485,6 +765,9 @@ export class OrlClient {
     const modifiedFiles: { [filePath: string]: string } = {};
 
     try {
+      // Source workspace is the parent of .orl-temp
+      const sourceWorkspaceDir = path.dirname(tempDir);
+
       // Read all IaC files from temp directory
       const files = await this.getAllIacFiles(tempDir);
 
@@ -498,12 +781,26 @@ export class OrlClient {
           const relativePath = path.relative(tempDir, filePath);
           const orlPath = `/workspace/${relativePath}`;
 
-          modifiedFiles[orlPath] = content;
+          // Only include files that actually changed compared to the source workspace.
+          // This avoids treating "all IaC files" as modified (which breaks diffing and is slow on large workspaces).
+          const sourcePath = path.join(sourceWorkspaceDir, relativePath);
+          let sourceContent: string | undefined;
+          try {
+            sourceContent = await fs.promises.readFile(sourcePath, 'utf8');
+          } catch {
+            sourceContent = undefined;
+          }
+
+          if (sourceContent === undefined || sourceContent !== content) {
+            modifiedFiles[orlPath] = content;
+          }
 
           logger.debug('Read modified file from temp directory', {
             filePath,
             orlPath,
             contentLength: content.length,
+            changed:
+              sourceContent === undefined ? true : sourceContent !== content,
           });
         } catch (error) {
           logger.warn('Failed to read modified file', { filePath, error });

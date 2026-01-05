@@ -9,16 +9,6 @@ rule="${1:-unknown}"; prio="${2:-0}"
 case "$prio" in ''|*[!0-9-]*) prio=0;; esac
 rule_esc=$(json_escape "$rule")
 printf '{"event":"pre_remediate_rule","ruleName":"%s","priority":%s,"time":"%s"}\n' "$rule_esc" "$prio" "$(timestamp)" >> "$manifest"
-# Snapshot current workspace for this rule's baseline
-snapDir="$BASE/.orl/diag/rules/$rule_esc/before"
-mkdir -p "$snapDir"
-# Copy only IaC files; preserve directory structure
-cd "$BASE"
-find . -type d -name ".orl" -prune -o -type f \( -name "*.tf" -o -name "*.hcl" -o -name "*.tfvars" -o -name "*.yaml" -o -name "*.yml" -o -name "*.tpl" -o -name "*.json" -o -name "Dockerfile*" \) -print | while IFS= read -r f; do
-  # Remove leading ./ from path
-  rel_path=$(echo "$f" | sed 's|^\./||')
-  dest="$snapDir/$rel_path"
-  mkdir -p "$(dirname "$dest")"
-  cp "$f" "$dest" 2>/dev/null || true
-done
-
+# NOTE: Do not snapshot the entire workspace per-rule.
+# On multi-file scans this becomes extremely expensive (O(rules * files)) and can peg CPU for minutes.
+# Resource tracking and modified-file attribution are handled elsewhere (rule_finding hooks + IDE diffing).
