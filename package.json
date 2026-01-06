@@ -108,7 +108,7 @@
           },
           "gomboc-vscode-extension.orlDebugPersistDiagnostics": {
             "type": "boolean",
-            "default": true,
+            "default": false,
             "description": "Debug: copy .orl-temp/.orl/diagnostics artifacts to <workspace>/.orl-debug/last-run before cleanup."
           },
           "gomboc-vscode-extension.integrationsServiceUrl": {
