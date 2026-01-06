@@ -1455,11 +1455,11 @@ export class OrlResultConverter {
               '-',
             );
 
-            // Also try with hashicorp__ prefix variations
+            // Also try with hashicorp__ prefix variations.
+            // IMPORTANT: Avoid overly-generic core matches like `aws_instance` -> `instance`,
+            // which can cause cross-provider false positives (e.g. matching google_compute_instance).
             const resourceVariants = [
               normalizedResource,
-              coreResource,
-              coreResourceWithDashes,
               normalizedResourceWithDashes,
               `hashicorp__aws-resources-${normalizedResource}`,
               `hashicorp__aws-resources-aws_${normalizedResource}`,
@@ -1471,6 +1471,17 @@ export class OrlResultConverter {
               `hashicorp__aws-resources-${normalizedResourceWithDashes}`,
               `aws-resources-${normalizedResourceWithDashes}`,
             ];
+
+            // Only include coreResource variants when they're specific (contain a separator),
+            // e.g. `neptune_cluster` but not `instance`.
+            if (coreResource.includes('_') || coreResource.includes('-')) {
+              resourceVariants.splice(
+                1,
+                0,
+                coreResource,
+                coreResourceWithDashes,
+              );
+            }
 
             for (const ruleName of allFileRules) {
               // Check if rule name contains any variant of the resource type
@@ -1562,8 +1573,6 @@ export class OrlResultConverter {
 
             const resourceVariants = [
               normalizedResource,
-              coreResource,
-              coreResourceWithDashes,
               normalizedResourceWithDashes,
               `hashicorp__aws-resources-${normalizedResource}`,
               `hashicorp__aws-resources-aws_${normalizedResource}`,
@@ -1575,6 +1584,15 @@ export class OrlResultConverter {
               `hashicorp__aws-resources-${normalizedResourceWithDashes}`,
               `aws-resources-${normalizedResourceWithDashes}`,
             ];
+
+            if (coreResource.includes('_') || coreResource.includes('-')) {
+              resourceVariants.splice(
+                1,
+                0,
+                coreResource,
+                coreResourceWithDashes,
+              );
+            }
 
             for (const rule of diagnosticsRules) {
               const ruleLower = rule.ruleName.toLowerCase();
