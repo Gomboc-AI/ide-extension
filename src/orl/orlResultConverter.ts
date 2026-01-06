@@ -1475,7 +1475,12 @@ export class OrlResultConverter {
             // Only include coreResource variants when they're specific (contain a separator),
             // e.g. `neptune_cluster` but not `instance`.
             if (coreResource.includes('_') || coreResource.includes('-')) {
-              resourceVariants.splice(1, 0, coreResource, coreResourceWithDashes);
+              resourceVariants.splice(
+                1,
+                0,
+                coreResource,
+                coreResourceWithDashes,
+              );
             }
 
             for (const ruleName of allFileRules) {
@@ -1581,7 +1586,12 @@ export class OrlResultConverter {
             ];
 
             if (coreResource.includes('_') || coreResource.includes('-')) {
-              resourceVariants.splice(1, 0, coreResource, coreResourceWithDashes);
+              resourceVariants.splice(
+                1,
+                0,
+                coreResource,
+                coreResourceWithDashes,
+              );
             }
 
             for (const rule of diagnosticsRules) {
