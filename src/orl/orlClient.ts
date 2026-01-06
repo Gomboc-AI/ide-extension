@@ -35,25 +35,6 @@ export class OrlClient {
     'report.yml',
   ];
 
-  /**
-   * Temporary safety valve: exclude known-problematic rulesets that can hang remediation.
-   *
-   * IMPORTANT: ORL expands Rulesets into per-rule names by appending a numeric suffix (%03d),
-   * e.g. `...aws_iam_access_key` becomes `...aws_iam_access_key000`, `...001`, etc.
-   *
-   * The rules-service stores/pulls the ruleset under the *base* name (no numeric suffix),
-   * so we must exclude by base name to be effective at rules-pull time.
-   */
-  private static readonly excludedRuleNames: string[] = [
-    // User-observed expanded rule name (suffix will be stripped automatically)
-    'gomboc-ai/ensure_credentials_unused_for_45_days_or_more_are_disabled_for_hashicorp__aws-resources-aws_iam_access_key000',
-  ];
-
-  private static excludedRuleBases(): string[] {
-    const stripSuffix = (s: string) => s.replace(/[0-9]+$/, '');
-    return Array.from(new Set(OrlClient.excludedRuleNames.map(stripSuffix)));
-  }
-
   constructor(config: OrlConfig) {
     this.config = config;
   }
@@ -78,7 +59,6 @@ export class OrlClient {
       const age = Date.now() - stat.mtimeMs;
       if (age >= 0 && age < ttlMs) {
         logger.info('Reusing cached rules', { rulesDir });
-        await this.pruneRulesByName(rulesDir, OrlClient.excludedRuleBases());
         return rulesDir;
       }
     } catch {
@@ -87,90 +67,8 @@ export class OrlClient {
 
     logger.info('Pulling rules (cache miss or stale)', { rulesDir });
     await this.pullRulesUsingOrl(rulesDir);
-    await this.pruneRulesByName(rulesDir, OrlClient.excludedRuleBases());
     await fs.promises.writeFile(stampPath, new Date().toISOString(), 'utf8');
     return rulesDir;
-  }
-
-  private async pruneRulesByName(
-    rulesDir: string,
-    ruleNames: string[],
-  ): Promise<void> {
-    if (!ruleNames || ruleNames.length === 0) {
-      return;
-    }
-
-    const exts = new Set(['.orl', '.yaml', '.yml', '.json']);
-    const targets = new Set(ruleNames);
-    let removed = 0;
-
-    const walk = async (dir: string): Promise<void> => {
-      const entries = await fs.promises.readdir(dir, { withFileTypes: true });
-      for (const entry of entries) {
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          await walk(full);
-          continue;
-        }
-        if (!entry.isFile()) {
-          continue;
-        }
-        const ext = path.extname(entry.name).toLowerCase();
-        if (!exts.has(ext)) {
-          continue;
-        }
-        let content: string;
-        try {
-          content = await fs.promises.readFile(full, 'utf8');
-        } catch {
-          continue;
-        }
-        // Look for rule name occurrences in common fields.
-        // Rulesets typically have `name: <baseName>` under metadata.
-        for (const rn of targets) {
-          if (
-            content.includes(`name: ${rn}`) ||
-            content.includes(`name: "${rn}"`) ||
-            content.includes(`name: '${rn}'`) ||
-            content.includes(`"name": "${rn}"`) ||
-            content.includes(`"name":"${rn}"`)
-          ) {
-            try {
-              await fs.promises.rename(full, `${full}.disabled`);
-              removed++;
-              logger.warn('Disabled rule file due to exclusion', {
-                ruleName: rn,
-                file: full,
-              });
-            } catch (e) {
-              logger.warn('Failed to disable rule file (ignored)', {
-                ruleName: rn,
-                file: full,
-                e,
-              });
-            }
-            break;
-          }
-        }
-      }
-    };
-
-    try {
-      await walk(rulesDir);
-      if (removed > 0) {
-        logger.warn('Excluded rule(s) removed from rulespace', {
-          rulesDir,
-          removed,
-          excluded: ruleNames,
-        });
-      }
-    } catch (e) {
-      logger.warn('Failed to prune rules by name (ignored)', {
-        rulesDir,
-        excluded: ruleNames,
-        e,
-      });
-    }
   }
 
   /**
@@ -695,13 +593,6 @@ export class OrlClient {
       `-e RULE_SERVICE_TOKEN='${rulesServiceToken}'`,
       `${this.config.containerImage} rules pull --url='${rulesServiceUrl}' --out=/output --channel='${channel}'`,
     ];
-
-    // Exclude problematic rulesets at pull-time (filters are subtractive: exclude matches).
-    // Use $.name (rule/ruleset name in rules-service). Exclude by BASE name (no numeric suffix).
-    for (const base of OrlClient.excludedRuleBases()) {
-      pullCommandParts[pullCommandParts.length - 1] +=
-        ` --filter='(eq $.name "${base}")'`;
-    }
 
     const pullCommand = pullCommandParts.join(' \\\n      ');
     logger.info('Pulling rules using ORL', { command: pullCommand });
