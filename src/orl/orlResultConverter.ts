@@ -4,6 +4,7 @@ import logger from '../utils/logger';
 import { PathConverter } from '../utils/pathConverter';
 import { FileDiffAnalyzer, Difference } from '../utils/fileDiffAnalyzer';
 import { DiffContentAnalyzer } from '../utils/diffContentAnalyzer';
+import { parseOrlReport } from '../utils/orlReportParser';
 
 export interface OrlResult {
   success: boolean;
@@ -48,6 +49,83 @@ export interface ScanResponse {
  * Utility class for converting ORL results to VS Code scan response format
  */
 export class OrlResultConverter {
+  /**
+   * Best-effort extraction of per-rule changed file paths from the ORL YAML report.
+   *
+   * This is important because our hook diagnostics may include rule names but not file paths
+   * (e.g. if ORL does not provide file lists to hooks). When that happens, rule attribution
+   * falls back to fuzzy matching and can introduce false positives.
+   */
+  private static extractChangedFilesByRuleFromReport(
+    report?: string,
+  ): Record<string, string[]> {
+    const out: Record<string, string[]> = {};
+    const parsed = parseOrlReport(report);
+    if (!parsed || typeof parsed !== 'object') {
+      return out;
+    }
+    const spec = (parsed as any).spec;
+    const rules = spec?.rules;
+    if (!Array.isArray(rules)) {
+      return out;
+    }
+
+    const toInt = (v: unknown): number => {
+      if (typeof v === 'number' && Number.isFinite(v)) {
+        return v;
+      }
+      if (typeof v === 'string') {
+        const n = parseInt(v, 10);
+        return Number.isFinite(n) ? n : 0;
+      }
+      return 0;
+    };
+
+    for (const r of rules) {
+      const ruleName: string | undefined =
+        (typeof r?.name === 'string' && r.name) ||
+        (typeof r?.metadata?.name === 'string' && r.metadata.name) ||
+        undefined;
+      if (!ruleName) {
+        continue;
+      }
+
+      // NOTE: We parse the report with FAILSAFE_SCHEMA (see `parseOrlReport`), so numeric scalars
+      // like fixes/changes may come through as strings. Coerce to int.
+      const fixes = toInt(r?.fixes);
+      const changes = toInt(r?.changes);
+
+      const paths: string[] = [];
+
+      // Prefer the explicit files_changed map when present (it indicates changed files).
+      if (r?.files_changed && typeof r.files_changed === 'object') {
+        for (const k of Object.keys(r.files_changed)) {
+          if (k) {
+            paths.push(k);
+          }
+        }
+      }
+
+      // Fall back to files[].path when files_changed isn't available.
+      if (paths.length === 0 && Array.isArray(r?.files)) {
+        for (const f of r.files) {
+          const p = typeof f?.path === 'string' ? f.path : undefined;
+          if (p) {
+            paths.push(p);
+          }
+        }
+      }
+
+      // Only consider rules that actually produced changes/fixes; most rules audit but do not modify.
+      // However, `files_changed` is authoritative for modifications even if counters are missing/strings.
+      if (paths.length > 0 && (fixes > 0 || changes > 0 || (r?.files_changed && typeof r.files_changed === 'object' && Object.keys(r.files_changed).length > 0))) {
+        out[ruleName] = Array.from(new Set(paths));
+      }
+    }
+
+    return out;
+  }
+
   private static extractRuleDescriptionsFromReport(
     report?: string,
   ): Record<string, string> {
@@ -415,10 +493,38 @@ export class OrlResultConverter {
       Array<{ type: string; name: string; startLine: number; endLine: number }>
     > = {};
     const resourceInstanceToRules: Record<string, string[]> = {};
+    const fileToReportRules: Record<string, string[]> = {};
+
+    // Pull per-rule changed files from the report (if present) as a reliable attribution source.
+    // This avoids depending solely on hook diagnostics for file mapping.
+    const reportRuleToChangedFiles =
+      OrlResultConverter.extractChangedFilesByRuleFromReport(result.report);
+
+    // Seed fileToRules with report-derived changed-file mappings first.
+    for (const [ruleName, paths] of Object.entries(reportRuleToChangedFiles)) {
+      for (const p of paths) {
+        const keys = addFileKeys(p);
+        for (const k of keys) {
+          if (!fileToRules[k]) {
+            fileToRules[k] = [];
+          }
+          if (!fileToRules[k].includes(ruleName)) {
+            fileToRules[k].push(ruleName);
+          }
+          if (!fileToReportRules[k]) {
+            fileToReportRules[k] = [];
+          }
+          if (!fileToReportRules[k].includes(ruleName)) {
+            fileToReportRules[k].push(ruleName);
+          }
+        }
+      }
+    }
 
     logger.debug('Processing diagnostics', {
       hasDiagnostics: !!result.diagnostics,
       rulesCount: result.diagnostics?.rules?.length || 0,
+      reportRuleChangedFilesCount: Object.keys(reportRuleToChangedFiles).length,
       sampleRules: result.diagnostics?.rules?.slice(0, 3).map(r => ({
         ruleName: r.ruleName,
         filesCount: r.files?.length || 0,
@@ -847,6 +953,7 @@ export class OrlResultConverter {
           }
         } else {
           // For Terraform files, look for resource definitions
+          const terraformResourceLookback = 500;
           for (
             let lineIdx = Math.min(diffLineIndex, fileLines.length - 1);
             lineIdx >= 0;
@@ -875,7 +982,7 @@ export class OrlResultConverter {
               break;
             }
             // Stop searching if we've gone too far back (more than 50 lines)
-            if (diffLineIndex - lineIdx > 50) {
+            if (diffLineIndex - lineIdx > terraformResourceLookback) {
               break;
             }
           }
@@ -909,7 +1016,7 @@ export class OrlResultConverter {
                 }
                 break;
               }
-              if (diffLineIndex - lineIdx > 50) {
+              if (diffLineIndex - lineIdx > terraformResourceLookback) {
                 break;
               }
             }
@@ -960,6 +1067,20 @@ export class OrlResultConverter {
           }
         }
 
+        // Rules that (per the ORL report) actually changed this file.
+        // This is the strongest signal for attribution, and it avoids relying on rule-name substrings.
+        const reportFileRules: string[] = [];
+        for (const key of matchKeys) {
+          const rules = fileToReportRules[key];
+          if (rules) {
+            for (const ruleName of rules) {
+              if (!reportFileRules.includes(ruleName)) {
+                reportFileRules.push(ruleName);
+              }
+            }
+          }
+        }
+
         logger.debug('File-to-rules matching attempt', {
           file: actualFilePath,
           orlPath: orlFilePath,
@@ -981,6 +1102,13 @@ export class OrlResultConverter {
         // 3. Diff line falls within resource's line range
         let matchingRules: string[] = [];
         const diffLine = diff.targetLine;
+        // Attribution categories:
+        // - file-mapped:precise   -> we had file rules and matched in the primary path
+        // - file-mapped:heuristic -> we had file rules but had to use a fallback heuristic within the file
+        // - ultimate              -> we had no file rules and had to use diagnostics-wide ultimate fallback
+        const hasFileRules = allFileRules.length > 0;
+        let usedHeuristicWithinFile = false;
+        let usedUltimateFallback = !hasFileRules;
 
         // For Kubernetes and Docker files, we can match rules even without resourceInstanceName
         // For Terraform, we need resourceInstanceName to match properly
@@ -1099,8 +1227,6 @@ export class OrlResultConverter {
 
               const resourceVariants = [
                 normalizedResource,
-                coreResource,
-                coreResourceWithDashes,
                 normalizedResourceWithDashes,
                 `hashicorp__aws-resources-${normalizedResource}`,
                 `hashicorp__aws-resources-aws_${normalizedResource}`,
@@ -1113,10 +1239,81 @@ export class OrlResultConverter {
                 `aws-resources-${normalizedResourceWithDashes}`,
               ];
 
+              // Only include coreResource variants when they're specific (contain a separator),
+              // e.g. `neptune_cluster` but not `instance`.
+              if (coreResource.includes('_') || coreResource.includes('-')) {
+                resourceVariants.splice(1, 0, coreResource, coreResourceWithDashes);
+              }
+
               // Match rules to this specific resource instance by checking:
               // 1. Rule name contains the resource type (filters out irrelevant rules)
               // 2. Rule has this specific resource instance in its resources list
               // 3. Diff line falls within that resource's line range
+              //
+              // NOTE: Some Terraform rule names do not include the resource type in the name
+              // (e.g. `ensure-instance-...`). If the ORL report indicates a rule actually changed
+              // this file, prefer those as candidates to preserve descriptions.
+              if (reportFileRules.length > 0) {
+                usedHeuristicWithinFile = true;
+                const candidates = reportFileRules.filter(r =>
+                  allFileRules.includes(r),
+                );
+                const picked: string[] = [];
+                // Best-effort heuristic: if we can't do instance-level matching, use diff content + rule name terms.
+                if ((analysis.properties?.length || 0) > 0) {
+                  const diffContent = diff.newLines.join('\n').toLowerCase();
+                  const diffProperties = (analysis.properties || []).map(p =>
+                    p.toLowerCase(),
+                  );
+                  const stop = new Set([
+                    'for',
+                    'hashicorp',
+                    'aws',
+                    'google',
+                    'azurerm',
+                    'resources',
+                    'resource',
+                    'ensure',
+                    'that',
+                    'the',
+                    'is',
+                    'are',
+                    'and',
+                    'or',
+                    'with',
+                    'when',
+                    'it',
+                    'enabled',
+                    'enable',
+                    'disabled',
+                    'disable',
+                    'true',
+                    'false',
+                    'instance',
+                  ]);
+                  for (const rn of candidates) {
+                    const terms = rn
+                      .toLowerCase()
+                      .replace(/[0-9]+$/, '')
+                      .split(/[_\-\s/]+/)
+                      .filter(t => t.length > 3)
+                      .filter(t => !stop.has(t));
+                    if (terms.length === 0) {
+                      continue;
+                    }
+                    const hit = terms.some(
+                      t =>
+                        diffContent.includes(t) ||
+                        diffProperties.some(p => p.includes(t)),
+                    );
+                    if (hit) {
+                      picked.push(rn);
+                    }
+                  }
+                }
+                matchingRules =
+                  picked.length > 0 ? picked : candidates.slice(0, 10);
+              } else {
               for (const ruleName of allFileRules) {
                 // First filter by resource type - rule name must contain the resource type
                 const ruleLower = ruleName.toLowerCase();
@@ -1237,6 +1434,7 @@ export class OrlResultConverter {
                     }
                   }
                 }
+              }
               }
 
               // If no instance-level match found, fall back to diff content analysis
@@ -1424,6 +1622,7 @@ export class OrlResultConverter {
           resourceName !== 'Resource' &&
           allFileRules.length > 0
         ) {
+          usedHeuristicWithinFile = true;
           // For Kubernetes and Docker files, use all file-level rules as fallback
           if (isDockerfile || isKubernetes) {
             // Accept all rules that touched this file as potential matches
@@ -1503,6 +1702,7 @@ export class OrlResultConverter {
           (isKubernetes || isDockerfile) &&
           allFileRules.length > 0
         ) {
+          usedHeuristicWithinFile = true;
           // For Kubernetes/Docker files, if we have rules that touched this file, use them all
           for (const ruleName of allFileRules) {
             if (!matchingRules.includes(ruleName)) {
@@ -1528,6 +1728,7 @@ export class OrlResultConverter {
           result.diagnostics?.rules &&
           result.diagnostics.rules.length > 0
         ) {
+          usedUltimateFallback = true;
           const diagnosticsRules = result.diagnostics.rules;
 
           if (isKubernetes || isDockerfile) {
@@ -1791,6 +1992,7 @@ export class OrlResultConverter {
           // Fallback if no descriptions found
           descriptionText = `${displayResourceName}\n${analysis.description || 'Update configuration for resource'}`;
         }
+
 
         // Note: VS Code Diagnostic messages support MarkdownString for rich formatting
         // You can use MarkdownString to create sections like:
