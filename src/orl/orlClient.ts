@@ -303,7 +303,9 @@ export class OrlClient {
 
       logger.info('Persisted ORL diagnostics artifacts', { outDir });
     } catch (e) {
-      logger.warn('Failed to persist ORL diagnostics artifacts (ignored)', { e });
+      logger.warn('Failed to persist ORL diagnostics artifacts (ignored)', {
+        e,
+      });
     }
   }
   /**
@@ -499,7 +501,9 @@ export class OrlClient {
         if (!this.config.debugKeepTemp) {
           await fs.promises.rm(tempDir, { recursive: true, force: true });
         } else {
-          logger.warn('Debug: preserving .orl-temp after remediation', { tempDir });
+          logger.warn('Debug: preserving .orl-temp after remediation', {
+            tempDir,
+          });
         }
         throw error;
       }
@@ -889,7 +893,8 @@ export function createOrlClient(extensionPath?: string): OrlClient {
     rulesServiceToken,
     channel: config.get('orlChannel') || 'default',
     extensionPath,
-    debugKeepTemp: (config.get('orlDebugKeepTemp') as boolean | undefined) || false,
+    debugKeepTemp:
+      (config.get('orlDebugKeepTemp') as boolean | undefined) || false,
     debugPersistDiagnostics:
       (config.get('orlDebugPersistDiagnostics') as boolean | undefined) ?? true,
   });

@@ -118,7 +118,14 @@ export class OrlResultConverter {
 
       // Only consider rules that actually produced changes/fixes; most rules audit but do not modify.
       // However, `files_changed` is authoritative for modifications even if counters are missing/strings.
-      if (paths.length > 0 && (fixes > 0 || changes > 0 || (r?.files_changed && typeof r.files_changed === 'object' && Object.keys(r.files_changed).length > 0))) {
+      if (
+        paths.length > 0 &&
+        (fixes > 0 ||
+          changes > 0 ||
+          (r?.files_changed &&
+            typeof r.files_changed === 'object' &&
+            Object.keys(r.files_changed).length > 0))
+      ) {
         out[ruleName] = Array.from(new Set(paths));
       }
     }
@@ -1242,7 +1249,12 @@ export class OrlResultConverter {
               // Only include coreResource variants when they're specific (contain a separator),
               // e.g. `neptune_cluster` but not `instance`.
               if (coreResource.includes('_') || coreResource.includes('-')) {
-                resourceVariants.splice(1, 0, coreResource, coreResourceWithDashes);
+                resourceVariants.splice(
+                  1,
+                  0,
+                  coreResource,
+                  coreResourceWithDashes,
+                );
               }
 
               // Match rules to this specific resource instance by checking:
@@ -1314,127 +1326,129 @@ export class OrlResultConverter {
                 matchingRules =
                   picked.length > 0 ? picked : candidates.slice(0, 10);
               } else {
-              for (const ruleName of allFileRules) {
-                // First filter by resource type - rule name must contain the resource type
-                const ruleLower = ruleName.toLowerCase();
-                const matchesResourceType = resourceVariants.some(variant =>
-                  ruleLower.includes(variant.toLowerCase()),
-                );
+                for (const ruleName of allFileRules) {
+                  // First filter by resource type - rule name must contain the resource type
+                  const ruleLower = ruleName.toLowerCase();
+                  const matchesResourceType = resourceVariants.some(variant =>
+                    ruleLower.includes(variant.toLowerCase()),
+                  );
 
-                if (!matchesResourceType) {
-                  continue; // Skip rules that don't apply to this resource type
-                }
+                  if (!matchesResourceType) {
+                    continue; // Skip rules that don't apply to this resource type
+                  }
 
-                // Find the rule in diagnostics
-                const rule = result.diagnostics?.rules?.find(
-                  r => r.ruleName === ruleName,
-                );
-                if (!rule) {
-                  continue;
-                }
-
-                // Check if this rule has this specific resource instance in its resources
-                const ruleFiles = rule.files || [];
-                for (const ruleFile of ruleFiles) {
-                  const keys = addFileKeys(ruleFile.path);
-                  const fileMatches = keys.some(k => matchKeys.includes(k));
-                  if (!fileMatches) {
+                  // Find the rule in diagnostics
+                  const rule = result.diagnostics?.rules?.find(
+                    r => r.ruleName === ruleName,
+                  );
+                  if (!rule) {
                     continue;
                   }
 
-                  const resources = (ruleFile as any).resources || [];
-                  // Check if this specific resource instance is in the rule's resources
-                  // AND the diff line falls within that resource's line range
-                  const matchingResource = resources.find(
-                    (r: any) =>
-                      r.type === resourceName &&
-                      r.name === resourceInstanceName &&
-                      diffLine >= r.startLine &&
-                      diffLine <= r.endLine,
-                  );
-
-                  if (matchingResource) {
-                    // Additional filtering: Use diff content to verify this rule actually applies
-                    // This prevents false positives when multiple rules have the same resource in their list
-                    const diffProperties = analysis.properties || [];
-                    const diffContent = diff.newLines.join('\n').toLowerCase();
-                    const ruleLower = ruleName.toLowerCase();
-
-                    // Extract key terms from rule name that indicate what it changes
-                    const ruleTerms = ruleLower
-                      .split(/[_\-\s]+/)
-                      .filter(term => term.length > 3)
-                      .filter(
-                        term =>
-                          ![
-                            'for',
-                            'hashicorp',
-                            'aws',
-                            'resources',
-                            'ensure',
-                            'that',
-                            'the',
-                            'is',
-                            'are',
-                            'and',
-                            'or',
-                          ].includes(term),
-                      );
-
-                    // Check if the diff content matches what this rule would change
-                    let matchesDiffContent = false;
-                    if (ruleTerms.length > 0) {
-                      matchesDiffContent = ruleTerms.some(term => {
-                        // Check if term appears in diff content
-                        if (diffContent.includes(term)) {
-                          return true;
-                        }
-                        // Check if term appears in property names
-                        if (
-                          diffProperties.some(prop =>
-                            prop.toLowerCase().includes(term),
-                          )
-                        ) {
-                          return true;
-                        }
-                        // Generic matching: if term appears anywhere in diff content or properties, it's a match
-                        // No need for hardcoded property patterns - rely on semantic matching
-                        return false;
-                      });
-                    } else {
-                      // If no meaningful terms, assume it matches (conservative approach)
-                      matchesDiffContent = true;
+                  // Check if this rule has this specific resource instance in its resources
+                  const ruleFiles = rule.files || [];
+                  for (const ruleFile of ruleFiles) {
+                    const keys = addFileKeys(ruleFile.path);
+                    const fileMatches = keys.some(k => matchKeys.includes(k));
+                    if (!fileMatches) {
+                      continue;
                     }
 
-                    // Only add the rule if diff content matches
-                    if (
-                      matchesDiffContent &&
-                      !matchingRules.includes(ruleName)
-                    ) {
-                      logger.debug(
-                        'Matched rule using instance-level matching',
-                        {
-                          ruleName,
-                          resourceType: resourceName,
-                          resourceInstance: resourceInstanceName,
-                          diffLine,
-                          resourceRange: `${matchingResource.startLine}-${matchingResource.endLine}`,
-                          diffProperties,
-                          matchedTerms: ruleTerms.filter(
-                            term =>
-                              diffContent.includes(term) ||
-                              diffProperties.some(prop =>
-                                prop.toLowerCase().includes(term),
-                              ),
-                          ),
-                        },
-                      );
-                      matchingRules.push(ruleName);
-                      break; // Found a match for this rule, no need to check other files
+                    const resources = (ruleFile as any).resources || [];
+                    // Check if this specific resource instance is in the rule's resources
+                    // AND the diff line falls within that resource's line range
+                    const matchingResource = resources.find(
+                      (r: any) =>
+                        r.type === resourceName &&
+                        r.name === resourceInstanceName &&
+                        diffLine >= r.startLine &&
+                        diffLine <= r.endLine,
+                    );
+
+                    if (matchingResource) {
+                      // Additional filtering: Use diff content to verify this rule actually applies
+                      // This prevents false positives when multiple rules have the same resource in their list
+                      const diffProperties = analysis.properties || [];
+                      const diffContent = diff.newLines
+                        .join('\n')
+                        .toLowerCase();
+                      const ruleLower = ruleName.toLowerCase();
+
+                      // Extract key terms from rule name that indicate what it changes
+                      const ruleTerms = ruleLower
+                        .split(/[_\-\s]+/)
+                        .filter(term => term.length > 3)
+                        .filter(
+                          term =>
+                            ![
+                              'for',
+                              'hashicorp',
+                              'aws',
+                              'resources',
+                              'ensure',
+                              'that',
+                              'the',
+                              'is',
+                              'are',
+                              'and',
+                              'or',
+                            ].includes(term),
+                        );
+
+                      // Check if the diff content matches what this rule would change
+                      let matchesDiffContent = false;
+                      if (ruleTerms.length > 0) {
+                        matchesDiffContent = ruleTerms.some(term => {
+                          // Check if term appears in diff content
+                          if (diffContent.includes(term)) {
+                            return true;
+                          }
+                          // Check if term appears in property names
+                          if (
+                            diffProperties.some(prop =>
+                              prop.toLowerCase().includes(term),
+                            )
+                          ) {
+                            return true;
+                          }
+                          // Generic matching: if term appears anywhere in diff content or properties, it's a match
+                          // No need for hardcoded property patterns - rely on semantic matching
+                          return false;
+                        });
+                      } else {
+                        // If no meaningful terms, assume it matches (conservative approach)
+                        matchesDiffContent = true;
+                      }
+
+                      // Only add the rule if diff content matches
+                      if (
+                        matchesDiffContent &&
+                        !matchingRules.includes(ruleName)
+                      ) {
+                        logger.debug(
+                          'Matched rule using instance-level matching',
+                          {
+                            ruleName,
+                            resourceType: resourceName,
+                            resourceInstance: resourceInstanceName,
+                            diffLine,
+                            resourceRange: `${matchingResource.startLine}-${matchingResource.endLine}`,
+                            diffProperties,
+                            matchedTerms: ruleTerms.filter(
+                              term =>
+                                diffContent.includes(term) ||
+                                diffProperties.some(prop =>
+                                  prop.toLowerCase().includes(term),
+                                ),
+                            ),
+                          },
+                        );
+                        matchingRules.push(ruleName);
+                        break; // Found a match for this rule, no need to check other files
+                      }
                     }
                   }
                 }
-              }
               }
 
               // If no instance-level match found, fall back to diff content analysis
@@ -1992,7 +2006,6 @@ export class OrlResultConverter {
           // Fallback if no descriptions found
           descriptionText = `${displayResourceName}\n${analysis.description || 'Update configuration for resource'}`;
         }
-
 
         // Note: VS Code Diagnostic messages support MarkdownString for rich formatting
         // You can use MarkdownString to create sections like:
