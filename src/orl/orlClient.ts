@@ -896,6 +896,7 @@ export function createOrlClient(extensionPath?: string): OrlClient {
     debugKeepTemp:
       (config.get('orlDebugKeepTemp') as boolean | undefined) || false,
     debugPersistDiagnostics:
-      (config.get('orlDebugPersistDiagnostics') as boolean | undefined) ?? false,
+      (config.get('orlDebugPersistDiagnostics') as boolean | undefined) ??
+      false,
   });
 }
