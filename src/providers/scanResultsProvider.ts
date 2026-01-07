@@ -243,7 +243,10 @@ export class ScanResultsProvider {
             ? path.dirname(vscode.window.activeTextEditor.document.uri.fsPath)
             : undefined;
 
-      if (workspacePath && (ruleIdentifiers.length > 0 || ruleNamesSet.size > 0)) {
+      if (
+        workspacePath &&
+        (ruleIdentifiers.length > 0 || ruleNamesSet.size > 0)
+      ) {
         queueOrlFixAppliedEvent(this.context, workspacePath, {
           fixKind: 'individual',
           ruleNames: Array.from(ruleNamesSet),
