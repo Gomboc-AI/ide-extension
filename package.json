@@ -111,6 +111,16 @@
             "default": false,
             "description": "Debug: copy .orl-temp/.orl/diagnostics artifacts to <workspace>/.orl-debug/last-run before cleanup."
           },
+          "gomboc-vscode-extension.orlFixAppliedAnalyticsEnabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Emit analytics to integrations service when an ORL fix is applied."
+          },
+          "gomboc-vscode-extension.integrationsFixAppliedEndpointPath": {
+            "type": "string",
+            "default": "/reporting/orl-fix-applied",
+            "description": "Integrations service endpoint path for ORL fix applied analytics events."
+          },
           "gomboc-vscode-extension.integrationsServiceUrl": {
             "type": "string",
             "default": "https://integrations.app.gomboc.ai",
