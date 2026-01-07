@@ -323,10 +323,36 @@ export async function queueOrlFixAppliedEvent(
     return;
   }
 
-  const [repoPath, branch] = await Promise.all([
+  const [repoPath, branch, gitRoot] = await Promise.all([
     getRepoRelativePath(workspacePath),
     getGitBranch(workspacePath),
+    getGitRoot(workspacePath),
   ]);
+
+  // Never send absolute on-disk paths from the user's machine.
+  // Prefer repo-relative paths when inside a git repo; otherwise fall back to basenames.
+  const sanitizeFilePath = (p: string): string => {
+    if (!p || typeof p !== 'string') {
+      return '';
+    }
+    // If it's not absolute already, keep as-is (but normalize slashes).
+    if (!path.isAbsolute(p)) {
+      return p.replace(/\\/g, '/');
+    }
+    if (gitRoot) {
+      const rel = path.relative(gitRoot, p).replace(/\\/g, '/');
+      // If the file isn't within the repo, don't leak parent traversal.
+      if (!rel || rel.startsWith('..')) {
+        return path.basename(p);
+      }
+      return rel;
+    }
+    return path.basename(p);
+  };
+
+  const sanitizedFilePaths = (input.filePaths || [])
+    .map(sanitizeFilePath)
+    .filter(p => !!p);
 
   const event: OrlFixAppliedEventV1 = {
     type: 'orl_fix_applied',
@@ -335,6 +361,7 @@ export async function queueOrlFixAppliedEvent(
     repoPath: repoPath ?? undefined,
     branch: branch ?? undefined,
     ...input,
+    filePaths: sanitizedFilePaths,
   };
 
   const queue = await loadQueue(context);
