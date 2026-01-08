@@ -82,7 +82,7 @@
           },
           "gomboc-vscode-extension.orlContainerImage": {
             "type": "string",
-            "default": "gombocai/orl:latest",
+            "default": "gombocai/orl:v1.0.9-latest",
             "description": "Docker image for ORL execution"
           },
           "gomboc-vscode-extension.orlRulesServiceUrl": {
@@ -100,6 +100,21 @@
             "type": "string",
             "default": "default",
             "description": "Channel name to pull rules from the rules service"
+          },
+          "gomboc-vscode-extension.orlDebugKeepTemp": {
+            "type": "boolean",
+            "default": false,
+            "description": "Debug: keep the .orl-temp folder after ORL completes so diagnostics can be inspected."
+          },
+          "gomboc-vscode-extension.orlDebugPersistDiagnostics": {
+            "type": "boolean",
+            "default": false,
+            "description": "Debug: copy .orl-temp/.orl/diagnostics artifacts to <workspace>/.orl-debug/last-run before cleanup."
+          },
+          "gomboc-vscode-extension.integrationsServiceUrl": {
+            "type": "string",
+            "default": "https://integrations.app.gomboc.ai",
+            "description": "Integrations service URL for reporting ORL scan results"
           }
         }
       }
@@ -151,6 +166,7 @@
     "@graphql-codegen/cli": "^5.0.4",
     "@semantic-release/release-notes-generator": "^14.0.3",
     "@types/jest": "^30.0.0",
+    "@types/js-yaml": "^4.0.9",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
     "@types/react": "^19.0.8",
@@ -182,6 +198,7 @@
     "dotenv": "^16.4.7",
     "file-type": "^20.1.0",
     "graphql-tag": "^2.12.6",
+    "js-yaml": "^4.1.0",
     "neverthrow": "^8.1.1",
     "react": "^19.0.0",
     "winston": "^3.17.0",

@@ -95,6 +95,7 @@ export async function activate(context: vscode.ExtensionContext) {
         { language: 'json', scheme: 'file' },
         { language: 'yaml', scheme: 'file' },
         { language: 'plaintext', scheme: 'file' },
+        { language: 'dockerfile', scheme: 'file' },
       ],
       new CodeActionProvider(),
     ),
@@ -102,8 +103,23 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 export const isRemediableFile = (filePath: string): boolean => {
-  const acceptedFileTypes = ['.tf', '.yaml', '.yml'];
-  const fileExtension = path.extname(filePath);
+  const fileName = path.basename(filePath).toLowerCase();
+  const fileExtension = path.extname(filePath).toLowerCase();
+  const acceptedFileTypes = [
+    '.tf',
+    '.hcl',
+    '.tfvars',
+    '.yaml',
+    '.yml',
+    '.tpl',
+    '.json',
+  ];
+
+  // Docker: Dockerfile* (no extension or any extension)
+  if (fileName.startsWith('dockerfile')) {
+    return true;
+  }
+
   return acceptedFileTypes.includes(fileExtension);
 };
 
