@@ -145,7 +145,8 @@ function isRetryableStatus(status: number): boolean {
   return status === 429 || (status >= 500 && status <= 599);
 }
 
-function pruneSentMap(sent: Record<string, number>, ttlMs: number): void {
+function pruneSentMap(args: { sent: Record<string, number>; ttlMs: number }): void {
+  const { sent, ttlMs } = args;
   const cutoff = Date.now() - ttlMs;
   for (const [k, ts] of Object.entries(sent)) {
     if (typeof ts !== 'number' || ts < cutoff) {
@@ -164,9 +165,9 @@ async function loadQueue(
 }
 
 async function saveQueue(
-  context: vscode.ExtensionContext,
-  items: OrlFixAppliedEventQueueItemV1[],
+  args: { context: vscode.ExtensionContext; items: OrlFixAppliedEventQueueItemV1[] },
 ): Promise<void> {
+  const { context, items } = args;
   await context.globalState.update(FIX_APPLIED_QUEUE_KEY, items);
 }
 
@@ -180,18 +181,21 @@ async function loadSentMap(
 }
 
 async function saveSentMap(
-  context: vscode.ExtensionContext,
-  sent: Record<string, number>,
+  args: { context: vscode.ExtensionContext; sent: Record<string, number> },
 ): Promise<void> {
+  const { context, sent } = args;
   await context.globalState.update(FIX_APPLIED_SENT_KEY, sent);
 }
 
 async function postFixAppliedEvent(
-  url: string,
-  apiKey: string,
-  endpointPath: string,
-  event: OrlFixAppliedEventV1,
+  args: {
+    url: string;
+    apiKey: string;
+    endpointPath: string;
+    event: OrlFixAppliedEventV1;
+  },
 ): Promise<void> {
+  const { url, apiKey, endpointPath, event } = args;
   const body = {
     version: 1.0,
     requestOrigin: 'ide-extension',
@@ -227,7 +231,7 @@ export async function flushOrlFixAppliedEvents(
   }
 
   const sent = await loadSentMap(context);
-  pruneSentMap(sent, 7 * 24 * 60 * 60 * 1000); // 7 days
+  pruneSentMap({ sent, ttlMs: 7 * 24 * 60 * 60 * 1000 }); // 7 days
 
   const now = Date.now();
   const remaining: OrlFixAppliedEventQueueItemV1[] = [];
@@ -252,12 +256,12 @@ export async function flushOrlFixAppliedEvents(
     }
 
     try {
-      await postFixAppliedEvent(
-        integrationsServiceUrl,
+      await postFixAppliedEvent({
+        url: integrationsServiceUrl,
         apiKey,
         endpointPath,
-        item.event,
-      );
+        event: item.event,
+      });
       sent[item.event.idempotencyKey] = Date.now();
       sentCount++;
     } catch (err: any) {
@@ -301,7 +305,10 @@ export async function flushOrlFixAppliedEvents(
 
   // Cap queue size to prevent unbounded growth
   const capped = remaining.slice(-MAX_QUEUE_SIZE);
-  await Promise.all([saveQueue(context, capped), saveSentMap(context, sent)]);
+  await Promise.all([
+    saveQueue({ context, items: capped }),
+    saveSentMap({ context, sent }),
+  ]);
 
   if (sentCount || droppedCount) {
     logger.info('ORL fix applied events flush result', {
@@ -395,7 +402,7 @@ export async function queueOrlFixAppliedEvent(
   const queue = await loadQueue(context);
   queue.push({ event, attempts: 0, nextAttemptAt: 0 });
   const capped = queue.slice(-MAX_QUEUE_SIZE);
-  await saveQueue(context, capped);
+  await saveQueue({ context, items: capped });
 
   // Fire-and-forget flush
   flushOrlFixAppliedEvents(context).catch(() => {});
