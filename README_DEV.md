@@ -146,7 +146,6 @@ git commit -m "feat: add new feature [force-release]"
 git commit -m "fix(api): resolve authentication issue [force-release]"
 ```
 
-
 ### Publishing
 We are using the `vsce` package in order to publish. For now, this will be done as a manual process. 
 
