@@ -20,6 +20,19 @@ import {
   sendErrorToIntegrations,
 } from '../utils/integrationsService';
 
+/**
+ * ORL scans are executed by spawning a docker container (`orlClient.remediate`).
+ * Overlapping runs can race on temp workspace state and frequently cause the
+ * “first scan works, subsequent scans fail” behavior when retriggered quickly
+ * (save events, command palette, post-remediation rescans, etc.).
+ *
+ * We intentionally serialize ORL scans and allow at most one queued "latest"
+ * rescan request while a scan is running.
+ */
+let orlScanRunning = false;
+let orlScanQueued = false;
+let orlScanSeq = 0;
+
 export async function scanFileCommand(
   context: vscode.ExtensionContext,
   scanResultsProvider: ScanResultsProvider,
@@ -30,10 +43,34 @@ export async function scanFileCommand(
 
   if (orlEnabled) {
     logger.info('ORL remediation enabled, using ORL client');
-    await scanWithOrl(context, scanResultsProvider);
+    await runOrlScanSerialized(context, scanResultsProvider);
   } else {
     logger.info('Using traditional API client');
     await scanWithApiClient(scanResultsProvider);
+  }
+}
+
+async function runOrlScanSerialized(
+  context: vscode.ExtensionContext,
+  scanResultsProvider: ScanResultsProvider,
+) {
+  if (orlScanRunning) {
+    orlScanQueued = true;
+    logger.info('ORL scan already running; queued a rescan');
+    return;
+  }
+
+  orlScanRunning = true;
+  const seq = ++orlScanSeq;
+  try {
+    do {
+      orlScanQueued = false;
+      logger.info('ORL scan execution begin', { seq });
+      await scanWithOrl(context, scanResultsProvider);
+      logger.info('ORL scan execution end', { seq, queued: orlScanQueued });
+    } while (orlScanQueued);
+  } finally {
+    orlScanRunning = false;
   }
 }
 
