@@ -198,7 +198,7 @@
     "dotenv": "^16.4.7",
     "file-type": "^20.1.0",
     "graphql-tag": "^2.12.6",
-    "js-yaml": "^4.1.0",
+    "js-yaml": "^4.1.1",
     "neverthrow": "^8.1.1",
     "react": "^19.0.0",
     "winston": "^3.17.0",
