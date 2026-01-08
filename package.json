@@ -113,7 +113,7 @@
           },
           "gomboc-vscode-extension.orlFixAppliedAnalyticsEnabled": {
             "type": "boolean",
-            "default": false,
+            "default": true,
             "description": "Emit analytics to integrations service when an ORL fix is applied."
           },
           "gomboc-vscode-extension.integrationsFixAppliedEndpointPath": {

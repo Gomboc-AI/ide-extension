@@ -354,6 +354,33 @@ export async function queueOrlFixAppliedEvent(
     .map(sanitizeFilePath)
     .filter(p => !!p);
 
+  // ORL may expand a base ruleset into multiple concrete instances and append a
+  // zero-padded numeric suffix like "...000", "...001". For analytics aggregation
+  // we strip ONLY a trailing 3-digit suffix when preceded by a non-digit.
+  const stripOrlInstanceSuffix = (name: string): string => {
+    if (!name || typeof name !== 'string') {
+      return '';
+    }
+    const m = name.match(/^(.*?)(\d{3})$/);
+    if (!m) {
+      return name;
+    }
+    const base = m[1] ?? '';
+    if (!base) {
+      return name;
+    }
+    const prev = base[base.length - 1];
+    // Don't strip if we're in the middle of a longer numeric suffix (e.g. "...2025").
+    if (prev && /[0-9]/.test(prev)) {
+      return name;
+    }
+    return base;
+  };
+
+  const sanitizedRuleNames = (input.ruleNames || [])
+    .map(stripOrlInstanceSuffix)
+    .filter(r => !!r);
+
   const event: OrlFixAppliedEventV1 = {
     type: 'orl_fix_applied',
     idempotencyKey: randomUUID(),
@@ -361,6 +388,7 @@ export async function queueOrlFixAppliedEvent(
     repoPath: repoPath ?? undefined,
     branch: branch ?? undefined,
     ...input,
+    ruleNames: sanitizedRuleNames,
     filePaths: sanitizedFilePaths,
   };
 
