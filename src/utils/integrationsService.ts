@@ -145,7 +145,10 @@ function isRetryableStatus(status: number): boolean {
   return status === 429 || (status >= 500 && status <= 599);
 }
 
-function pruneSentMap(args: { sent: Record<string, number>; ttlMs: number }): void {
+function pruneSentMap(args: {
+  sent: Record<string, number>;
+  ttlMs: number;
+}): void {
   const { sent, ttlMs } = args;
   const cutoff = Date.now() - ttlMs;
   for (const [k, ts] of Object.entries(sent)) {
@@ -164,9 +167,10 @@ async function loadQueue(
   return Array.isArray(v) ? v : [];
 }
 
-async function saveQueue(
-  args: { context: vscode.ExtensionContext; items: OrlFixAppliedEventQueueItemV1[] },
-): Promise<void> {
+async function saveQueue(args: {
+  context: vscode.ExtensionContext;
+  items: OrlFixAppliedEventQueueItemV1[];
+}): Promise<void> {
   const { context, items } = args;
   await context.globalState.update(FIX_APPLIED_QUEUE_KEY, items);
 }
@@ -180,21 +184,20 @@ async function loadSentMap(
   return v && typeof v === 'object' ? v : {};
 }
 
-async function saveSentMap(
-  args: { context: vscode.ExtensionContext; sent: Record<string, number> },
-): Promise<void> {
+async function saveSentMap(args: {
+  context: vscode.ExtensionContext;
+  sent: Record<string, number>;
+}): Promise<void> {
   const { context, sent } = args;
   await context.globalState.update(FIX_APPLIED_SENT_KEY, sent);
 }
 
-async function postFixAppliedEvent(
-  args: {
-    url: string;
-    apiKey: string;
-    endpointPath: string;
-    event: OrlFixAppliedEventV1;
-  },
-): Promise<void> {
+async function postFixAppliedEvent(args: {
+  url: string;
+  apiKey: string;
+  endpointPath: string;
+  event: OrlFixAppliedEventV1;
+}): Promise<void> {
   const { url, apiKey, endpointPath, event } = args;
   const body = {
     version: 1.0,
