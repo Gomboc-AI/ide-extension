@@ -10,6 +10,21 @@ case "$prio" in ''|*[!0-9-]*) prio=0;; esac
 rule_esc=$(json_escape "$rule")
 printf '{"event":"post_remediate_rule","ruleName":"%s","priority":%s,"time":"%s"}\n' "$rule_esc" "$prio" "$(timestamp)" >> "$manifest" || true
 
+# Split an ORL-provided file list into individual paths.
+# ORL sometimes passes a comma-separated list, but we've also observed it passing
+# a whitespace-separated list (e.g. "a.tf b.tf c.tf"). We normalize both.
+split_files() {
+  input="$1"
+  [ -z "$input" ] && return 0
+  # If it has commas, treat commas as separators; otherwise split on whitespace.
+  if printf '%s' "$input" | grep -q ','; then
+    printf '%s' "$input" | tr ',' '\n'
+  else
+    # shellcheck disable=SC2001
+    printf '%s' "$input" | tr ' \t\r\n' '\n'
+  fi
+}
+
 # Build per-rule JSON with file paths and resource instances
 rulesOut="$BASE/.orl/diagnostics/rules"
 ruleDir="$rulesOut/$rule_esc"
@@ -28,9 +43,7 @@ if [ -f "$modified_resources" ] && command -v jq >/dev/null 2>&1; then
   firstFile=1
   
   if [ -n "$files_csv" ]; then
-    OLDIFS=$IFS
-    IFS=','; set -- $files_csv; IFS=$OLDIFS
-    for p in "$@"; do
+    split_files "$files_csv" | while IFS= read -r p; do
       t=$(printf '%s' "$p" | sed -e 's/^ *//' -e 's/ *$//' || echo "")
       [ -z "$t" ] && continue
       
@@ -60,9 +73,7 @@ else
   printf '{"ruleName":"%s","priority":%s,"files":[' "$rule_esc" "$prio" > "$ruleJsonTmp" || true
   firstFile=1
   if [ -n "$files_csv" ]; then
-    OLDIFS=$IFS
-    IFS=','; set -- $files_csv; IFS=$OLDIFS
-    for p in "$@"; do
+    split_files "$files_csv" | while IFS= read -r p; do
       t=$(printf '%s' "$p" | sed -e 's/^ *//' -e 's/ *$//' || echo "")
       [ -z "$t" ] && continue
       if [ "$firstFile" -eq 0 ]; then printf ',' >> "$ruleJsonTmp" || true; fi

@@ -134,6 +134,32 @@ function normalizeOrlReport(
   workspacePath: string,
   language: string,
 ): any {
+  const filterAnnotations = (
+    annotations: Record<string, any> | undefined,
+  ): Record<string, string> => {
+    const filtered: Record<string, string> = {};
+    if (!annotations || typeof annotations !== 'object') {
+      return filtered;
+    }
+    for (const key in annotations) {
+      if (
+        key.includes('example') ||
+        key.includes('graph') ||
+        key.includes('code-fix-id') ||
+        key.includes('resource-key') ||
+        key.includes('risk/statement') ||
+        key.includes('impact/statement')
+      ) {
+        continue;
+      }
+      const value = annotations[key];
+      if (typeof value === 'string') {
+        filtered[key] = value;
+      }
+    }
+    return filtered;
+  };
+
   const toNumber = (val: any, fallback = 0): number => {
     if (typeof val === 'number' && Number.isFinite(val)) {
       return val;
@@ -162,68 +188,57 @@ function normalizeOrlReport(
     Array.isArray(val) ? val : fallback;
 
   const report = (raw && typeof raw === 'object' ? raw : {}) as any;
+  // Support spec.* (preferred) and fall back to top-level
+  const spec =
+    report.spec && typeof report.spec === 'object' ? report.spec : report;
   const metadata =
-    report.metadata && typeof report.metadata === 'object'
-      ? report.metadata
-      : {};
+    spec.metadata && typeof spec.metadata === 'object' ? spec.metadata : {};
 
-  const rules = ensureArray(report.rules).map((r: any) => {
-    const rMeta =
-      r && typeof r === 'object' && typeof r.metadata === 'object'
-        ? r.metadata
-        : {};
-    const files = ensureArray(r.files)
-      .map((f: any) =>
-        f && typeof f === 'object' && typeof f.path === 'string'
-          ? { path: f.path }
-          : null,
-      )
-      .filter(Boolean) as Array<{ path: string }>;
+  const filteredTopAnnotations = filterAnnotations(metadata.annotations);
 
-    return {
-      metadata: {
-        name: rMeta.name || r.name || 'unknown',
-        description: rMeta.description,
-        priority:
-          rMeta.priority !== undefined
-            ? toNumber(rMeta.priority, undefined as any)
-            : undefined,
-        skip: rMeta.skip !== undefined ? toBoolean(rMeta.skip) : undefined,
-        required_contexts: ensureArray(rMeta.required_contexts),
-        annotations: rMeta.annotations,
-        classifications: ensureArray(rMeta.classifications),
-      },
-      name: r.name || rMeta.name || 'unknown',
-      findings: toNumber(r.findings),
-      fixes: toNumber(r.fixes),
-      changes: toNumber(r.changes),
-      errors: ensureArray(r.errors),
-      files,
-    };
-  });
+  const rulesSource = ensureArray(spec.rules || report.rules);
+  const sumField = (field: 'findings' | 'fixes' | 'changes') =>
+    rulesSource.reduce((acc: number, r: any) => acc + toNumber(r?.[field]), 0);
 
   return {
     type: 'Report',
     version: 'v1',
     metadata: {
       name: metadata.name || 'unknown',
-      description: metadata.description,
+      // Drop large descriptions/annotations to reduce payload size
+      description:
+        typeof metadata.description === 'string'
+          ? metadata.description.slice(0, 500)
+          : undefined,
       priority:
         metadata.priority !== undefined
           ? toNumber(metadata.priority, undefined as any)
           : undefined,
       skip: metadata.skip !== undefined ? toBoolean(metadata.skip) : undefined,
       required_contexts: ensureArray(metadata.required_contexts),
-      annotations: metadata.annotations,
+      annotations: filteredTopAnnotations,
     },
-    workspace: report.workspace || workspacePath || '',
-    language: report.language || language || '',
-    rules_applied: toNumber(report.rules_applied),
-    findings: toNumber(report.findings),
-    fixes: toNumber(report.fixes),
-    changes: toNumber(report.changes),
-    errors: ensureArray(report.errors),
-    rules,
+    workspace: spec.workspace || report.workspace || workspacePath || '',
+    language: spec.language || report.language || language || '',
+    rules_applied: toNumber(
+      spec.rules_applied ?? report.rules_applied ?? rulesSource.length,
+    ),
+    findings: toNumber(
+      spec.findings ?? report.findings ?? sumField('findings'),
+    ),
+    fixes: toNumber(spec.fixes ?? report.fixes ?? sumField('fixes')),
+    changes: toNumber(spec.changes ?? report.changes ?? sumField('changes')),
+    errors: ensureArray(spec.errors ?? report.errors)
+      .map((e: any) =>
+        typeof e === 'string'
+          ? e
+          : e && typeof e === 'object' && typeof e.message === 'string'
+            ? e.message
+            : undefined,
+      )
+      .filter((e: any) => typeof e === 'string'),
+    // Drop the per-rule payload to avoid large request sizes; counts above remain accurate
+    rules: [],
   };
 }
 
