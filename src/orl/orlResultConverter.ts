@@ -46,6 +46,8 @@ export interface ScanResponse {
   // Optional debug/UX data for ORL-only flows (not part of API GraphQL types).
   // Used to show stable per-rule diagnostics even when our per-hunk attribution is fuzzy.
   orlRuleDescriptions?: Record<string, string>;
+  // Optional short names for display in Problems tab.
+  orlRuleShortNames?: Record<string, string>;
 }
 
 /**
@@ -471,6 +473,63 @@ export class OrlResultConverter {
     return descriptions;
   }
 
+  private static extractRuleShortNamesFromReport(
+    report?: string,
+  ): Record<string, string> {
+    const out: Record<string, string> = {};
+    const parsed = parseOrlReport(report);
+    if (!parsed || typeof parsed !== 'object') {
+      return out;
+    }
+    const spec = (parsed as any).spec;
+    const rules = spec?.rules;
+    if (!Array.isArray(rules)) {
+      return out;
+    }
+
+    const stripOrlInstanceSuffix = (name: string): string => {
+      if (!name || typeof name !== 'string') {
+        return '';
+      }
+      const m = name.match(/^(.*?)(\d{3})$/);
+      if (!m) {
+        return name;
+      }
+      const base = m[1] ?? '';
+      if (!base) {
+        return name;
+      }
+      const prev = base[base.length - 1];
+      if (prev && /[0-9]/.test(prev)) {
+        return name;
+      }
+      return base;
+    };
+
+    for (const r of rules) {
+      const ruleName: string | undefined =
+        (typeof r?.name === 'string' && r.name) ||
+        (typeof r?.metadata?.name === 'string' && r.metadata.name) ||
+        undefined;
+      if (!ruleName) {
+        continue;
+      }
+
+      const displayName: string | undefined =
+        (typeof r?.metadata?.display_name === 'string' &&
+          r.metadata.display_name) ||
+        (typeof r?.metadata?.displayName === 'string' &&
+          r.metadata.displayName) ||
+        undefined;
+
+      const cleaned = stripOrlInstanceSuffix(ruleName);
+      const fallback = cleaned.split('/').pop() || cleaned;
+      out[ruleName] = (displayName && displayName.trim()) || fallback;
+    }
+
+    return out;
+  }
+
   /**
    * Convert ORL result to IDE extension scan response format
    */
@@ -591,6 +650,8 @@ export class OrlResultConverter {
     // Extract rule descriptions from ORL YAML report
     const ruleDescriptions =
       OrlResultConverter.extractRuleDescriptionsFromReport(result.report);
+    const ruleShortNames =
+      OrlResultConverter.extractRuleShortNamesFromReport(result.report);
 
     logger.info('Rule descriptions extracted', {
       count: Object.keys(ruleDescriptions).length,
@@ -1041,6 +1102,11 @@ export class OrlResultConverter {
             resourceStartLine >= 0 ? resourceStartLine + 1 : null,
           resourceEndLine: resourceEndLine >= 0 ? resourceEndLine + 1 : null,
         });
+
+        // Prefer anchoring diagnostics at the start of the resource block.
+        // This improves UX vs highlighting the closing brace or the very bottom of a block.
+        const diagnosticAnchorLine =
+          resourceStartLine >= 0 ? resourceStartLine + 1 : diff.targetLine;
 
         // Build a human-friendly resource header for diagnostics so users can tell
         // exactly which block a rule applies to (e.g. Terraform: resource "aws_instance" "worker").
@@ -2094,7 +2160,7 @@ export class OrlResultConverter {
                       ? 'kubernetes'
                       : 'cloudformation',
               filepath: actualFilePath,
-              line: diff.targetLine,
+              line: diagnosticAnchorLine,
             },
             disposition: 'NonCompliant' as const,
           },
@@ -2206,6 +2272,7 @@ export class OrlResultConverter {
       individualFixes,
       groupedFixes,
       orlRuleDescriptions: ruleDescriptions,
+      orlRuleShortNames: ruleShortNames,
     };
   }
 }

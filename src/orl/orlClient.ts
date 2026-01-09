@@ -553,7 +553,9 @@ export class OrlClient {
     filePath: string;
   }): Promise<void> {
     const { sourceDir, destDir, filePath } = args;
-    const abs = path.isAbsolute(filePath) ? filePath : path.join(sourceDir, filePath);
+    const abs = path.isAbsolute(filePath)
+      ? filePath
+      : path.join(sourceDir, filePath);
     const base = path.basename(abs);
     if (!this.isIacFile(base)) {
       throw new Error(`Not an IaC file: ${base}`);

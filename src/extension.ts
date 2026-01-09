@@ -8,6 +8,7 @@ import logger from './utils/logger';
 import { ScanResultsProvider } from './providers/scanResultsProvider';
 import { CodeActionProvider } from './providers/codeActionProvider';
 import { GombocInfoViewProvider } from './providers/sidebarProvider';
+import { OrlHoverProvider } from './providers/orlHoverProvider';
 import { getInfrastructureToolFromFileUri } from './infrastructureTool';
 import { DiagnosticCollectionManager } from './diagnosticCollectionManager';
 import { flushOrlFixAppliedEvents } from './utils/integrationsService';
@@ -102,6 +103,17 @@ export async function activate(context: vscode.ExtensionContext) {
         { language: 'dockerfile', scheme: 'file' },
       ],
       new CodeActionProvider(),
+    ),
+    vscode.languages.registerHoverProvider(
+      [
+        { language: 'terraform', scheme: 'file' },
+        { language: 'tf', scheme: 'file' },
+        { language: 'json', scheme: 'file' },
+        { language: 'yaml', scheme: 'file' },
+        { language: 'plaintext', scheme: 'file' },
+        { language: 'dockerfile', scheme: 'file' },
+      ],
+      new OrlHoverProvider(),
     ),
   );
 }

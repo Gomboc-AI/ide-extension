@@ -53,7 +53,10 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
   private _isOrlRuleFixDiagnostic(
     diagnostic: vscode.Diagnostic,
   ): diagnostic is OrlRuleFixGombocDiagnostic {
-    return diagnostic.hasOwnProperty('ruleName') && diagnostic.hasOwnProperty('filePath');
+    return (
+      diagnostic.hasOwnProperty('ruleName') &&
+      diagnostic.hasOwnProperty('filePath')
+    );
   }
 
   private _createIndividualFixCommandCodeAction(
@@ -107,7 +110,8 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
     action.command = {
       command: 'gomboc-results.applyOrlRuleRemediation',
       title: 'Gomboc fix',
-      tooltip: 'This will rerun ORL with only the selected rule and apply the results',
+      tooltip:
+        'This will rerun ORL with only the selected rule and apply the results',
       arguments: [
         [
           {

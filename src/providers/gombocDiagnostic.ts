@@ -42,6 +42,9 @@ export class GroupedFixGombocDiagnostic extends vscode.Diagnostic {
 export class OrlRuleFixGombocDiagnostic extends vscode.Diagnostic {
   ruleName: string;
   filePath: string;
+  resourceHeader?: string;
+  ruleShortName?: string;
+  ruleDescription?: string;
   quickFixMessage: string;
 
   constructor(

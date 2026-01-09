@@ -31,6 +31,7 @@ export class ScanResultsProvider {
   private individualRemediations: IndividualFixesRemediation[];
   private groupedRemediations: GroupedFixesRemediation[];
   private orlRuleDescriptions: Record<string, string>;
+  private orlRuleShortNames: Record<string, string>;
 
   private constructor(
     private context: vscode.ExtensionContext,
@@ -39,6 +40,7 @@ export class ScanResultsProvider {
     this.individualRemediations = [];
     this.groupedRemediations = [];
     this.orlRuleDescriptions = {};
+    this.orlRuleShortNames = {};
   }
 
   static init(
@@ -85,13 +87,20 @@ export class ScanResultsProvider {
     );
   }
 
-  public generateComments(remediations: Fixes & { orlRuleDescriptions?: any }) {
+  public generateComments(
+    remediations: Fixes & { orlRuleDescriptions?: any; orlRuleShortNames?: any },
+  ) {
     this.individualRemediations = remediations.individualFixes;
     this.groupedRemediations = remediations.groupedFixes;
     this.orlRuleDescriptions =
       (remediations as any)?.orlRuleDescriptions &&
       typeof (remediations as any).orlRuleDescriptions === 'object'
         ? ((remediations as any).orlRuleDescriptions as Record<string, string>)
+        : {};
+    this.orlRuleShortNames =
+      (remediations as any)?.orlRuleShortNames &&
+      typeof (remediations as any).orlRuleShortNames === 'object'
+        ? ((remediations as any).orlRuleShortNames as Record<string, string>)
         : {};
   }
 
@@ -144,9 +153,15 @@ export class ScanResultsProvider {
         typeof r?.benchmarkRecommendation?.id === 'string' &&
         r.benchmarkRecommendation.id.startsWith('orl-rule:');
 
-      if (currentRemediation.length > 0 && isOrl(currentRemediation[0] as any)) {
+      if (
+        currentRemediation.length > 0 &&
+        isOrl(currentRemediation[0] as any)
+      ) {
         // ORL mode: show per-rule diagnostics (robust apply = rerun ORL with single rule).
-        const ruleToMeta = new Map<string, { line: number; resourceHeader?: string }>();
+        const ruleToMeta = new Map<
+          string,
+          { line: number; resourceHeader?: string }
+        >();
         for (const remediation of currentRemediation as any[]) {
           const br = remediation?.benchmarkRecommendation as any;
           const embedded = br?.orlRuleNames;
@@ -166,7 +181,8 @@ export class ScanResultsProvider {
           }
 
           const resourceHeader: string | undefined =
-            typeof remediation?.codeObservation?.codeResourceInstance?.name === 'string'
+            typeof remediation?.codeObservation?.codeResourceInstance?.name ===
+            'string'
               ? remediation.codeObservation.codeResourceInstance.name
               : undefined;
 
@@ -182,17 +198,21 @@ export class ScanResultsProvider {
           const line = meta.line;
           const startPosition = new vscode.Position(line - 1, 0);
           const endPosition = new vscode.Position(line - 1, 999);
-          const description =
-            this.orlRuleDescriptions?.[ruleName] || ruleName;
+          const shortName = this.orlRuleShortNames?.[ruleName] || ruleName;
+          const description = this.orlRuleDescriptions?.[ruleName] || ruleName;
           const resourcePrefix = meta.resourceHeader
             ? `${meta.resourceHeader} — `
             : '';
           diagnosticTotal++;
           uniqueLines.add(line);
           curDiag.push({
-            message: `${resourcePrefix}${description}`,
+            // Problems tab: keep it compact (resource + shortName)
+            message: `${resourcePrefix}${shortName}`,
             ruleName,
             filePath: filepath,
+            resourceHeader: meta.resourceHeader,
+            ruleShortName: shortName,
+            ruleDescription: description,
             quickFixMessage: `Apply ORL fix (${ruleName})`,
             range: new vscode.Range(startPosition, endPosition),
             severity: vscode.DiagnosticSeverity.Error,
@@ -453,12 +473,16 @@ export class ScanResultsProvider {
     }
   }
 
-  async applyOrlRuleRemediation(args: Array<{ ruleName: string; filePath: string }>) {
+  async applyOrlRuleRemediation(
+    args: Array<{ ruleName: string; filePath: string }>,
+  ) {
     const first = Array.isArray(args) ? args[0] : undefined;
     const ruleName = first?.ruleName;
     const filePath = first?.filePath;
     if (!ruleName || !filePath) {
-      vscode.window.showErrorMessage('Unable to apply ORL rule fix: missing rule or file path');
+      vscode.window.showErrorMessage(
+        'Unable to apply ORL rule fix: missing rule or file path',
+      );
       return;
     }
 
@@ -508,10 +532,14 @@ export class ScanResultsProvider {
     const updatedFiles = new Set<string>();
     let changedAny = false;
 
-    for (const [orlPath, content] of Object.entries(result.modifiedFiles || {})) {
+    for (const [orlPath, content] of Object.entries(
+      result.modifiedFiles || {},
+    )) {
       const rel = orlPath.replace(/^\/workspace\/+/, '');
       const absPath = path.join(workspacePath, rel);
-      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(absPath));
+      const doc = await vscode.workspace.openTextDocument(
+        vscode.Uri.file(absPath),
+      );
       const before = doc.getText();
       if (before === content) {
         // Skip no-op replacements to avoid confusing "applied but nothing changed" behavior.
@@ -535,7 +563,9 @@ export class ScanResultsProvider {
 
     const success = await vscode.workspace.applyEdit(edit);
     if (!success) {
-      vscode.window.showErrorMessage('Unable to apply ORL rule fix due to an unexpected error');
+      vscode.window.showErrorMessage(
+        'Unable to apply ORL rule fix due to an unexpected error',
+      );
       return;
     }
 
@@ -563,7 +593,9 @@ export class ScanResultsProvider {
       });
     }
 
-    vscode.window.showInformationMessage(`Applied ORL fix for rule: ${ruleName}`);
+    vscode.window.showInformationMessage(
+      `Applied ORL fix for rule: ${ruleName}`,
+    );
   }
 
   async getCurrentFile(): Promise<{ file: string; editor: vscode.TextEditor }> {
