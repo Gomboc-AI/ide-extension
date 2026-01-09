@@ -82,7 +82,7 @@
           },
           "gomboc-vscode-extension.orlContainerImage": {
             "type": "string",
-            "default": "gombocai/orl:v1.0.9-",
+            "default": "gombocai/orl:v1.0.9",
             "description": "Docker image for ORL execution"
           },
           "gomboc-vscode-extension.orlRulesServiceUrl": {
