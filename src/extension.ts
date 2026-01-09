@@ -10,6 +10,7 @@ import { CodeActionProvider } from './providers/codeActionProvider';
 import { GombocInfoViewProvider } from './providers/sidebarProvider';
 import { getInfrastructureToolFromFileUri } from './infrastructureTool';
 import { DiagnosticCollectionManager } from './diagnosticCollectionManager';
+import { flushOrlFixAppliedEvents } from './utils/integrationsService';
 
 const previousContentMap = new Map<string, string>();
 
@@ -26,6 +27,9 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   scanResults.registerApplyRemediation();
+
+  // Best-effort: flush any queued "fix applied" analytics events from prior sessions.
+  flushOrlFixAppliedEvents(context).catch(() => {});
 
   const commands = [
     {

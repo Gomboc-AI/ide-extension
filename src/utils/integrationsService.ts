@@ -3,6 +3,7 @@ import axios from 'axios';
 import * as path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { randomUUID } from 'crypto';
 import logger from './logger';
 import { parseOrlReport } from './orlReportParser';
 import { OrlResult } from '../orl/orlResultConverter';
@@ -89,6 +90,325 @@ function getIntegrationsConfig(): {
       | undefined,
     apiKey: config.get('apiKey') as string | undefined,
   };
+}
+
+function getFixAppliedAnalyticsConfig(): {
+  enabled: boolean;
+  endpointPath: string;
+} {
+  const config = vscode.workspace.getConfiguration('gomboc-vscode-extension');
+  return {
+    enabled: (config.get('orlFixAppliedAnalyticsEnabled') as boolean) || false,
+    endpointPath:
+      (config.get('integrationsFixAppliedEndpointPath') as string) ||
+      '/reporting/orl-fix-applied',
+  };
+}
+
+type OrlFixAppliedEventV1 = {
+  type: 'orl_fix_applied';
+  idempotencyKey: string;
+  occurredAt: string;
+  fixKind: 'individual' | 'grouped';
+  ruleNames: string[];
+  ruleIdentifiers: string[];
+  filePaths: string[];
+  repoPath?: string;
+  branch?: string;
+  repoRelativeDir?: string;
+  reportGeneratedAt?: string;
+};
+
+type OrlFixAppliedEventQueueItemV1 = {
+  event: OrlFixAppliedEventV1;
+  attempts: number;
+  nextAttemptAt: number;
+};
+
+const FIX_APPLIED_QUEUE_KEY = 'gomboc.orlFixAppliedQueueV1';
+const FIX_APPLIED_SENT_KEY = 'gomboc.orlFixAppliedSentV1';
+const MAX_QUEUE_SIZE = 200;
+const MAX_ATTEMPTS = 10;
+
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+function backoffMs(attempts: number): number {
+  // 1s, 2s, 4s ... capped at 60s
+  const ms = Math.min(60_000, 1_000 * Math.pow(2, Math.max(0, attempts)));
+  // small jitter
+  return ms + Math.floor(Math.random() * 250);
+}
+
+function isRetryableStatus(status: number): boolean {
+  return status === 429 || (status >= 500 && status <= 599);
+}
+
+function pruneSentMap(args: {
+  sent: Record<string, number>;
+  ttlMs: number;
+}): void {
+  const { sent, ttlMs } = args;
+  const cutoff = Date.now() - ttlMs;
+  for (const [k, ts] of Object.entries(sent)) {
+    if (typeof ts !== 'number' || ts < cutoff) {
+      delete sent[k];
+    }
+  }
+}
+
+async function loadQueue(
+  context: vscode.ExtensionContext,
+): Promise<OrlFixAppliedEventQueueItemV1[]> {
+  const v = context.globalState.get(FIX_APPLIED_QUEUE_KEY) as
+    | OrlFixAppliedEventQueueItemV1[]
+    | undefined;
+  return Array.isArray(v) ? v : [];
+}
+
+async function saveQueue(args: {
+  context: vscode.ExtensionContext;
+  items: OrlFixAppliedEventQueueItemV1[];
+}): Promise<void> {
+  const { context, items } = args;
+  await context.globalState.update(FIX_APPLIED_QUEUE_KEY, items);
+}
+
+async function loadSentMap(
+  context: vscode.ExtensionContext,
+): Promise<Record<string, number>> {
+  const v = context.globalState.get(FIX_APPLIED_SENT_KEY) as
+    | Record<string, number>
+    | undefined;
+  return v && typeof v === 'object' ? v : {};
+}
+
+async function saveSentMap(args: {
+  context: vscode.ExtensionContext;
+  sent: Record<string, number>;
+}): Promise<void> {
+  const { context, sent } = args;
+  await context.globalState.update(FIX_APPLIED_SENT_KEY, sent);
+}
+
+async function postFixAppliedEvent(args: {
+  url: string;
+  apiKey: string;
+  endpointPath: string;
+  event: OrlFixAppliedEventV1;
+}): Promise<void> {
+  const { url, apiKey, endpointPath, event } = args;
+  const body = {
+    version: 1.0,
+    requestOrigin: 'ide-extension',
+    events: [event],
+  };
+  await axios.post(`${url}${endpointPath}`, body, {
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'Idempotency-Key': event.idempotencyKey,
+      'X-Idempotency-Key': event.idempotencyKey,
+    },
+    timeout: 10_000,
+  });
+}
+
+export async function flushOrlFixAppliedEvents(
+  context: vscode.ExtensionContext,
+): Promise<void> {
+  const { integrationsServiceUrl, apiKey } = getIntegrationsConfig();
+  const { enabled, endpointPath } = getFixAppliedAnalyticsConfig();
+
+  if (!enabled) {
+    return;
+  }
+  if (!integrationsServiceUrl || !apiKey) {
+    return;
+  }
+
+  const queue = await loadQueue(context);
+  if (queue.length === 0) {
+    return;
+  }
+
+  const sent = await loadSentMap(context);
+  pruneSentMap({ sent, ttlMs: 7 * 24 * 60 * 60 * 1000 }); // 7 days
+
+  const now = Date.now();
+  const remaining: OrlFixAppliedEventQueueItemV1[] = [];
+  let sentCount = 0;
+  let droppedCount = 0;
+
+  for (const item of queue) {
+    if (!item?.event?.idempotencyKey) {
+      droppedCount++;
+      continue;
+    }
+
+    if (sent[item.event.idempotencyKey]) {
+      // Already sent (client-side dedupe)
+      droppedCount++;
+      continue;
+    }
+
+    if ((item.nextAttemptAt || 0) > now) {
+      remaining.push(item);
+      continue;
+    }
+
+    try {
+      await postFixAppliedEvent({
+        url: integrationsServiceUrl,
+        apiKey,
+        endpointPath,
+        event: item.event,
+      });
+      sent[item.event.idempotencyKey] = Date.now();
+      sentCount++;
+    } catch (err: any) {
+      const status = err?.response?.status as number | undefined;
+
+      // If endpoint doesn't exist or request is invalid, drop to avoid infinite growth.
+      if (status && status >= 400 && status < 500 && status !== 429) {
+        logger.warn('Dropping ORL fix applied event (non-retryable)', {
+          status,
+          endpointPath,
+        });
+        droppedCount++;
+        continue;
+      }
+
+      // Network error or retryable status => keep with backoff, up to MAX_ATTEMPTS.
+      const attempts = (item.attempts || 0) + 1;
+      if (attempts >= MAX_ATTEMPTS) {
+        logger.warn('Dropping ORL fix applied event (max attempts reached)', {
+          attempts,
+          endpointPath,
+          status,
+        });
+        droppedCount++;
+        continue;
+      }
+
+      const retryable = status ? isRetryableStatus(status) : true;
+      if (!retryable) {
+        droppedCount++;
+        continue;
+      }
+
+      remaining.push({
+        event: item.event,
+        attempts,
+        nextAttemptAt: Date.now() + backoffMs(attempts),
+      });
+    }
+  }
+
+  // Cap queue size to prevent unbounded growth
+  const capped = remaining.slice(-MAX_QUEUE_SIZE);
+  await Promise.all([
+    saveQueue({ context, items: capped }),
+    saveSentMap({ context, sent }),
+  ]);
+
+  if (sentCount || droppedCount) {
+    logger.info('ORL fix applied events flush result', {
+      queuedBefore: queue.length,
+      queuedAfter: capped.length,
+      sentCount,
+      droppedCount,
+    });
+  }
+}
+
+export async function queueOrlFixAppliedEvent(
+  context: vscode.ExtensionContext,
+  workspacePath: string,
+  input: Omit<OrlFixAppliedEventV1, 'idempotencyKey' | 'occurredAt' | 'type'>,
+): Promise<void> {
+  const { enabled } = getFixAppliedAnalyticsConfig();
+  if (!enabled) {
+    return;
+  }
+
+  const [repoPath, branch, gitRoot] = await Promise.all([
+    getRepoRelativePath(workspacePath),
+    getGitBranch(workspacePath),
+    getGitRoot(workspacePath),
+  ]);
+
+  // Never send absolute on-disk paths from the user's machine.
+  // Prefer repo-relative paths when inside a git repo; otherwise fall back to basenames.
+  const sanitizeFilePath = (p: string): string => {
+    if (!p || typeof p !== 'string') {
+      return '';
+    }
+    // If it's not absolute already, keep as-is (but normalize slashes).
+    if (!path.isAbsolute(p)) {
+      return p.replace(/\\/g, '/');
+    }
+    if (gitRoot) {
+      const rel = path.relative(gitRoot, p).replace(/\\/g, '/');
+      // If the file isn't within the repo, don't leak parent traversal.
+      if (!rel || rel.startsWith('..')) {
+        return path.basename(p);
+      }
+      return rel;
+    }
+    return path.basename(p);
+  };
+
+  const sanitizedFilePaths = (input.filePaths || [])
+    .map(sanitizeFilePath)
+    .filter(p => !!p);
+
+  // ORL may expand a base ruleset into multiple concrete instances and append a
+  // zero-padded numeric suffix like "...000", "...001". For analytics aggregation
+  // we strip ONLY a trailing 3-digit suffix when preceded by a non-digit.
+  const stripOrlInstanceSuffix = (name: string): string => {
+    if (!name || typeof name !== 'string') {
+      return '';
+    }
+    const m = name.match(/^(.*?)(\d{3})$/);
+    if (!m) {
+      return name;
+    }
+    const base = m[1] ?? '';
+    if (!base) {
+      return name;
+    }
+    const prev = base[base.length - 1];
+    // Don't strip if we're in the middle of a longer numeric suffix (e.g. "...2025").
+    if (prev && /[0-9]/.test(prev)) {
+      return name;
+    }
+    return base;
+  };
+
+  const sanitizedRuleNames = (input.ruleNames || [])
+    .map(stripOrlInstanceSuffix)
+    .filter(r => !!r);
+
+  const event: OrlFixAppliedEventV1 = {
+    type: 'orl_fix_applied',
+    idempotencyKey: randomUUID(),
+    occurredAt: nowIso(),
+    repoPath: repoPath ?? undefined,
+    branch: branch ?? undefined,
+    ...input,
+    ruleNames: sanitizedRuleNames,
+    filePaths: sanitizedFilePaths,
+  };
+
+  const queue = await loadQueue(context);
+  queue.push({ event, attempts: 0, nextAttemptAt: 0 });
+  const capped = queue.slice(-MAX_QUEUE_SIZE);
+  await saveQueue({ context, items: capped });
+
+  // Fire-and-forget flush
+  flushOrlFixAppliedEvents(context).catch(() => {});
 }
 
 /**

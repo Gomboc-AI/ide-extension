@@ -2041,6 +2041,8 @@ export class OrlResultConverter {
             // Use only rule metadata.description in diagnostics when available
             name: descriptionText,
             description: descriptionText,
+            // Not part of the GraphQL schema; used internally for analytics attribution.
+            orlRuleNames: matchingRules,
           },
           fixes: [fix],
           codeObservation: {
@@ -2148,6 +2150,8 @@ export class OrlResultConverter {
             benchmarkRecommendation: {
               id: groupedId || localId,
               name: groupedDescriptionText || localName || analysis.description,
+              // Not part of the GraphQL schema; used internally for analytics attribution.
+              orlRuleNames: localSorted.map(([r]) => r).slice(0, 20),
             },
           };
         }),

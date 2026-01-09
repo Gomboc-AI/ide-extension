@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import {
   IndividualFixGombocDiagnostic,
   GroupedFixGombocDiagnostic,
@@ -12,6 +13,7 @@ import {
 import { FixType } from '../api/__generated__/graphql';
 import { DiagnosticCollectionManager } from '../diagnosticCollectionManager';
 import { getInfrastructureToolFromFileUri } from '../infrastructureTool';
+import { queueOrlFixAppliedEvent } from '../utils/integrationsService';
 
 type IndividualFix = IndividualFixesRemediation['fixes'][number] &
   Pick<
@@ -203,6 +205,57 @@ export class ScanResultsProvider {
     }
     const success = await vscode.workspace.applyEdit(edit);
 
+    // Emit "ORL fix applied" analytics (best-effort) when the edit succeeds.
+    if (success) {
+      const ruleIdentifiers = Array.from(
+        new Set(
+          remediations
+            .map(r => r?.benchmarkRecommendation?.id)
+            .filter((id): id is string => typeof id === 'string')
+            .filter(id => id.startsWith('orl-rule:')),
+        ),
+      );
+      const ruleNamesSet = new Set<string>();
+      for (const r of remediations) {
+        const br: any = r?.benchmarkRecommendation as any;
+        const embedded = br?.orlRuleNames;
+        if (Array.isArray(embedded)) {
+          for (const rn of embedded) {
+            if (typeof rn === 'string' && rn.trim()) {
+              ruleNamesSet.add(rn);
+            }
+          }
+          continue;
+        }
+        const id = br?.id;
+        if (typeof id === 'string' && id.startsWith('orl-rule:')) {
+          const rn = id.slice('orl-rule:'.length);
+          if (rn && rn !== 'multiple') {
+            ruleNamesSet.add(rn);
+          }
+        }
+      }
+      const files = Array.from(updatedFiles);
+      const workspacePath =
+        files.length > 0
+          ? path.dirname(files[0])
+          : vscode.window.activeTextEditor
+            ? path.dirname(vscode.window.activeTextEditor.document.uri.fsPath)
+            : undefined;
+
+      if (
+        workspacePath &&
+        (ruleIdentifiers.length > 0 || ruleNamesSet.size > 0)
+      ) {
+        queueOrlFixAppliedEvent(this.context, workspacePath, {
+          fixKind: 'individual',
+          ruleNames: Array.from(ruleNamesSet),
+          ruleIdentifiers,
+          filePaths: files,
+        }).catch(() => {});
+      }
+    }
+
     // once we apply a remediation we have to dispose and clear everything and re-run
     for (const file of updatedFiles) {
       const uri = vscode.Uri.file(file);
@@ -245,6 +298,49 @@ export class ScanResultsProvider {
 
       if (!remediationSuccess) {
         throw new Error('Unable to apply any fixes due to an unexpected error');
+      }
+
+      // Emit "ORL fix applied" analytics (best-effort) for this file.
+      try {
+        const ruleIdentifiers = Array.from(
+          new Set(
+            (remediation.comments || [])
+              .map((c: any) => c?.benchmarkRecommendation?.id)
+              .filter((id: any): id is string => typeof id === 'string')
+              .filter(id => id.startsWith('orl-rule:')),
+          ),
+        );
+        const ruleNamesSet = new Set<string>();
+        for (const c of remediation.comments || []) {
+          const br: any = (c as any)?.benchmarkRecommendation;
+          const embedded = br?.orlRuleNames;
+          if (Array.isArray(embedded)) {
+            for (const rn of embedded) {
+              if (typeof rn === 'string' && rn.trim()) {
+                ruleNamesSet.add(rn);
+              }
+            }
+            continue;
+          }
+          const id = br?.id;
+          if (typeof id === 'string' && id.startsWith('orl-rule:')) {
+            const rn = id.slice('orl-rule:'.length);
+            if (rn && rn !== 'multiple') {
+              ruleNamesSet.add(rn);
+            }
+          }
+        }
+        const workspacePath = path.dirname(remediation.path);
+        if (ruleIdentifiers.length > 0 || ruleNamesSet.size > 0) {
+          queueOrlFixAppliedEvent(this.context, workspacePath, {
+            fixKind: 'grouped',
+            ruleNames: Array.from(ruleNamesSet),
+            ruleIdentifiers,
+            filePaths: [remediation.path],
+          }).catch(() => {});
+        }
+      } catch {
+        // ignore analytics errors
       }
 
       const textEditor = vscode.window.activeTextEditor;
