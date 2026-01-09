@@ -69,7 +69,11 @@ export class OrlHoverProvider implements vscode.HoverProvider {
 
       const headingParts = [
         !commonResource && resource ? `**${resource}**` : undefined,
-        shortName ? `**${shortName}**` : ruleName ? `**${ruleName}**` : undefined,
+        shortName
+          ? `**${shortName}**`
+          : ruleName
+            ? `**${ruleName}**`
+            : undefined,
       ].filter(Boolean);
 
       md.appendMarkdown(`- ${headingParts.join(' — ')}`);
@@ -84,5 +88,3 @@ export class OrlHoverProvider implements vscode.HoverProvider {
     return new vscode.Hover(md, unique[0].range);
   }
 }
-
-

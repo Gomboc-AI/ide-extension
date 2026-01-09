@@ -88,7 +88,10 @@ export class ScanResultsProvider {
   }
 
   public generateComments(
-    remediations: Fixes & { orlRuleDescriptions?: any; orlRuleShortNames?: any },
+    remediations: Fixes & {
+      orlRuleDescriptions?: any;
+      orlRuleShortNames?: any;
+    },
   ) {
     this.individualRemediations = remediations.individualFixes;
     this.groupedRemediations = remediations.groupedFixes;
@@ -194,10 +197,15 @@ export class ScanResultsProvider {
         }
 
         // Emit one diagnostic per rule.
+        let orlIdx = 0;
         for (const [ruleName, meta] of ruleToMeta.entries()) {
           const line = meta.line;
           const startPosition = new vscode.Position(line - 1, 0);
-          const endPosition = new vscode.Position(line - 1, 999);
+          // Make each ORL diagnostic range slightly unique so selecting an item
+          // from Problems can produce a single-action lightbulb menu.
+          const baseLen = Math.max(1, (meta.resourceHeader || '').length);
+          const endChar = Math.min(999, baseLen + orlIdx);
+          const endPosition = new vscode.Position(line - 1, endChar);
           const shortName = this.orlRuleShortNames?.[ruleName] || ruleName;
           const description = this.orlRuleDescriptions?.[ruleName] || ruleName;
           const resourcePrefix = meta.resourceHeader
@@ -213,11 +221,12 @@ export class ScanResultsProvider {
             resourceHeader: meta.resourceHeader,
             ruleShortName: shortName,
             ruleDescription: description,
-            quickFixMessage: `Apply ORL fix (${ruleName})`,
+            quickFixMessage: `Apply ORL fix (${shortName})`,
             range: new vscode.Range(startPosition, endPosition),
             severity: vscode.DiagnosticSeverity.Error,
             source: 'Gomboc',
           } as any);
+          orlIdx++;
         }
 
         // Keep "Apply all fixes" but only once (at the first diagnostic line).

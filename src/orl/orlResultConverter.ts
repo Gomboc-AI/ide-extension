@@ -650,8 +650,9 @@ export class OrlResultConverter {
     // Extract rule descriptions from ORL YAML report
     const ruleDescriptions =
       OrlResultConverter.extractRuleDescriptionsFromReport(result.report);
-    const ruleShortNames =
-      OrlResultConverter.extractRuleShortNamesFromReport(result.report);
+    const ruleShortNames = OrlResultConverter.extractRuleShortNamesFromReport(
+      result.report,
+    );
 
     logger.info('Rule descriptions extracted', {
       count: Object.keys(ruleDescriptions).length,

@@ -26,7 +26,13 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
         this._isOrlRuleFixDiagnostic(diagnostic),
     );
 
-    return diagnostics.reduce((acc, cur) => {
+    // If the current selection range exactly matches a diagnostic range (common when
+    // invoked from the Problems panel), prefer only that diagnostic to avoid showing
+    // multiple quick-fix actions for overlapping diagnostics on the same line.
+    const exactMatches = diagnostics.filter(d => d.range.isEqual(range));
+    const scoped = exactMatches.length > 0 ? exactMatches : diagnostics;
+
+    return scoped.reduce((acc, cur) => {
       if (this._isGombocGroupedFixDiagnostic(cur)) {
         return [...acc, this._createGroupedFixCommandCodeAction(cur)];
       } else if (this._isGombocIndividualFixDiagnostic(cur)) {
