@@ -43,6 +43,9 @@ export interface OrlResult {
 export interface ScanResponse {
   individualFixes: any[];
   groupedFixes: any[];
+  // Optional debug/UX data for ORL-only flows (not part of API GraphQL types).
+  // Used to show stable per-rule diagnostics even when our per-hunk attribution is fuzzy.
+  orlRuleDescriptions?: Record<string, string>;
 }
 
 /**
@@ -1038,6 +1041,40 @@ export class OrlResultConverter {
             resourceStartLine >= 0 ? resourceStartLine + 1 : null,
           resourceEndLine: resourceEndLine >= 0 ? resourceEndLine + 1 : null,
         });
+
+        // Build a human-friendly resource header for diagnostics so users can tell
+        // exactly which block a rule applies to (e.g. Terraform: resource "aws_instance" "worker").
+        const resourceHeader = (() => {
+          if (isDockerfile) {
+            if (resourceName === 'docker_stage' && resourceInstanceName) {
+              return `FROM ${resourceInstanceName}`;
+            }
+            return 'Dockerfile';
+          }
+          if (isKubernetes) {
+            if (resourceName && resourceName !== 'Resource') {
+              return resourceInstanceName
+                ? `${resourceName} "${resourceInstanceName}"`
+                : resourceName;
+            }
+            return path.basename(actualFilePath);
+          }
+          // Terraform-ish
+          if (
+            resourceName &&
+            resourceName !== 'Resource' &&
+            resourceInstanceName &&
+            resourceInstanceName.trim()
+          ) {
+            return `resource "${resourceName}" "${resourceInstanceName}"`;
+          }
+          if (resourceName && resourceName !== 'Resource') {
+            return resourceInstanceName
+              ? `${resourceName}.${resourceInstanceName}`
+              : resourceName;
+          }
+          return path.basename(actualFilePath);
+        })();
 
         // Analyze the diff content to extract meaningful information
         // This can help identify which attributes were changed, which might help
@@ -2047,7 +2084,7 @@ export class OrlResultConverter {
           fixes: [fix],
           codeObservation: {
             codeResourceInstance: {
-              name: resourceInstanceName || path.basename(actualFilePath),
+              name: resourceHeader,
               type:
                 filetype === 'tf'
                   ? 'terraform'
@@ -2168,6 +2205,7 @@ export class OrlResultConverter {
     return {
       individualFixes,
       groupedFixes,
+      orlRuleDescriptions: ruleDescriptions,
     };
   }
 }

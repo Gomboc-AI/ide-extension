@@ -34,3 +34,26 @@ export class GroupedFixGombocDiagnostic extends vscode.Diagnostic {
     this.quickFixMessage = quickFixMessage;
   }
 }
+
+/**
+ * ORL-only: a synthetic diagnostic representing "apply this single ORL rule".
+ * The handler reruns ORL with only this rule and applies the resulting file updates.
+ */
+export class OrlRuleFixGombocDiagnostic extends vscode.Diagnostic {
+  ruleName: string;
+  filePath: string;
+  quickFixMessage: string;
+
+  constructor(
+    range: vscode.Range,
+    message: string,
+    quickFixMessage: string,
+    args: { ruleName: string; filePath: string },
+    severity?: vscode.DiagnosticSeverity,
+  ) {
+    super(range, message, severity);
+    this.ruleName = args.ruleName;
+    this.filePath = args.filePath;
+    this.quickFixMessage = quickFixMessage;
+  }
+}
