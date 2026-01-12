@@ -677,16 +677,12 @@ export class OrlResultConverter {
       );
       const originalText = new TextDecoder().decode(originalContent);
 
-      // Find the differences between original and modified content
-      logger.info('File content comparison', {
+      // Find the differences between original and modified content.
+      // Keep this as debug to avoid heavy string splitting on large scans.
+      logger.debug('File content comparison', {
         file: actualFilePath,
         originalLength: originalText.length,
         modifiedLength: (modifiedContent as string).length,
-        originalPreview: originalText.split('\n').slice(0, 5).join('\n'),
-        modifiedPreview: (modifiedContent as string)
-          .split('\n')
-          .slice(0, 5)
-          .join('\n'),
       });
 
       const differences = FileDiffAnalyzer.findDifferences(
@@ -699,7 +695,7 @@ export class OrlResultConverter {
         continue;
       }
 
-      logger.info('Found differences in file', {
+      logger.debug('Found differences in file', {
         file: actualFilePath,
         differenceCount: differences.length,
         differences: differences.map((d: Difference) => ({

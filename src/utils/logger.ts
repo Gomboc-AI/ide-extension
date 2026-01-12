@@ -7,8 +7,23 @@ const customFormat = winston.format(info => {
   return info;
 });
 
+function normalizeLevel(level: unknown): string {
+  const l = typeof level === 'string' ? level.toLowerCase().trim() : '';
+  switch (l) {
+    case 'error':
+    case 'warn':
+    case 'info':
+    case 'debug':
+      return l;
+    default:
+      return 'info';
+  }
+}
+
 const logger = winston.createLogger({
-  level: 'debug',
+  // Default to info; debug logging is extremely verbose and can slow down scans.
+  // Can be overridden via env or extension settings (see setLoggerLevel()).
+  level: normalizeLevel(process.env.GOMBOC_LOG_LEVEL),
   format: winston.format.combine(customFormat(), winston.format.json()),
   transports: [
     new winston.transports.Console({
@@ -16,5 +31,9 @@ const logger = winston.createLogger({
     }),
   ],
 });
+
+export function setLoggerLevel(level: unknown): void {
+  logger.level = normalizeLevel(level);
+}
 
 export default logger;
