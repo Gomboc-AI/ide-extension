@@ -3,6 +3,7 @@ import * as path from 'path';
 import {
   IndividualFixGombocDiagnostic,
   GroupedFixGombocDiagnostic,
+  OrlRuleFixGombocDiagnostic,
 } from './gombocDiagnostic';
 import {
   Fixes,
@@ -14,6 +15,9 @@ import { FixType } from '../api/__generated__/graphql';
 import { DiagnosticCollectionManager } from '../diagnosticCollectionManager';
 import { getInfrastructureToolFromFileUri } from '../infrastructureTool';
 import { queueOrlFixAppliedEvent } from '../utils/integrationsService';
+import { createOrlClient } from '../orl/orlClient';
+import { detectLanguageFromFile } from '../utils/scanValidator';
+import logger from '../utils/logger';
 
 type IndividualFix = IndividualFixesRemediation['fixes'][number] &
   Pick<
@@ -26,6 +30,8 @@ export class ScanResultsProvider {
   private static scanResultsProviderInstance: ScanResultsProvider | null = null;
   private individualRemediations: IndividualFixesRemediation[];
   private groupedRemediations: GroupedFixesRemediation[];
+  private orlRuleDescriptions: Record<string, string>;
+  private orlRuleShortNames: Record<string, string>;
 
   private constructor(
     private context: vscode.ExtensionContext,
@@ -33,6 +39,8 @@ export class ScanResultsProvider {
   ) {
     this.individualRemediations = [];
     this.groupedRemediations = [];
+    this.orlRuleDescriptions = {};
+    this.orlRuleShortNames = {};
   }
 
   static init(
@@ -69,11 +77,34 @@ export class ScanResultsProvider {
         },
       ),
     );
+    this.context.subscriptions.push(
+      vscode.commands.registerCommand(
+        'gomboc-results.applyOrlRuleRemediation',
+        fixedResults => {
+          this.applyOrlRuleRemediation(fixedResults);
+        },
+      ),
+    );
   }
 
-  public generateComments(remediations: Fixes) {
+  public generateComments(
+    remediations: Fixes & {
+      orlRuleDescriptions?: any;
+      orlRuleShortNames?: any;
+    },
+  ) {
     this.individualRemediations = remediations.individualFixes;
     this.groupedRemediations = remediations.groupedFixes;
+    this.orlRuleDescriptions =
+      (remediations as any)?.orlRuleDescriptions &&
+      typeof (remediations as any).orlRuleDescriptions === 'object'
+        ? ((remediations as any).orlRuleDescriptions as Record<string, string>)
+        : {};
+    this.orlRuleShortNames =
+      (remediations as any)?.orlRuleShortNames &&
+      typeof (remediations as any).orlRuleShortNames === 'object'
+        ? ((remediations as any).orlRuleShortNames as Record<string, string>)
+        : {};
   }
 
   // uses the scan response to generate a diagnostic for the diagnostic collection
@@ -115,38 +146,94 @@ export class ScanResultsProvider {
       const uri = vscode.Uri.file(filepath);
       const currentRemediation = existingResourceBenchmarkFixes[filepath];
       const curDiag: Array<
-        IndividualFixGombocDiagnostic | GroupedFixGombocDiagnostic
+        | IndividualFixGombocDiagnostic
+        | GroupedFixGombocDiagnostic
+        | OrlRuleFixGombocDiagnostic
       > = [];
       const uniqueLines = new Set<number>();
-      for (const remediation of currentRemediation) {
-        let startLine = remediation.codeObservation.codeResourceInstance.line;
-        let containsAddFixType = false;
-        for (const fix of remediation.fixes) {
-          if (fix.fixType === FixType.Add) {
-            containsAddFixType = true;
-            break;
+
+      const isOrl = (r: any): boolean =>
+        typeof r?.benchmarkRecommendation?.id === 'string' &&
+        r.benchmarkRecommendation.id.startsWith('orl-rule:');
+
+      if (
+        currentRemediation.length > 0 &&
+        isOrl(currentRemediation[0] as any)
+      ) {
+        // ORL mode: show per-rule diagnostics (robust apply = rerun ORL with single rule).
+        const ruleToMeta = new Map<
+          string,
+          { line: number; resourceHeader?: string }
+        >();
+        for (const remediation of currentRemediation as any[]) {
+          const br = remediation?.benchmarkRecommendation as any;
+          const embedded = br?.orlRuleNames;
+          const ruleNames: string[] = Array.isArray(embedded)
+            ? embedded.filter((x: any) => typeof x === 'string' && x.trim())
+            : typeof br?.id === 'string' && br.id.startsWith('orl-rule:')
+              ? [br.id.replace(/^orl-rule:/, '')]
+              : [];
+
+          // Pick a reasonable anchor line for diagnostics.
+          let line: number =
+            remediation?.codeObservation?.codeResourceInstance?.line ||
+            remediation?.fixes?.[0]?.codePosition?.line ||
+            1;
+          if (!Number.isFinite(line) || line <= 0) {
+            line = 1;
+          }
+
+          const resourceHeader: string | undefined =
+            typeof remediation?.codeObservation?.codeResourceInstance?.name ===
+            'string'
+              ? remediation.codeObservation.codeResourceInstance.name
+              : undefined;
+
+          for (const rn of ruleNames) {
+            if (!ruleToMeta.has(rn)) {
+              ruleToMeta.set(rn, { line, resourceHeader });
+            }
           }
         }
-        if (!containsAddFixType && remediation.fixes.length > 0) {
-          startLine = remediation.fixes[0].codePosition.line;
-        }
-        const startPosition = new vscode.Position(startLine - 1, 0);
-        uniqueLines.add(startLine);
-        const endPosition = new vscode.Position(startLine - 1, 999);
 
-        diagnosticTotal++;
-        curDiag.push({
-          message: `${remediation.benchmarkRecommendation.name}`,
-          individualFixGombocResult: remediation,
-          quickFixMessage: `Fix with Gomboc ${remediation.benchmarkRecommendation.name} for ${remediation.codeObservation.codeResourceInstance.type}`,
-          range: new vscode.Range(startPosition, endPosition),
-          severity: vscode.DiagnosticSeverity.Error,
-          source: 'Gomboc ',
-        });
-      }
-      for (const line of uniqueLines) {
-        const startPosition = new vscode.Position(line - 1, 0);
-        const endPosition = new vscode.Position(line - 1, 999);
+        // Emit one diagnostic per rule.
+        let orlIdx = 0;
+        for (const [ruleName, meta] of ruleToMeta.entries()) {
+          const line = meta.line;
+          const startPosition = new vscode.Position(line - 1, 0);
+          // Make each ORL diagnostic range slightly unique so selecting an item
+          // from Problems can produce a single-action lightbulb menu.
+          const baseLen = Math.max(1, (meta.resourceHeader || '').length);
+          const endChar = Math.min(999, baseLen + orlIdx);
+          const endPosition = new vscode.Position(line - 1, endChar);
+          const shortName = this.orlRuleShortNames?.[ruleName] || ruleName;
+          const description = this.orlRuleDescriptions?.[ruleName] || ruleName;
+          const resourcePrefix = meta.resourceHeader
+            ? `${meta.resourceHeader} — `
+            : '';
+          diagnosticTotal++;
+          uniqueLines.add(line);
+          curDiag.push({
+            // Problems tab: keep it compact (resource + shortName)
+            message: `${resourcePrefix}${shortName}`,
+            ruleName,
+            filePath: filepath,
+            resourceHeader: meta.resourceHeader,
+            ruleShortName: shortName,
+            ruleDescription: description,
+            quickFixMessage: `Apply ORL fix (${shortName})`,
+            range: new vscode.Range(startPosition, endPosition),
+            severity: vscode.DiagnosticSeverity.Error,
+            source: 'Gomboc',
+          } as any);
+          orlIdx++;
+        }
+
+        // Keep "Apply all fixes" but only once (at the first diagnostic line).
+        const firstLine =
+          uniqueLines.size > 0 ? Math.min(...Array.from(uniqueLines)) : 1;
+        const startPosition = new vscode.Position(firstLine - 1, 0);
+        const endPosition = new vscode.Position(firstLine - 1, 999);
         curDiag.push({
           message: 'Apply all fixes',
           groupedFixGombocResult: existingGroupedFixes[filepath],
@@ -154,7 +241,47 @@ export class ScanResultsProvider {
           range: new vscode.Range(startPosition, endPosition),
           severity: vscode.DiagnosticSeverity.Error,
           source: 'Gomboc',
-        });
+        } as any);
+      } else {
+        // API mode (or legacy): keep individual per-fix diagnostics + grouped apply-all.
+        for (const remediation of currentRemediation) {
+          let startLine = remediation.codeObservation.codeResourceInstance.line;
+          let containsAddFixType = false;
+          for (const fix of remediation.fixes) {
+            if (fix.fixType === FixType.Add) {
+              containsAddFixType = true;
+              break;
+            }
+          }
+          if (!containsAddFixType && remediation.fixes.length > 0) {
+            startLine = remediation.fixes[0].codePosition.line;
+          }
+          const startPosition = new vscode.Position(startLine - 1, 0);
+          uniqueLines.add(startLine);
+          const endPosition = new vscode.Position(startLine - 1, 999);
+
+          diagnosticTotal++;
+          curDiag.push({
+            message: `${remediation.benchmarkRecommendation.name}`,
+            individualFixGombocResult: remediation,
+            quickFixMessage: `Fix with Gomboc ${remediation.benchmarkRecommendation.name} for ${remediation.codeObservation.codeResourceInstance.type}`,
+            range: new vscode.Range(startPosition, endPosition),
+            severity: vscode.DiagnosticSeverity.Error,
+            source: 'Gomboc ',
+          });
+        }
+        for (const line of uniqueLines) {
+          const startPosition = new vscode.Position(line - 1, 0);
+          const endPosition = new vscode.Position(line - 1, 999);
+          curDiag.push({
+            message: 'Apply all fixes',
+            groupedFixGombocResult: existingGroupedFixes[filepath],
+            quickFixMessage: 'Apply all fixes',
+            range: new vscode.Range(startPosition, endPosition),
+            severity: vscode.DiagnosticSeverity.Error,
+            source: 'Gomboc',
+          });
+        }
       }
       this.diagnosticCollectionManager.updateDiagnosticCollection(uri, curDiag);
     }
@@ -353,6 +480,131 @@ export class ScanResultsProvider {
         ScanResultsProvider.codeActionDisposable.dispose();
       }
     }
+  }
+
+  async applyOrlRuleRemediation(
+    args: Array<{ ruleName: string; filePath: string }>,
+  ) {
+    const first = Array.isArray(args) ? args[0] : undefined;
+    const ruleName = first?.ruleName;
+    const filePath = first?.filePath;
+    if (!ruleName || !filePath) {
+      vscode.window.showErrorMessage(
+        'Unable to apply ORL rule fix: missing rule or file path',
+      );
+      return;
+    }
+
+    // Use the same scan scope as ORL scans (directory containing the file).
+    const workspacePath = path.dirname(filePath);
+
+    const fileUri = vscode.Uri.file(filePath);
+    const document = await vscode.workspace.openTextDocument(fileUri);
+    const language = detectLanguageFromFile(filePath, document.getText());
+    if (!language) {
+      vscode.window.showErrorMessage(
+        'Unable to apply ORL rule fix: file language could not be detected',
+      );
+      return;
+    }
+
+    // Ensure file is saved before remediation (avoid racing unsaved editor content).
+    try {
+      await document.save();
+    } catch {
+      // ignore
+    }
+
+    const orlClient = createOrlClient(this.context.extensionPath);
+    logger.info('Applying ORL single-rule remediation', {
+      ruleName,
+      workspacePath,
+      filePath,
+      language,
+    });
+
+    const result = await orlClient.remediateSingleRule({
+      workspacePath,
+      language,
+      ruleName,
+      targetFilePath: filePath,
+    });
+
+    if (!result.success) {
+      vscode.window.showErrorMessage(
+        `Failed to apply ORL rule fix: ${result.error || 'unknown error'}`,
+      );
+      return;
+    }
+
+    const edit = new vscode.WorkspaceEdit();
+    const updatedFiles = new Set<string>();
+    let changedAny = false;
+
+    for (const [orlPath, content] of Object.entries(
+      result.modifiedFiles || {},
+    )) {
+      const rel = orlPath.replace(/^\/workspace\/+/, '');
+      const absPath = path.join(workspacePath, rel);
+      const doc = await vscode.workspace.openTextDocument(
+        vscode.Uri.file(absPath),
+      );
+      const before = doc.getText();
+      if (before === content) {
+        // Skip no-op replacements to avoid confusing "applied but nothing changed" behavior.
+        continue;
+      }
+      changedAny = true;
+      updatedFiles.add(absPath);
+      const fullRange = new vscode.Range(
+        doc.positionAt(0),
+        doc.positionAt(doc.getText().length),
+      );
+      edit.replace(doc.uri, fullRange, content);
+    }
+
+    if (!changedAny) {
+      vscode.window.showInformationMessage(
+        `ORL did not produce any changes for rule: ${ruleName} (single-file apply). If this rule needs cross-file context, try “Apply all fixes” for the directory.`,
+      );
+      return;
+    }
+
+    const success = await vscode.workspace.applyEdit(edit);
+    if (!success) {
+      vscode.window.showErrorMessage(
+        'Unable to apply ORL rule fix due to an unexpected error',
+      );
+      return;
+    }
+
+    // Best-effort save
+    try {
+      for (const p of updatedFiles) {
+        const d = await vscode.workspace.openTextDocument(vscode.Uri.file(p));
+        await d.save();
+      }
+    } catch {
+      // ignore
+    }
+
+    // Emit analytics (best-effort). Treat as "individual" since it's a single rule apply.
+    try {
+      await queueOrlFixAppliedEvent(this.context, workspacePath, {
+        fixKind: 'individual',
+        ruleNames: [ruleName],
+        ruleIdentifiers: [`orl-rule:${ruleName}`],
+        filePaths: Array.from(updatedFiles),
+      });
+    } catch (e) {
+      logger.debug('Failed to queue ORL fix applied event (ignored)', {
+        e: e instanceof Error ? e.message : String(e),
+      });
+    }
+
+    vscode.window.showInformationMessage(
+      `Applied ORL fix for rule: ${ruleName}`,
+    );
   }
 
   async getCurrentFile(): Promise<{ file: string; editor: vscode.TextEditor }> {

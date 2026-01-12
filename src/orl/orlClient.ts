@@ -3,6 +3,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
 import logger from '../utils/logger';
 
 const execAsync = promisify(exec);
@@ -543,9 +544,42 @@ export class OrlClient {
   }
 
   /**
+   * Copy a single IaC file into the temp workspace, preserving its basename.
+   * We intentionally do not copy the whole directory so ORL only sees this file.
+   */
+  private async copySingleWorkspaceFile(args: {
+    sourceDir: string;
+    destDir: string;
+    filePath: string;
+  }): Promise<void> {
+    const { sourceDir, destDir, filePath } = args;
+    const abs = path.isAbsolute(filePath)
+      ? filePath
+      : path.join(sourceDir, filePath);
+    const base = path.basename(abs);
+    if (!this.isIacFile(base)) {
+      throw new Error(`Not an IaC file: ${base}`);
+    }
+    // Only support copying files within the scan directory (matches our scan scoping).
+    const rel = path.relative(sourceDir, abs);
+    if (!rel || rel.startsWith('..')) {
+      throw new Error('Selected file is not within the scan directory');
+    }
+
+    await fs.promises.mkdir(destDir, { recursive: true });
+    const destFile = path.join(destDir, rel);
+    await fs.promises.mkdir(path.dirname(destFile), { recursive: true });
+    const content = await fs.promises.readFile(abs);
+    await fs.promises.writeFile(destFile, content);
+  }
+
+  /**
    * Pull rules
    */
-  private async pullRulesUsingOrl(rulesDir: string): Promise<void> {
+  private async pullRulesUsingOrl(
+    rulesDir: string,
+    opts?: { searchQuery?: string },
+  ): Promise<void> {
     const { rulesServiceUrl, rulesServiceToken, channel } = this.config;
 
     // reuse ORL's rules pull command
@@ -554,8 +588,16 @@ export class OrlClient {
     commandParts.push(
       `-v '${rulesDir}:/output'`,
       `-e RULE_SERVICE_TOKEN='${rulesServiceToken}'`,
-      `${this.config.containerImage} rules pull --url='${rulesServiceUrl}' --out=/output --channel='${channel}'`,
     );
+    if (opts?.searchQuery) {
+      commandParts.push(
+        `${this.config.containerImage} rules pull --url='${rulesServiceUrl}' --out=/output --search='${opts.searchQuery}'`,
+      );
+    } else {
+      commandParts.push(
+        `${this.config.containerImage} rules pull --url='${rulesServiceUrl}' --out=/output --channel='${channel}'`,
+      );
+    }
     const pullCommand = commandParts.join(' \\\n      ');
 
     logger.info('Pulling rules using ORL', { command: pullCommand });
@@ -574,6 +616,52 @@ export class OrlClient {
         `Failed to pull rules: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
+  }
+
+  private async hasAnyRulesInDir(rulesDir: string): Promise<boolean> {
+    try {
+      const entries = await fs.promises.readdir(rulesDir, {
+        withFileTypes: true,
+      });
+      // ORL rulespaces typically contain files + directories; we just need "non-empty"
+      // to avoid the "search succeeded but returned zero rules" case.
+      for (const e of entries) {
+        if (e.isFile()) {
+          return true;
+        }
+        if (e.isDirectory()) {
+          // If there is any file inside, consider it non-empty.
+          const nested = await fs.promises
+            .readdir(path.join(rulesDir, e.name))
+            .catch(() => []);
+          if (nested.length > 0) {
+            return true;
+          }
+        }
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
+  private stripOrlInstanceSuffix(ruleName: string): string {
+    if (!ruleName || typeof ruleName !== 'string') {
+      return ruleName;
+    }
+    const m = ruleName.match(/^(.*?)(\d{3})$/);
+    if (!m) {
+      return ruleName;
+    }
+    const base = m[1] ?? '';
+    if (!base) {
+      return ruleName;
+    }
+    const prev = base[base.length - 1];
+    if (prev && /[0-9]/.test(prev)) {
+      return ruleName;
+    }
+    return base;
   }
 
   /**
@@ -855,6 +943,147 @@ export class OrlClient {
     } catch (error) {
       logger.error('ORL connection test failed', { error });
       return false;
+    }
+  }
+
+  /**
+   * Execute ORL remediation scoped to a single ORL rule. This is intended for
+   * robust per-rule fixes: we rerun ORL with only the selected rule present in
+   * the rulespace, then apply the resulting modified files as full replacements.
+   *
+   * Note: We keep the same directory-level scan scope as our normal ORL scan
+   * (workspacePath is the directory containing the file).
+   */
+  async remediateSingleRule(args: {
+    workspacePath: string;
+    language?: string;
+    ruleName: string;
+    targetFilePath?: string;
+  }): Promise<OrlResult> {
+    const { workspacePath, language, ruleName, targetFilePath } = args;
+    try {
+      logger.info('Starting ORL single-rule remediation', {
+        workspacePath,
+        ruleName,
+        targetFilePath,
+      });
+
+      // Use an OS temp directory to avoid contending with .orl-temp from scans.
+      const tempDir = await fs.promises.mkdtemp(
+        path.join(os.tmpdir(), 'orl-single-rule-'),
+      );
+
+      // Copy only the selected file when provided; otherwise keep directory-level behavior.
+      if (targetFilePath) {
+        await this.copySingleWorkspaceFile({
+          sourceDir: workspacePath,
+          destDir: tempDir,
+          filePath: targetFilePath,
+        });
+      } else {
+        await this.copyWorkspaceFiles(workspacePath, tempDir);
+      }
+
+      // Write ORL hook scripts into temp workspace so they are available inside the container.
+      await this.writeHooksToTempWorkspace(tempDir);
+
+      // Pull only this rule into a temp rulespace.
+      const rulesDir = path.join(tempDir, 'rules');
+      await fs.promises.mkdir(rulesDir, { recursive: true });
+
+      // Prefer an exact name match. If this fails (e.g., rules service mismatch),
+      // fall back to pulling the channel (heavier but robust).
+      const escapeForQuery = (s: string): string =>
+        s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+
+      const baseRuleName = this.stripOrlInstanceSuffix(ruleName);
+      const exact = escapeForQuery(ruleName);
+      const base = escapeForQuery(baseRuleName);
+      const query =
+        baseRuleName && baseRuleName !== ruleName
+          ? `(or (eq $.name "${exact}") (eq $.name "${base}"))`
+          : `(eq $.name "${exact}")`;
+
+      let pulledSingleRule = false;
+      try {
+        await this.pullRulesUsingOrl(rulesDir, { searchQuery: query });
+        pulledSingleRule = await this.hasAnyRulesInDir(rulesDir);
+        if (!pulledSingleRule) {
+          logger.warn(
+            'Single-rule rules pull via --search returned no rules; falling back to channel pull',
+            { ruleName, baseRuleName },
+          );
+          await this.pullRulesUsingOrl(rulesDir);
+        }
+      } catch (e) {
+        logger.warn(
+          'Single-rule rules pull via --search failed; falling back to channel pull',
+          {
+            ruleName,
+            baseRuleName,
+            error: e instanceof Error ? e.message : String(e),
+          },
+        );
+        await this.pullRulesUsingOrl(rulesDir);
+      }
+
+      // Execute ORL remediation with pulled rules.
+      const dockerCommand = this.buildDockerCommand(
+        tempDir,
+        language,
+        rulesDir,
+      );
+      logger.info('Executing Docker command (single-rule)', {
+        command: dockerCommand,
+      });
+
+      const { stdout, stderr } = await execAsync(dockerCommand, {
+        timeout: 90000,
+        maxBuffer: 10 * 1024 * 1024,
+        cwd: workspacePath,
+      });
+
+      if (stderr && !stderr.includes('WARN')) {
+        logger.warn('ORL execution warnings (single-rule)', { stderr });
+      }
+
+      const modifiedFiles = await this.readModifiedFilesFromTemp(tempDir);
+      const diagnostics = await this.readDiagnostics(tempDir);
+      const reportFile = await this.readReportFile(tempDir);
+
+      await this.persistDiagnosticsArtifacts(
+        workspacePath,
+        tempDir,
+        reportFile || stdout,
+      );
+
+      await fs.promises.rm(tempDir, { recursive: true, force: true });
+
+      logger.info('ORL single-rule remediation completed', {
+        ruleName,
+        filesModified: Object.keys(modifiedFiles).length,
+      });
+
+      return {
+        success: true,
+        modifiedFiles,
+        report: reportFile || stdout,
+        // @ts-ignore add diagnostics for downstream usage
+        diagnostics,
+      };
+    } catch (error: any) {
+      logger.error('ORL single-rule remediation failed', {
+        ruleName,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return {
+        success: false,
+        modifiedFiles: {},
+        error:
+          error instanceof Error
+            ? error.message
+            : 'ORL single-rule remediation failed',
+      };
     }
   }
 }

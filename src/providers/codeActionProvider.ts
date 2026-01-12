@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import {
   IndividualFixGombocDiagnostic,
   GroupedFixGombocDiagnostic,
+  OrlRuleFixGombocDiagnostic,
 } from './gombocDiagnostic';
 export class CodeActionProvider implements vscode.CodeActionProvider {
   public static readonly providedCodeActionKinds = [
@@ -21,14 +22,23 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
     const diagnostics = context.diagnostics.filter(
       diagnostic =>
         this._isGombocGroupedFixDiagnostic(diagnostic) ||
-        this._isGombocIndividualFixDiagnostic(diagnostic),
+        this._isGombocIndividualFixDiagnostic(diagnostic) ||
+        this._isOrlRuleFixDiagnostic(diagnostic),
     );
 
-    return diagnostics.reduce((acc, cur) => {
+    // If the current selection range exactly matches a diagnostic range (common when
+    // invoked from the Problems panel), prefer only that diagnostic to avoid showing
+    // multiple quick-fix actions for overlapping diagnostics on the same line.
+    const exactMatches = diagnostics.filter(d => d.range.isEqual(range));
+    const scoped = exactMatches.length > 0 ? exactMatches : diagnostics;
+
+    return scoped.reduce((acc, cur) => {
       if (this._isGombocGroupedFixDiagnostic(cur)) {
         return [...acc, this._createGroupedFixCommandCodeAction(cur)];
       } else if (this._isGombocIndividualFixDiagnostic(cur)) {
         return [...acc, this._createIndividualFixCommandCodeAction(cur)];
+      } else if (this._isOrlRuleFixDiagnostic(cur)) {
+        return [...acc, this._createOrlRuleFixCommandCodeAction(cur)];
       }
       return acc;
     }, [] as vscode.CodeAction[]);
@@ -44,6 +54,15 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
     diagnostic: vscode.Diagnostic,
   ): diagnostic is IndividualFixGombocDiagnostic {
     return diagnostic.hasOwnProperty('individualFixGombocResult');
+  }
+
+  private _isOrlRuleFixDiagnostic(
+    diagnostic: vscode.Diagnostic,
+  ): diagnostic is OrlRuleFixGombocDiagnostic {
+    return (
+      diagnostic.hasOwnProperty('ruleName') &&
+      diagnostic.hasOwnProperty('filePath')
+    );
   }
 
   private _createIndividualFixCommandCodeAction(
@@ -82,6 +101,33 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
     };
     action.diagnostics = [diagnostic];
     action.isPreferred = true;
+    return action;
+  }
+
+  private _createOrlRuleFixCommandCodeAction(
+    diagnostic: OrlRuleFixGombocDiagnostic,
+  ): vscode.CodeAction {
+    const { quickFixMessage } = diagnostic;
+
+    const action = new vscode.CodeAction(
+      quickFixMessage,
+      vscode.CodeActionKind.QuickFix,
+    );
+    action.command = {
+      command: 'gomboc-results.applyOrlRuleRemediation',
+      title: 'Gomboc fix',
+      tooltip:
+        'This will rerun ORL with only the selected rule and apply the results',
+      arguments: [
+        [
+          {
+            ruleName: diagnostic.ruleName,
+            filePath: diagnostic.filePath,
+          },
+        ],
+      ],
+    };
+    action.diagnostics = [diagnostic];
     return action;
   }
 
