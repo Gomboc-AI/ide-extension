@@ -160,6 +160,18 @@ export class ScanResultsProvider {
         currentRemediation.length > 0 &&
         isOrl(currentRemediation[0] as any)
       ) {
+        const prettifyShortName = (s: string): string => {
+          const raw = (s || '').trim();
+          if (!raw) {
+            return raw;
+          }
+          const spaced = raw.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+          if (!spaced) {
+            return spaced;
+          }
+          return spaced[0].toUpperCase() + spaced.slice(1);
+        };
+
         // ORL mode: show per-rule diagnostics (robust apply = rerun ORL with single rule).
         const ruleToMeta = new Map<
           string,
@@ -206,16 +218,17 @@ export class ScanResultsProvider {
           const baseLen = Math.max(1, (meta.resourceHeader || '').length);
           const endChar = Math.min(999, baseLen + orlIdx);
           const endPosition = new vscode.Position(line - 1, endChar);
-          const shortName = this.orlRuleShortNames?.[ruleName] || ruleName;
+          const shortNameRaw = this.orlRuleShortNames?.[ruleName] || ruleName;
+          const shortName = prettifyShortName(shortNameRaw);
           const description = this.orlRuleDescriptions?.[ruleName] || ruleName;
-          const resourcePrefix = meta.resourceHeader
-            ? `${meta.resourceHeader} — `
-            : '';
           diagnosticTotal++;
           uniqueLines.add(line);
+          const message = meta.resourceHeader
+            ? `${shortName}: ${meta.resourceHeader}`
+            : shortName;
           curDiag.push({
             // Problems tab: keep it compact (resource + shortName)
-            message: `${resourcePrefix}${shortName}`,
+            message,
             ruleName,
             filePath: filepath,
             resourceHeader: meta.resourceHeader,
