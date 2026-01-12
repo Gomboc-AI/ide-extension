@@ -17,7 +17,10 @@ export function initScanStatus(context: vscode.ExtensionContext): void {
   context.subscriptions.push(statusItem);
 }
 
-export function setScanStatus(args: { running: boolean; queued?: boolean }): void {
+export function setScanStatus(args: {
+  running: boolean;
+  queued?: boolean;
+}): void {
   if (!statusItem) {
     return;
   }
@@ -32,5 +35,3 @@ export function setScanStatus(args: { running: boolean; queued?: boolean }): voi
     ? 'Scan running (another scan is queued)'
     : 'Scan running';
 }
-
-

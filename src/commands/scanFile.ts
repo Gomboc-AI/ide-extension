@@ -232,44 +232,44 @@ async function scanWithOrl(
 async function scanWithApiClient(scanResultsProvider: ScanResultsProvider) {
   setScanStatus({ running: true, queued: false });
   try {
-  const apiClient = new CustomerApiClient();
-  // ----- Gather input ------- //
-  const editor = vscode.window.activeTextEditor;
-  if (!editor) {
-    return;
-  }
-  const document = editor.document;
-  const filePath = document.uri.fsPath;
-  const filetype = getFileType(filePath);
+    const apiClient = new CustomerApiClient();
+    // ----- Gather input ------- //
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      return;
+    }
+    const document = editor.document;
+    const filePath = document.uri.fsPath;
+    const filetype = getFileType(filePath);
 
-  let fileContents: IacScanContent[];
-  let tool: InfrastructureTool;
+    let fileContents: IacScanContent[];
+    let tool: InfrastructureTool;
 
-  if (filetype === 'tf') {
-    tool = InfrastructureTool.Terraform;
-    fileContents = await getTFScenarioFiles(document);
-  } else if (filetype === 'yml' || filetype === 'yaml') {
-    tool = InfrastructureTool.Cloudformation;
-    fileContents = getCFNFile(document);
-  } else {
-    vscode.window.showErrorMessage(
-      'Current file is not a cloudformation or terraform file',
-    );
-    throw new Error('Current file is not a cloudformation or terraform file');
-  }
+    if (filetype === 'tf') {
+      tool = InfrastructureTool.Terraform;
+      fileContents = await getTFScenarioFiles(document);
+    } else if (filetype === 'yml' || filetype === 'yaml') {
+      tool = InfrastructureTool.Cloudformation;
+      fileContents = getCFNFile(document);
+    } else {
+      vscode.window.showErrorMessage(
+        'Current file is not a cloudformation or terraform file',
+      );
+      throw new Error('Current file is not a cloudformation or terraform file');
+    }
 
-  // const metaData = await generateRequestMetadata();
+    // const metaData = await generateRequestMetadata();
 
-  // ----- Send data to customerapi ------ //
-  const inputObject: ScanLocalScenarioInput = {
-    fileContents,
-    iacTool: tool,
-  };
+    // ----- Send data to customerapi ------ //
+    const inputObject: ScanLocalScenarioInput = {
+      fileContents,
+      iacTool: tool,
+    };
 
-  const scanResponse = await apiClient.getFixes({ inputObject });
+    const scanResponse = await apiClient.getFixes({ inputObject });
 
-  scanResultsProvider.generateComments(scanResponse);
-  scanResultsProvider.createDiagnostic();
+    scanResultsProvider.generateComments(scanResponse);
+    scanResultsProvider.createDiagnostic();
   } finally {
     setScanStatus({ running: false });
   }
