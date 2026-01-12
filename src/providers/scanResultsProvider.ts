@@ -234,7 +234,7 @@ export class ScanResultsProvider {
             resourceHeader: meta.resourceHeader,
             ruleShortName: shortName,
             ruleDescription: description,
-            quickFixMessage: `Apply ORL fix (${shortName})`,
+            quickFixMessage: `Apply fix (${shortName})`,
             range: new vscode.Range(startPosition, endPosition),
             severity: vscode.DiagnosticSeverity.Error,
             source: 'Gomboc',
@@ -503,7 +503,7 @@ export class ScanResultsProvider {
     const filePath = first?.filePath;
     if (!ruleName || !filePath) {
       vscode.window.showErrorMessage(
-        'Unable to apply ORL rule fix: missing rule or file path',
+        'Unable to apply rule fix: missing rule or file path',
       );
       return;
     }
@@ -516,7 +516,7 @@ export class ScanResultsProvider {
     const language = detectLanguageFromFile(filePath, document.getText());
     if (!language) {
       vscode.window.showErrorMessage(
-        'Unable to apply ORL rule fix: file language could not be detected',
+        'Unable to apply rule fix: file language could not be detected',
       );
       return;
     }
@@ -545,7 +545,7 @@ export class ScanResultsProvider {
 
     if (!result.success) {
       vscode.window.showErrorMessage(
-        `Failed to apply ORL rule fix: ${result.error || 'unknown error'}`,
+        `Failed to apply rule fix: ${result.error || 'unknown error'}`,
       );
       return;
     }
@@ -586,7 +586,7 @@ export class ScanResultsProvider {
     const success = await vscode.workspace.applyEdit(edit);
     if (!success) {
       vscode.window.showErrorMessage(
-        'Unable to apply ORL rule fix due to an unexpected error',
+        'Unable to apply rule fix due to an unexpected error',
       );
       return;
     }
