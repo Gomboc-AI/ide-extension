@@ -4,7 +4,7 @@ import { testApiKeyCommand } from './commands/testApiKey';
 import { scanFileCommand } from './commands/scanFile';
 import { showBenchmarksCommand } from './commands/showFrameworks';
 import { testOrlConnectionCommand } from './commands/testOrlConnection';
-import logger from './utils/logger';
+import logger, { setLoggerLevel } from './utils/logger';
 import { ScanResultsProvider } from './providers/scanResultsProvider';
 import { CodeActionProvider } from './providers/codeActionProvider';
 import { GombocInfoViewProvider } from './providers/sidebarProvider';
@@ -18,6 +18,13 @@ const previousContentMap = new Map<string, string>();
 
 export async function activate(context: vscode.ExtensionContext) {
   logger.info('VSCode extension activated .... ');
+  // Configure logger verbosity (default: info).
+  try {
+    const cfg = vscode.workspace.getConfiguration('gomboc-vscode-extension');
+    setLoggerLevel(cfg.get('logLevel'));
+  } catch {
+    // ignore
+  }
   initScanStatus(context);
   // diagnostics initialization
   const diagnosticCollectionManager = DiagnosticCollectionManager.get();

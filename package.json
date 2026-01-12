@@ -47,6 +47,7 @@
     ],
     "configuration": [
       {
+        "title": "Gomboc",
         "type": "object",
         "properties": {
           "gomboc-vscode-extension.apiKey": {
@@ -54,7 +55,13 @@
             "default": "",
             "description": "API Key for accessing the server.",
             "sensitive": true
-          },
+          }
+        }
+      },
+      {
+        "title": "Gomboc (Advanced)",
+        "type": "object",
+        "properties": {
           "gomboc-vscode-extension.scanOnFileSave": {
             "type": "boolean",
             "default": false,
@@ -125,6 +132,17 @@
             "type": "string",
             "default": "https://integrations.app.gomboc.ai",
             "description": "Integrations service URL for reporting ORL scan results"
+          },
+          "gomboc-vscode-extension.logLevel": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warn",
+              "info",
+              "debug"
+            ],
+            "default": "error",
+            "description": "Controls extension logging verbosity. Use 'debug' only when diagnosing issues (it can be very noisy)."
           }
         }
       }
