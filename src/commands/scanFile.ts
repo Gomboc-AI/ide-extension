@@ -19,6 +19,7 @@ import {
   sendOrlReportToIntegrations,
   sendErrorToIntegrations,
 } from '../utils/integrationsService';
+import { setScanStatus } from '../utils/scanStatus';
 
 /**
  * ORL scans are executed by spawning a docker container (`orlClient.remediate`).
@@ -57,10 +58,12 @@ async function runOrlScanSerialized(
   if (orlScanRunning) {
     orlScanQueued = true;
     logger.info('ORL scan already running; queued a rescan');
+    setScanStatus({ running: true, queued: true });
     return;
   }
 
   orlScanRunning = true;
+  setScanStatus({ running: true, queued: false });
   const seq = ++orlScanSeq;
   try {
     do {
@@ -68,9 +71,11 @@ async function runOrlScanSerialized(
       logger.info('ORL scan execution begin', { seq });
       await scanWithOrl(context, scanResultsProvider);
       logger.info('ORL scan execution end', { seq, queued: orlScanQueued });
+      setScanStatus({ running: true, queued: orlScanQueued });
     } while (orlScanQueued);
   } finally {
     orlScanRunning = false;
+    setScanStatus({ running: false });
   }
 }
 
@@ -225,6 +230,8 @@ async function scanWithOrl(
 }
 
 async function scanWithApiClient(scanResultsProvider: ScanResultsProvider) {
+  setScanStatus({ running: true, queued: false });
+  try {
   const apiClient = new CustomerApiClient();
   // ----- Gather input ------- //
   const editor = vscode.window.activeTextEditor;
@@ -263,6 +270,9 @@ async function scanWithApiClient(scanResultsProvider: ScanResultsProvider) {
 
   scanResultsProvider.generateComments(scanResponse);
   scanResultsProvider.createDiagnostic();
+  } finally {
+    setScanStatus({ running: false });
+  }
 }
 
 async function getTFScenarioFiles(
