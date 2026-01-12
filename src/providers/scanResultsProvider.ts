@@ -160,6 +160,18 @@ export class ScanResultsProvider {
         currentRemediation.length > 0 &&
         isOrl(currentRemediation[0] as any)
       ) {
+        const prettifyShortName = (s: string): string => {
+          const raw = (s || '').trim();
+          if (!raw) {
+            return raw;
+          }
+          const spaced = raw.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+          if (!spaced) {
+            return spaced;
+          }
+          return spaced[0].toUpperCase() + spaced.slice(1);
+        };
+
         // ORL mode: show per-rule diagnostics (robust apply = rerun ORL with single rule).
         const ruleToMeta = new Map<
           string,
@@ -206,22 +218,23 @@ export class ScanResultsProvider {
           const baseLen = Math.max(1, (meta.resourceHeader || '').length);
           const endChar = Math.min(999, baseLen + orlIdx);
           const endPosition = new vscode.Position(line - 1, endChar);
-          const shortName = this.orlRuleShortNames?.[ruleName] || ruleName;
+          const shortNameRaw = this.orlRuleShortNames?.[ruleName] || ruleName;
+          const shortName = prettifyShortName(shortNameRaw);
           const description = this.orlRuleDescriptions?.[ruleName] || ruleName;
-          const resourcePrefix = meta.resourceHeader
-            ? `${meta.resourceHeader} — `
-            : '';
           diagnosticTotal++;
           uniqueLines.add(line);
+          const message = meta.resourceHeader
+            ? `${shortName}: ${meta.resourceHeader}`
+            : shortName;
           curDiag.push({
             // Problems tab: keep it compact (resource + shortName)
-            message: `${resourcePrefix}${shortName}`,
+            message,
             ruleName,
             filePath: filepath,
             resourceHeader: meta.resourceHeader,
             ruleShortName: shortName,
             ruleDescription: description,
-            quickFixMessage: `Apply ORL fix (${shortName})`,
+            quickFixMessage: `Apply fix (${shortName})`,
             range: new vscode.Range(startPosition, endPosition),
             severity: vscode.DiagnosticSeverity.Error,
             source: 'Gomboc',
@@ -490,7 +503,7 @@ export class ScanResultsProvider {
     const filePath = first?.filePath;
     if (!ruleName || !filePath) {
       vscode.window.showErrorMessage(
-        'Unable to apply ORL rule fix: missing rule or file path',
+        'Unable to apply rule fix: missing rule or file path',
       );
       return;
     }
@@ -503,7 +516,7 @@ export class ScanResultsProvider {
     const language = detectLanguageFromFile(filePath, document.getText());
     if (!language) {
       vscode.window.showErrorMessage(
-        'Unable to apply ORL rule fix: file language could not be detected',
+        'Unable to apply rule fix: file language could not be detected',
       );
       return;
     }
@@ -532,7 +545,7 @@ export class ScanResultsProvider {
 
     if (!result.success) {
       vscode.window.showErrorMessage(
-        `Failed to apply ORL rule fix: ${result.error || 'unknown error'}`,
+        `Failed to apply rule fix: ${result.error || 'unknown error'}`,
       );
       return;
     }
@@ -573,7 +586,7 @@ export class ScanResultsProvider {
     const success = await vscode.workspace.applyEdit(edit);
     if (!success) {
       vscode.window.showErrorMessage(
-        'Unable to apply ORL rule fix due to an unexpected error',
+        'Unable to apply rule fix due to an unexpected error',
       );
       return;
     }
