@@ -361,9 +361,12 @@ export class OrlClient {
         const reportText = reportFile || stdout;
 
         // Read only changed files when possible (avoid diffing entire directories).
-        const changedRelPaths = this.extractChangedRelativePathsFromReport(reportText);
+        const changedRelPaths =
+          this.extractChangedRelativePathsFromReport(reportText);
         const modifiedFiles = await this.readModifiedFilesFromTemp(tempDir, {
-          onlyRelativePaths: changedRelPaths.length ? changedRelPaths : undefined,
+          onlyRelativePaths: changedRelPaths.length
+            ? changedRelPaths
+            : undefined,
         });
 
         // Persist diagnostics for debugging (best-effort) before cleanup
@@ -407,9 +410,12 @@ export class OrlClient {
           const diagnostics = await this.readDiagnostics(tempDir);
           const reportFile = await this.readReportFile(tempDir);
           const reportText = reportFile || error.stdout;
-          const changedRelPaths = this.extractChangedRelativePathsFromReport(reportText);
+          const changedRelPaths =
+            this.extractChangedRelativePathsFromReport(reportText);
           const modifiedFiles = await this.readModifiedFilesFromTemp(tempDir, {
-            onlyRelativePaths: changedRelPaths.length ? changedRelPaths : undefined,
+            onlyRelativePaths: changedRelPaths.length
+              ? changedRelPaths
+              : undefined,
           });
 
           await this.persistDiagnosticsArtifacts(
@@ -466,9 +472,12 @@ export class OrlClient {
           const diagnostics = await this.readDiagnostics(tempDir);
           const reportFile = await this.readReportFile(tempDir);
           const reportText = reportFile || error.stdout;
-          const changedRelPaths = this.extractChangedRelativePathsFromReport(reportText);
+          const changedRelPaths =
+            this.extractChangedRelativePathsFromReport(reportText);
           const modifiedFiles = await this.readModifiedFilesFromTemp(tempDir, {
-            onlyRelativePaths: changedRelPaths.length ? changedRelPaths : undefined,
+            onlyRelativePaths: changedRelPaths.length
+              ? changedRelPaths
+              : undefined,
           });
 
           await this.persistDiagnosticsArtifacts(
@@ -1123,7 +1132,8 @@ export class OrlClient {
       const diagnostics = await this.readDiagnostics(tempDir);
       const reportFile = await this.readReportFile(tempDir);
       const reportText = reportFile || stdout;
-      const changedRelPaths = this.extractChangedRelativePathsFromReport(reportText);
+      const changedRelPaths =
+        this.extractChangedRelativePathsFromReport(reportText);
       const modifiedFiles = await this.readModifiedFilesFromTemp(tempDir, {
         onlyRelativePaths: changedRelPaths.length ? changedRelPaths : undefined,
       });

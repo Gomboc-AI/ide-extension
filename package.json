@@ -135,8 +135,13 @@
           },
           "gomboc-vscode-extension.logLevel": {
             "type": "string",
-            "enum": ["error", "warn", "info", "debug"],
-            "default": "info",
+            "enum": [
+              "error",
+              "warn",
+              "info",
+              "debug"
+            ],
+            "default": "error",
             "description": "Controls extension logging verbosity. Use 'debug' only when diagnosing issues (it can be very noisy)."
           }
         }

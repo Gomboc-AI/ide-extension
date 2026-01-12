@@ -16,12 +16,13 @@ function normalizeLevel(level: unknown): string {
     case 'debug':
       return l;
     default:
-      return 'info';
+      // Default to error-only to minimize logging overhead in normal usage.
+      return 'error';
   }
 }
 
 const logger = winston.createLogger({
-  // Default to info; debug logging is extremely verbose and can slow down scans.
+  // Default to error-only; debug/info logging can be very noisy and slow down scans.
   // Can be overridden via env or extension settings (see setLoggerLevel()).
   level: normalizeLevel(process.env.GOMBOC_LOG_LEVEL),
   format: winston.format.combine(customFormat(), winston.format.json()),
