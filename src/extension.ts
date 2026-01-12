@@ -12,11 +12,13 @@ import { OrlHoverProvider } from './providers/orlHoverProvider';
 import { getInfrastructureToolFromFileUri } from './infrastructureTool';
 import { DiagnosticCollectionManager } from './diagnosticCollectionManager';
 import { flushOrlFixAppliedEvents } from './utils/integrationsService';
+import { initScanStatus } from './utils/scanStatus';
 
 const previousContentMap = new Map<string, string>();
 
 export async function activate(context: vscode.ExtensionContext) {
   logger.info('VSCode extension activated .... ');
+  initScanStatus(context);
   // diagnostics initialization
   const diagnosticCollectionManager = DiagnosticCollectionManager.get();
   const diagnosticCollection =

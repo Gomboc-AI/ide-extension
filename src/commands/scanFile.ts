@@ -19,6 +19,7 @@ import {
   sendOrlReportToIntegrations,
   sendErrorToIntegrations,
 } from '../utils/integrationsService';
+import { setScanStatus } from '../utils/scanStatus';
 
 /**
  * ORL scans are executed by spawning a docker container (`orlClient.remediate`).
@@ -57,10 +58,12 @@ async function runOrlScanSerialized(
   if (orlScanRunning) {
     orlScanQueued = true;
     logger.info('ORL scan already running; queued a rescan');
+    setScanStatus({ running: true, queued: true });
     return;
   }
 
   orlScanRunning = true;
+  setScanStatus({ running: true, queued: false });
   const seq = ++orlScanSeq;
   try {
     do {
@@ -68,9 +71,11 @@ async function runOrlScanSerialized(
       logger.info('ORL scan execution begin', { seq });
       await scanWithOrl(context, scanResultsProvider);
       logger.info('ORL scan execution end', { seq, queued: orlScanQueued });
+      setScanStatus({ running: true, queued: orlScanQueued });
     } while (orlScanQueued);
   } finally {
     orlScanRunning = false;
+    setScanStatus({ running: false });
   }
 }
 
@@ -225,44 +230,49 @@ async function scanWithOrl(
 }
 
 async function scanWithApiClient(scanResultsProvider: ScanResultsProvider) {
-  const apiClient = new CustomerApiClient();
-  // ----- Gather input ------- //
-  const editor = vscode.window.activeTextEditor;
-  if (!editor) {
-    return;
+  setScanStatus({ running: true, queued: false });
+  try {
+    const apiClient = new CustomerApiClient();
+    // ----- Gather input ------- //
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      return;
+    }
+    const document = editor.document;
+    const filePath = document.uri.fsPath;
+    const filetype = getFileType(filePath);
+
+    let fileContents: IacScanContent[];
+    let tool: InfrastructureTool;
+
+    if (filetype === 'tf') {
+      tool = InfrastructureTool.Terraform;
+      fileContents = await getTFScenarioFiles(document);
+    } else if (filetype === 'yml' || filetype === 'yaml') {
+      tool = InfrastructureTool.Cloudformation;
+      fileContents = getCFNFile(document);
+    } else {
+      vscode.window.showErrorMessage(
+        'Current file is not a cloudformation or terraform file',
+      );
+      throw new Error('Current file is not a cloudformation or terraform file');
+    }
+
+    // const metaData = await generateRequestMetadata();
+
+    // ----- Send data to customerapi ------ //
+    const inputObject: ScanLocalScenarioInput = {
+      fileContents,
+      iacTool: tool,
+    };
+
+    const scanResponse = await apiClient.getFixes({ inputObject });
+
+    scanResultsProvider.generateComments(scanResponse);
+    scanResultsProvider.createDiagnostic();
+  } finally {
+    setScanStatus({ running: false });
   }
-  const document = editor.document;
-  const filePath = document.uri.fsPath;
-  const filetype = getFileType(filePath);
-
-  let fileContents: IacScanContent[];
-  let tool: InfrastructureTool;
-
-  if (filetype === 'tf') {
-    tool = InfrastructureTool.Terraform;
-    fileContents = await getTFScenarioFiles(document);
-  } else if (filetype === 'yml' || filetype === 'yaml') {
-    tool = InfrastructureTool.Cloudformation;
-    fileContents = getCFNFile(document);
-  } else {
-    vscode.window.showErrorMessage(
-      'Current file is not a cloudformation or terraform file',
-    );
-    throw new Error('Current file is not a cloudformation or terraform file');
-  }
-
-  // const metaData = await generateRequestMetadata();
-
-  // ----- Send data to customerapi ------ //
-  const inputObject: ScanLocalScenarioInput = {
-    fileContents,
-    iacTool: tool,
-  };
-
-  const scanResponse = await apiClient.getFixes({ inputObject });
-
-  scanResultsProvider.generateComments(scanResponse);
-  scanResultsProvider.createDiagnostic();
 }
 
 async function getTFScenarioFiles(
