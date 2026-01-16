@@ -2,9 +2,20 @@
 // generate __generated__ types
 import 'dotenv/config';
 
-let hiveSchema;
+/**
+ * Supports two ways of loading the CustomerAPI schema for codegen:
+ * 1) URL introspection (default): requires auth and a running CustomerAPI server.
+ * 2) File-based schema (recommended for local dev): point at CustomerAPI SDL files
+ *    to avoid depending on remediations/frontegg during schema introspection.
+ *
+ * Usage (local file-based):
+ *   STAGE=local CUSTOMER_API_SCHEMA_FILE='/abs/path/CustomerAPI/src/schema/*.graphql' npm run graphql:generate
+ */
 
-if (process.env.STAGE !== 'local') {
+const isLocalStage = process.env.STAGE === 'local';
+
+let hiveSchema: any;
+if (!isLocalStage) {
   const _customerapi_schema_cdn_url = process.env.CUSTOMER_API_SCHEMA_CDN_URL;
 
   if (_customerapi_schema_cdn_url == null) {
@@ -31,7 +42,17 @@ const localSchema = {
   },
 };
 
-const schema = process.env.STAGE === 'local' ? localSchema : hiveSchema;
+// Prefer file-based schema when explicitly provided.
+const schemaFile = process.env.CUSTOMER_API_SCHEMA_FILE;
+const schema =
+  schemaFile && schemaFile.trim()
+    ? schemaFile
+        .split(',')
+        .map(x => x.trim())
+        .filter(Boolean)
+    : isLocalStage
+      ? localSchema
+      : hiveSchema;
 
 const config = {
   schema: schema,
