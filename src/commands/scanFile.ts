@@ -44,7 +44,8 @@ export async function scanFileCommand(
   // 2) Otherwise, attempt server-side feature flag (CustomerAPI/OpenFeature).
   // 3) If that fails, fall back to the local extension setting.
   const config = vscode.workspace.getConfiguration('gomboc-vscode-extension');
-  const orlEnabledSetting = (config.get('remediateOrlEnabled') as boolean) ?? false;
+  const orlEnabledSetting =
+    (config.get('remediateOrlEnabled') as boolean) ?? false;
 
   let useOrl = orlEnabledSetting;
   if (!useOrl) {
@@ -61,11 +62,14 @@ export async function scanFileCommand(
     } catch (error) {
       // Fall back to the local setting if the flag check fails.
       useOrl = orlEnabledSetting;
-      logger.warn('Failed to resolve ORL feature flag via CustomerAPI; falling back to extension setting', {
-        flag: 'processor-orl-enabled',
-        useOrl,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      logger.warn(
+        'Failed to resolve ORL feature flag via CustomerAPI; falling back to extension setting',
+        {
+          flag: 'processor-orl-enabled',
+          useOrl,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
     }
   } else {
     logger.info('ORL remediation forced on via extension setting', {
