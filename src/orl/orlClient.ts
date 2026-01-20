@@ -19,6 +19,10 @@ export interface OrlConfig {
   debugPersistDiagnostics?: boolean;
 }
 
+// Pinned ORL container image. Intentionally not configurable via VS Code settings
+// to ensure consistent behavior across environments and easier support/debugging.
+const ORL_CONTAINER_IMAGE = 'gombocai/orl:v1.0.9-latest';
+
 export interface OrlResult {
   success: boolean;
   modifiedFiles: { [filePath: string]: string };
@@ -1203,7 +1207,7 @@ export function createOrlClient(extensionPath?: string): OrlClient {
     '';
 
   return new OrlClient({
-    containerImage: config.get('orlContainerImage') || 'gomboc/orl:latest',
+    containerImage: ORL_CONTAINER_IMAGE,
     rulesServiceUrl:
       config.get('orlRulesServiceUrl') || 'https://rules.app.gomboc.ai',
     rulesServiceToken,
