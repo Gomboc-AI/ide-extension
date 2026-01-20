@@ -11,6 +11,7 @@ export interface OrlResult {
   modifiedFiles: { [filePath: string]: string };
   report?: string;
   error?: string;
+  exitCode?: number;
   // Optional aggregated diagnostics produced by hooks
   // Shape:
   // {

@@ -171,6 +171,14 @@ async function scanWithOrl(
     const orlClient = createOrlClient(context.extensionPath);
     const result = await orlClient.remediate(workspacePath, language);
 
+    // If ORL signaled a recoverable failure (exit code 1), keep going but log loudly.
+    // This commonly happens when some rules fail to load/parse but other rules still run.
+    if (result.success && result.exitCode === 1) {
+      logger.warn('ORL scan completed with recoverable failure (exit code 1)', {
+        error: result.error,
+      });
+    }
+
     if (!result.success) {
       const errorMessage = result.error || 'ORL remediation failed';
       logger.error('ORL remediation failed', { error: errorMessage });
