@@ -38,12 +38,48 @@ export async function scanFileCommand(
   context: vscode.ExtensionContext,
   scanResultsProvider: ScanResultsProvider,
 ) {
-  // Check feature flag for ORL remediation
+  // Resolve whether we should run ORL vs the legacy CustomerAPI scan path.
+  // Precedence:
+  // 1) Local extension setting can force ORL on (override).
+  // 2) Otherwise, attempt server-side feature flag (CustomerAPI/OpenFeature).
+  // 3) If that fails, fall back to the local extension setting.
   const config = vscode.workspace.getConfiguration('gomboc-vscode-extension');
-  const orlEnabled = config.get('remediateOrlEnabled') as boolean;
+  const orlEnabledSetting =
+    (config.get('remediateOrlEnabled') as boolean) ?? false;
 
-  if (orlEnabled) {
-    logger.info('ORL remediation enabled, using ORL client');
+  let useOrl = orlEnabledSetting;
+  if (!useOrl) {
+    try {
+      const apiClient = new CustomerApiClient();
+      const flagEnabled = await apiClient.isProcessorOrlEnabled();
+      useOrl = Boolean(flagEnabled) || orlEnabledSetting;
+      logger.info('ORL enablement resolved via CustomerAPI flag', {
+        flag: 'processor-orl-enabled',
+        flagEnabled,
+        settingOverride: orlEnabledSetting,
+        useOrl,
+      });
+    } catch (error) {
+      // Fall back to the local setting if the flag check fails.
+      useOrl = orlEnabledSetting;
+      logger.warn(
+        'Failed to resolve ORL feature flag via CustomerAPI; falling back to extension setting',
+        {
+          flag: 'processor-orl-enabled',
+          useOrl,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
+    }
+  } else {
+    logger.info('ORL remediation forced on via extension setting', {
+      settingOverride: orlEnabledSetting,
+      useOrl,
+    });
+  }
+
+  if (useOrl) {
+    logger.info('Using ORL client');
     await runOrlScanSerialized(context, scanResultsProvider);
   } else {
     logger.info('Using traditional API client');
@@ -134,6 +170,14 @@ async function scanWithOrl(
     // Pass extension path so we know exactly where hooks are
     const orlClient = createOrlClient(context.extensionPath);
     const result = await orlClient.remediate(workspacePath, language);
+
+    // If ORL signaled a recoverable failure (exit code 1), keep going but log loudly.
+    // This commonly happens when some rules fail to load/parse but other rules still run.
+    if (result.success && result.exitCode === 1) {
+      logger.warn('ORL scan completed with recoverable failure (exit code 1)', {
+        error: result.error,
+      });
+    }
 
     if (!result.success) {
       const errorMessage = result.error || 'ORL remediation failed';

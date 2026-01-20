@@ -87,11 +87,6 @@
             "default": false,
             "description": "Enable ORL-based remediation using DevContainer execution (experimental)"
           },
-          "gomboc-vscode-extension.orlContainerImage": {
-            "type": "string",
-            "default": "gombocai/orl:v1.0.10",
-            "description": "Docker image for ORL execution"
-          },
           "gomboc-vscode-extension.orlRulesServiceUrl": {
             "type": "string",
             "default": "https://rules.app.gomboc.ai",

@@ -11,6 +11,7 @@ export interface OrlResult {
   modifiedFiles: { [filePath: string]: string };
   report?: string;
   error?: string;
+  exitCode?: number;
   // Optional aggregated diagnostics produced by hooks
   // Shape:
   // {
@@ -141,328 +142,89 @@ export class OrlResultConverter {
   private static extractRuleDescriptionsFromReport(
     report?: string,
   ): Record<string, string> {
-    if (!report) {
-      logger.warn('No report provided to extractRuleDescriptionsFromReport');
-      return {};
+    const out: Record<string, string> = {};
+    const parsed = parseOrlReport(report);
+    if (!parsed || typeof parsed !== 'object') {
+      return out;
     }
 
-    // The report might be embedded in stdout with file diffs before it
-    // Look for the YAML report section (starts with "---" followed by "type: Report")
-    let reportStart = report.indexOf('---\ntype: Report');
-    if (reportStart === -1) {
-      reportStart = report.indexOf('type: Report');
+    const spec = (parsed as any).spec;
+    const rules = spec?.rules;
+    if (!Array.isArray(rules)) {
+      return out;
     }
-    const yamlReport =
-      reportStart >= 0 ? report.substring(reportStart) : report;
 
-    // Remove the leading "---" if present
-    const cleanReport = yamlReport.startsWith('---\n')
-      ? yamlReport.substring(4)
-      : yamlReport;
-
-    logger.debug('Extracting from report', {
-      reportLength: report.length,
-      yamlReportLength: yamlReport.length,
-      cleanReportLength: cleanReport.length,
-      hasTypeReport: cleanReport.includes('type: Report'),
-      firstLines: cleanReport.split('\n').slice(0, 10),
-    });
-
-    const lines = cleanReport.split('\n');
-    const descriptions: Record<string, string> = {};
-    let inSpec = false;
-    let inRules = false;
-    let currentRuleName: string | null = null;
-    let metadataName: string | null = null;
-    let currentRuleIndent = 0;
-    let inMetadata = false;
-    let metadataIndent = 0;
-    let pendingDescription: string | null = null;
-
-    const getIndent = (s: string) => s.match(/^(\s*)/)?.[1]?.length ?? 0;
-    const unquote = (s: string) => s.replace(/^['"]|['"]$/g, '');
-
-    const saveDescription = (ruleName: string, desc: string) => {
-      if (ruleName && desc) {
-        descriptions[ruleName] = desc;
-        // Also save using metadata.name if different
-        if (metadataName && metadataName !== ruleName) {
-          descriptions[metadataName] = desc;
-        }
-        logger.debug('Extracted rule description', {
-          ruleName,
-          metadataName,
-          description: desc.substring(0, 50) + '...',
-        });
+    const coerceString = (v: unknown): string | undefined => {
+      if (typeof v !== 'string') {
+        return undefined;
       }
+      const s = v.trim();
+      return s ? s : undefined;
     };
 
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const indent = getIndent(line);
-      const trimmed = line.trim();
-
-      // Look for spec: section first
-      if (!inSpec) {
-        if (trimmed === 'spec:' || trimmed.startsWith('spec:')) {
-          inSpec = true;
-          continue;
-        }
-        continue;
+    const pickRuleDescription = (metadata: any): string | undefined => {
+      if (!metadata || typeof metadata !== 'object') {
+        return undefined;
       }
 
-      // Now look for rules: inside spec:
-      if (!inRules) {
-        if (trimmed === 'rules:' || trimmed.startsWith('rules:')) {
-          inRules = true;
-          logger.debug('Found rules section', { lineNumber: i, indent });
-          continue;
-        }
-        // If we're in spec but hit a top-level key (indent 0), we've left spec
-        if (indent === 0 && trimmed && !trimmed.startsWith(' ')) {
-          inSpec = false;
-        }
-        continue;
-      }
+      // New source of truth: plain-text description annotation (support both key spellings).
+      const annotationKeys = [
+        'gomboc-ai/description-plain',
+        'gomboc-ai/description_plain',
+      ];
 
-      // End rules section when we hit a top-level key (indent 0, not a list item)
-      if (
-        indent === 0 &&
-        !trimmed.startsWith('- ') &&
-        trimmed !== 'rules:' &&
-        trimmed !== ''
-      ) {
-        inRules = false;
-        if (currentRuleName && pendingDescription) {
-          saveDescription(currentRuleName, pendingDescription);
-        } else if (metadataName && pendingDescription) {
-          saveDescription(metadataName, pendingDescription);
-        }
-        currentRuleName = null;
-        metadataName = null;
-        inMetadata = false;
-        pendingDescription = null;
-        continue;
-      }
+      const annotations =
+        (metadata.annotations && typeof metadata.annotations === 'object'
+          ? metadata.annotations
+          : undefined) ||
+        (metadata.annotation && typeof metadata.annotation === 'object'
+          ? metadata.annotation
+          : undefined);
 
-      // New rule item (list item starts with '- ')
-      if (trimmed.startsWith('- ')) {
-        // Save previous rule's description if we had one
-        if (currentRuleName && pendingDescription) {
-          saveDescription(currentRuleName, pendingDescription);
-        } else if (metadataName && pendingDescription) {
-          saveDescription(metadataName, pendingDescription);
-        }
-        currentRuleName = null;
-        metadataName = null;
-        inMetadata = false;
-        pendingDescription = null;
-        // The indent of the list item line (spaces before '- ')
-        currentRuleIndent = indent;
-
-        // Check if metadata: is on the same line as '- '
-        const afterDash = trimmed.substring(2).trim();
-        if (afterDash.startsWith('metadata:')) {
-          inMetadata = true;
-          // metadata: is on same line, so metadataIndent is the same as the line
-          metadataIndent = indent;
-          logger.debug('New rule item with metadata on same line', {
-            lineNumber: i,
-            indent,
-            currentRuleIndent,
-            metadataIndent,
-            line: line.substring(0, 80),
-          });
-        } else {
-          logger.debug('New rule item', {
-            lineNumber: i,
-            indent,
-            currentRuleIndent,
-            line: line.substring(0, 80),
-          });
-        }
-        continue;
-      }
-
-      // Skip empty lines
-      if (trimmed === '') {
-        continue;
-      }
-
-      // Within a rule block (indented more than the list item)
-      // Note: After '- metadata:', the next line might be at same indent or more
-      if (
-        indent > currentRuleIndent ||
-        (indent === currentRuleIndent && !trimmed.startsWith('-'))
-      ) {
-        // Check if we're entering metadata section (on its own line)
-        if (trimmed.startsWith('metadata:')) {
-          inMetadata = true;
-          metadataIndent = indent;
-          logger.debug('Entered metadata section (own line)', {
-            lineNumber: i,
-            indent,
-            metadataIndent,
-            currentRuleIndent,
-            line: line.substring(0, 80),
-          });
-          continue;
-        }
-
-        // Check if we're in metadata section
-        // metadata: is at indent X, so metadata contents are at indent > X
-        if (inMetadata) {
-          logger.debug('In metadata section, checking line', {
-            lineNumber: i,
-            indent,
-            metadataIndent,
-            indentGreater: indent > metadataIndent,
-            trimmed: trimmed.substring(0, 50),
-          });
-
-          if (indent > metadataIndent) {
-            if (trimmed.startsWith('name:')) {
-              // metadata.name
-              const nm = trimmed.match(/^name:\s*(.+)\s*$/);
-              if (nm) {
-                metadataName = unquote(nm[1].trim());
-                logger.debug('Found metadata.name', {
-                  metadataName,
-                  lineNumber: i,
-                  indent,
-                  metadataIndent,
-                });
-                // If we already have a description, save it
-                if (pendingDescription) {
-                  saveDescription(metadataName, pendingDescription);
-                }
-              }
-            } else if (trimmed.startsWith('description:')) {
-              // Description can be on same line or next line(s)
-              let desc = trimmed.replace(/^description:\s*/, '').trim();
-
-              // Handle multi-line descriptions with | or > indicators
-              if (
-                desc === '' ||
-                desc === '|' ||
-                desc === '>' ||
-                desc.startsWith('|') ||
-                desc.startsWith('>')
-              ) {
-                // Multi-line description - look ahead
-                let descLines: string[] = [];
-                const descIndent = indent; // The indent of the description: line
-
-                for (let j = i + 1; j < lines.length; j++) {
-                  const nextLine = lines[j];
-                  const nextIndent = getIndent(nextLine);
-                  const nextTrimmed = nextLine.trim();
-
-                  // Stop when we hit same or less indent than metadata (end of metadata block)
-                  if (nextIndent <= metadataIndent) {
-                    break;
-                  }
-
-                  // Stop if we hit another key at the same indent as description:
-                  if (
-                    nextIndent === descIndent &&
-                    nextTrimmed &&
-                    !nextTrimmed.startsWith(' ') &&
-                    nextTrimmed.includes(':')
-                  ) {
-                    break;
-                  }
-
-                  // Include lines that are indented more than the description: line
-                  if (nextIndent > descIndent) {
-                    // Remove the extra indent to get the actual content
-                    const content = nextLine.substring(nextIndent);
-                    descLines.push(content);
-                  } else if (
-                    nextIndent === descIndent &&
-                    nextTrimmed &&
-                    !nextTrimmed.includes(':')
-                  ) {
-                    // Same indent but not a key - might be continuation (shouldn't happen with | but handle it)
-                    descLines.push(nextTrimmed);
-                  } else {
-                    break;
-                  }
-                }
-                desc = descLines.join('\n').trim();
-              }
-
-              const cleaned = unquote(desc);
-              logger.debug('Processing description line', {
-                originalDesc: desc.substring(0, 50),
-                cleaned: cleaned ? cleaned.substring(0, 50) : 'EMPTY',
-                hasMetadataName: !!metadataName,
-                lineNumber: i,
-                indent,
-                metadataIndent,
-                inMetadata,
-              });
-              if (cleaned) {
-                pendingDescription = cleaned;
-                logger.debug('Found description in metadata', {
-                  metadataName,
-                  description: cleaned.substring(0, 100),
-                  lineNumber: i,
-                });
-                // If we already have a name, save it now
-                if (metadataName) {
-                  saveDescription(metadataName, cleaned);
-                }
-              } else {
-                logger.debug('Description was empty after cleaning', {
-                  originalDesc: desc,
-                  cleaned,
-                  lineNumber: i,
-                });
-              }
-            }
+      if (annotations) {
+        for (const k of annotationKeys) {
+          const v = coerceString(annotations[k]);
+          if (v) {
+            return v;
           }
-          continue;
         }
-
-        // Check if we found the rule-level name (at same level as metadata, not inside it)
-        if (!inMetadata && trimmed.startsWith('name:')) {
-          const nm = trimmed.match(/^name:\s*(.+)\s*$/);
-          if (nm) {
-            currentRuleName = unquote(nm[1].trim());
-            // If we already have a pending description, save it now
-            if (pendingDescription) {
-              saveDescription(currentRuleName, pendingDescription);
-            }
-          }
-          continue;
-        }
-      } else {
-        // We've left the current rule block
-        if (currentRuleName && pendingDescription) {
-          saveDescription(currentRuleName, pendingDescription);
-        } else if (metadataName && pendingDescription) {
-          saveDescription(metadataName, pendingDescription);
-        }
-        currentRuleName = null;
-        metadataName = null;
-        inMetadata = false;
-        pendingDescription = null;
       }
-    }
 
-    // Don't forget the last rule
-    if (currentRuleName && pendingDescription) {
-      saveDescription(currentRuleName, pendingDescription);
-    } else if (metadataName && pendingDescription) {
-      saveDescription(metadataName, pendingDescription);
+      // Sometimes the report may flatten annotation keys onto metadata directly.
+      for (const k of annotationKeys) {
+        const v = coerceString(metadata[k]);
+        if (v) {
+          return v;
+        }
+      }
+
+      // Backwards-compatible fallback (old location).
+      return coerceString(metadata.description);
+    };
+
+    for (const r of rules) {
+      const desc = pickRuleDescription(r?.metadata);
+      if (!desc) {
+        continue;
+      }
+
+      // Store under both possible names so downstream lookups are resilient.
+      const names = new Set<string>();
+      if (typeof r?.name === 'string' && r.name.trim()) {
+        names.add(r.name.trim());
+      }
+      if (typeof r?.metadata?.name === 'string' && r.metadata.name.trim()) {
+        names.add(r.metadata.name.trim());
+      }
+      for (const n of names) {
+        out[n] = desc;
+      }
     }
 
     logger.info('Extracted rule descriptions', {
-      count: Object.keys(descriptions).length,
-      sampleRules: Object.keys(descriptions).slice(0, 5),
-      allRuleNames: Object.keys(descriptions),
-      sampleDescriptions: Object.entries(descriptions)
+      count: Object.keys(out).length,
+      sampleRules: Object.keys(out).slice(0, 5),
+      sampleDescriptions: Object.entries(out)
         .slice(0, 3)
         .map(([name, desc]) => ({
           name,
@@ -470,7 +232,7 @@ export class OrlResultConverter {
         })),
     });
 
-    return descriptions;
+    return out;
   }
 
   private static extractRuleShortNamesFromReport(
@@ -2138,7 +1900,7 @@ export class OrlResultConverter {
           benchmarkRecommendation: {
             id: ruleIdentifier,
             identifier: ruleIdentifier,
-            // Use only rule metadata.description in diagnostics when available
+            // Prefer rule metadata.annotations["gomboc-ai/description-plain"] (fallback: metadata.description)
             name: descriptionText,
             description: descriptionText,
             // Not part of the GraphQL schema; used internally for analytics attribution.

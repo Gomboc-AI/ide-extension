@@ -59,7 +59,7 @@ npm test
 
 ```bash
 # Pull the official ORL Docker image
-docker pull gombocai/orl:v1.0.0
+docker pull gombocai/orl:v1.0.9-latest
 
 # Verify image was pulled
 docker images | grep gombocai/orl
@@ -69,8 +69,8 @@ docker images | grep gombocai/orl
 
 ```bash
 # Test ORL functionality
-docker run --rm gombocai/orl:v1.0.0 --help
-docker run --rm gombocai/orl:v1.0.0 remediate --help
+docker run --rm gombocai/orl:v1.0.9-latest --help
+docker run --rm gombocai/orl:v1.0.9-latest remediate --help
 ```
 
 ## Step 4: Configure VS Code Extension
@@ -86,7 +86,6 @@ Open VS Code and configure the extension settings:
 ```json
 {
   "gomboc-vscode-extension.remediateOrlEnabled": true,
-  "gomboc-vscode-extension.orlContainerImage": "gombocai/orl:v1.0.0",
   "gomboc-vscode-extension.orlRulesServiceUrl": "https://rules.dev.gcp.gomboc.ai",
   "gomboc-vscode-extension.orlRulesServiceToken": "YOUR_TOKEN_HERE",
   "gomboc-vscode-extension.orlChannel": "orl-test-channel"
@@ -232,10 +231,10 @@ sudo systemctl restart docker  # Linux
 
 ```bash
 # Pull latest ORL image
-docker pull gombocai/orl:v1.0.0
+docker pull gombocai/orl:v1.0.9-latest
 
 # Test ORL directly
-docker run --rm -v $(pwd):/workspace gombocai/orl:v1.0.0 remediate /workspace --dry-run
+docker run --rm -v $(pwd):/workspace gombocai/orl:v1.0.9-latest remediate /workspace --dry-run
 ```
 
 #### Extension Issues
@@ -298,7 +297,7 @@ ide-extension/
 ### Extension Settings
 
 - `remediateOrlEnabled`: Enable/disable ORL integration
-- `orlContainerImage`: Docker image name (default: `gombocai/orl:v1.0.0`)
+- ORL Docker image is pinned by the extension to `gombocai/orl:v1.0.9-latest` (not configurable via settings).
 - `orlRulesServiceUrl`: Rules service endpoint
 - `orlRulesServiceToken`: Authentication token
 - `orlChannel`: Channel name for rules

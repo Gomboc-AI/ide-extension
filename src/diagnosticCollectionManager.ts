@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import path from 'path';
-import { InfrastructureTool } from './api/__generated__/graphql';
+import { LocalInfrastructureTool } from './infrastructureTool';
 
 enum COLLECTION_SCOPE_LEVEL {
   DIRECTORY = 'DIRECTORY',
@@ -8,7 +8,7 @@ enum COLLECTION_SCOPE_LEVEL {
 }
 
 const INFRASTRUCTURE_TOOL_COLLECTION_SCOPE: Record<
-  keyof typeof InfrastructureTool,
+  LocalInfrastructureTool,
   COLLECTION_SCOPE_LEVEL
 > = {
   Cloudformation: COLLECTION_SCOPE_LEVEL.FILE,
@@ -51,7 +51,7 @@ export class DiagnosticCollectionManager {
   }
 
   clearDiagnosticCollection(
-    iac: keyof typeof InfrastructureTool,
+    iac: LocalInfrastructureTool,
     updatedFileUri: vscode.Uri,
   ): void {
     const scope = INFRASTRUCTURE_TOOL_COLLECTION_SCOPE[iac];

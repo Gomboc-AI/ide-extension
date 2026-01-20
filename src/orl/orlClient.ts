@@ -1,13 +1,100 @@
 import * as vscode from 'vscode';
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { spawn } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import logger from '../utils/logger';
 import { parseOrlReport } from '../utils/orlReportParser';
 
-const execAsync = promisify(exec);
+type SpawnResult = {
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  signal: NodeJS.Signals | null;
+  timedOut: boolean;
+};
+
+/**
+ * Run a command without going through a shell.
+ * This avoids quoting/escaping pitfalls on Windows (PowerShell/cmd) and is safer cross-platform.
+ */
+async function runProcess(args: {
+  command: string;
+  commandArgs: string[];
+  cwd?: string;
+  timeoutMs?: number;
+  maxOutputBytes?: number;
+}): Promise<SpawnResult> {
+  const {
+    command,
+    commandArgs,
+    cwd,
+    timeoutMs,
+    maxOutputBytes = 10 * 1024 * 1024, // 10MB
+  } = args;
+
+  return await new Promise<SpawnResult>((resolve, reject) => {
+    let stdout = '';
+    let stderr = '';
+    let timedOut = false;
+
+    const child = spawn(command, commandArgs, {
+      cwd,
+      shell: false,
+      windowsHide: true,
+    });
+
+    const append = (prev: string, chunk: Buffer | string) => {
+      const next = prev + chunk.toString();
+      if (next.length > maxOutputBytes) {
+        return (
+          next.slice(0, maxOutputBytes) +
+          '\n...[truncated: maxOutputBytes exceeded]...\n'
+        );
+      }
+      return next;
+    };
+
+    child.stdout?.on('data', (d: Buffer) => {
+      stdout = append(stdout, d);
+    });
+    child.stderr?.on('data', (d: Buffer) => {
+      stderr = append(stderr, d);
+    });
+
+    let t: NodeJS.Timeout | undefined;
+    if (timeoutMs && timeoutMs > 0) {
+      t = setTimeout(() => {
+        timedOut = true;
+        try {
+          child.kill();
+        } catch {
+          // ignore
+        }
+      }, timeoutMs);
+    }
+
+    child.on('error', err => {
+      if (t) {
+        clearTimeout(t);
+      }
+      reject(err);
+    });
+
+    child.on('close', (code, signal) => {
+      if (t) {
+        clearTimeout(t);
+      }
+      resolve({
+        stdout,
+        stderr,
+        exitCode: code,
+        signal: signal as NodeJS.Signals | null,
+        timedOut,
+      });
+    });
+  });
+}
 
 export interface OrlConfig {
   containerImage: string;
@@ -19,10 +106,24 @@ export interface OrlConfig {
   debugPersistDiagnostics?: boolean;
 }
 
+// Pinned ORL container image. Intentionally not configurable via VS Code settings
+// to ensure consistent behavior across environments and easier support/debugging.
+const ORL_CONTAINER_IMAGE = 'gombocai/orl:v1.0.9-latest';
+
 export interface OrlResult {
   success: boolean;
   modifiedFiles: { [filePath: string]: string };
   report?: string;
+  /**
+   * The ORL process exit code, when available.
+   * Proposed semantics (client-facing):
+   * - 0: success
+   * - 1: recoverable failure (e.g., some rules failed to load but scan continued)
+   * - 2: unrecoverable failure
+   *
+   * Note: ORL may not yet implement these semantics consistently; we still surface the raw code.
+   */
+  exitCode?: number;
   error?: string;
 }
 
@@ -337,202 +438,122 @@ export class OrlClient {
       await this.pullRulesUsingOrl(rulesDir);
 
       // Step 2: Execute ORL remediation with pulled rules
-      const dockerCommand = this.buildDockerCommand(
+      const dockerArgs = this.buildDockerArgs(tempDir, language, rulesDir);
+      logger.info('Executing ORL via Docker', {
+        command: 'docker',
+        args: dockerArgs,
+      });
+
+      const execResult = await runProcess({
+        command: 'docker',
+        commandArgs: dockerArgs,
+        timeoutMs: 90000, // 90 second timeout - hooks add overhead but shouldn't take this long
+        maxOutputBytes: 10 * 1024 * 1024,
+        cwd: workspacePath,
+      });
+
+      const diagnostics = await this.readDiagnostics(tempDir);
+      const reportFile = await this.readReportFile(tempDir);
+      const reportText = reportFile || execResult.stdout;
+
+      const changedRelPaths = reportText
+        ? this.extractChangedRelativePathsFromReport(reportText)
+        : [];
+      const modifiedFiles = await this.readModifiedFilesFromTemp(tempDir, {
+        onlyRelativePaths: changedRelPaths.length ? changedRelPaths : undefined,
+      });
+
+      await this.persistDiagnosticsArtifacts(
+        workspacePath,
         tempDir,
-        language,
-        rulesDir,
+        reportText,
       );
-      logger.info('Executing Docker command', { command: dockerCommand });
 
-      try {
-        const { stdout, stderr } = await execAsync(dockerCommand, {
-          timeout: 90000, // 90 second timeout - hooks add overhead but shouldn't take this long
-          maxBuffer: 10 * 1024 * 1024, // 10MB buffer (default is 1MB, hooks produce more output)
-          cwd: workspacePath,
-        });
-
-        if (stderr && !stderr.includes('WARN')) {
-          logger.warn('ORL execution warnings', { stderr });
-        }
-
-        // Attempt to read aggregated diagnostics generated by hooks
-        const diagnostics = await this.readDiagnostics(tempDir);
-        const reportFile = await this.readReportFile(tempDir);
-        const reportText = reportFile || stdout;
-
-        // Read only changed files when possible (avoid diffing entire directories).
-        const changedRelPaths =
-          this.extractChangedRelativePathsFromReport(reportText);
-        const modifiedFiles = await this.readModifiedFilesFromTemp(tempDir, {
-          onlyRelativePaths: changedRelPaths.length
-            ? changedRelPaths
-            : undefined,
-        });
-
-        // Persist diagnostics for debugging (best-effort) before cleanup
-        await this.persistDiagnosticsArtifacts(
-          workspacePath,
+      if (!this.config.debugKeepTemp) {
+        await fs.promises.rm(tempDir, { recursive: true, force: true });
+      } else {
+        logger.warn('Debug: preserving .orl-temp after remediation', {
           tempDir,
-          reportText,
-        );
-
-        // Clean up temp directory
-        if (!this.config.debugKeepTemp) {
-          await fs.promises.rm(tempDir, { recursive: true, force: true });
-        } else {
-          logger.warn('Debug: preserving .orl-temp after remediation', {
-            tempDir,
-          });
-        }
-
-        logger.info('ORL remediation completed', {
-          filesModified: Object.keys(modifiedFiles).length,
         });
-
-        return {
-          success: true,
-          modifiedFiles,
-          report: reportFile || stdout,
-          // @ts-ignore add diagnostics for downstream usage
-          diagnostics,
-        };
-      } catch (error: any) {
-        // Handle SIGPIPE - if process was killed but files might have been modified
-        if (error.signal === 'SIGPIPE' || error.signal === 'SIGTERM') {
-          logger.warn(
-            'ORL process was interrupted (SIGPIPE/SIGTERM), checking for modified files',
-            {
-              signal: error.signal,
-            },
-          );
-
-          // Try to read modified files anyway - ORL might have completed before the pipe closed
-          const diagnostics = await this.readDiagnostics(tempDir);
-          const reportFile = await this.readReportFile(tempDir);
-          const reportText = reportFile || error.stdout;
-          const changedRelPaths =
-            this.extractChangedRelativePathsFromReport(reportText);
-          const modifiedFiles = await this.readModifiedFilesFromTemp(tempDir, {
-            onlyRelativePaths: changedRelPaths.length
-              ? changedRelPaths
-              : undefined,
-          });
-
-          await this.persistDiagnosticsArtifacts(
-            workspacePath,
-            tempDir,
-            reportText,
-          );
-
-          // If we got some results, treat it as success
-          if (Object.keys(modifiedFiles).length > 0) {
-            logger.info(
-              'ORL remediation completed despite signal interruption',
-              {
-                filesModified: Object.keys(modifiedFiles).length,
-              },
-            );
-
-            // Clean up temp directory
-            if (!this.config.debugKeepTemp) {
-              await fs.promises.rm(tempDir, { recursive: true, force: true });
-            } else {
-              logger.warn('Debug: preserving .orl-temp after remediation', {
-                tempDir,
-              });
-            }
-
-            return {
-              success: true,
-              modifiedFiles,
-              report: reportFile || error.stdout || '',
-              // @ts-ignore add diagnostics for downstream usage
-              diagnostics,
-            };
-          }
-
-          // No files modified, treat as failure
-          await fs.promises.rm(tempDir, { recursive: true, force: true });
-          throw new Error(
-            `ORL process was interrupted (${error.signal}). This may indicate the process was killed due to timeout or output buffer overflow.`,
-          );
-        }
-
-        // ORL non-zero exit codes semantics:
-        // - code 1: fixes < findings (partial remediation) -> treat as success
-        // - code 2: violations found (legacy behavior)     -> treat as success
-        if ((error.code === 1 || error.code === 2) && error.stdout) {
-          logger.info('ORL found violations (exit code 2)', {
-            stdout: error.stdout,
-            stderr: error.stderr,
-          });
-
-          // Read modified files directly from temp directory (non-dry-run mode)
-          // Attempt to read aggregated diagnostics generated by hooks
-          const diagnostics = await this.readDiagnostics(tempDir);
-          const reportFile = await this.readReportFile(tempDir);
-          const reportText = reportFile || error.stdout;
-          const changedRelPaths =
-            this.extractChangedRelativePathsFromReport(reportText);
-          const modifiedFiles = await this.readModifiedFilesFromTemp(tempDir, {
-            onlyRelativePaths: changedRelPaths.length
-              ? changedRelPaths
-              : undefined,
-          });
-
-          await this.persistDiagnosticsArtifacts(
-            workspacePath,
-            tempDir,
-            reportText,
-          );
-
-          // Clean up temp directory
-          if (!this.config.debugKeepTemp) {
-            await fs.promises.rm(tempDir, { recursive: true, force: true });
-          } else {
-            logger.warn('Debug: preserving .orl-temp after remediation', {
-              tempDir,
-            });
-          }
-
-          logger.info(
-            'ORL remediation completed with non-zero exit (expected)',
-            {
-              filesModified: Object.keys(modifiedFiles).length,
-              exitCode: error.code,
-            },
-          );
-
-          return {
-            success: true,
-            modifiedFiles,
-            report: reportFile || error.stdout,
-            // @ts-ignore add diagnostics for downstream usage
-            diagnostics,
-          };
-        }
-
-        // For other errors, clean up and rethrow
-        const reportFile = await this.readReportFile(tempDir);
-        await this.persistDiagnosticsArtifacts(
-          workspacePath,
-          tempDir,
-          reportFile || error.stdout,
-        );
-        if (!this.config.debugKeepTemp) {
-          await fs.promises.rm(tempDir, { recursive: true, force: true });
-        } else {
-          logger.warn('Debug: preserving .orl-temp after remediation', {
-            tempDir,
-          });
-        }
-        throw error;
       }
+
+      const exitCode =
+        typeof execResult.exitCode === 'number'
+          ? execResult.exitCode
+          : undefined;
+
+      // Treat ORL exit codes 0/1/2 as non-fatal for scan execution; anything else is fatal.
+      const nonFatal = exitCode === 0 || exitCode === 1 || exitCode === 2;
+
+      const looksLikeRuleLoadFailure = (text: string): boolean => {
+        const s = (text || '').toLowerCase();
+        if (!s) {
+          return false;
+        }
+        return (
+          s.includes('failed to load rule') ||
+          s.includes('error loading rule') ||
+          s.includes('failed to parse rule') ||
+          s.includes('failed to parse ruleset') ||
+          s.includes('failed to load ruleset') ||
+          (s.includes('ruleset') &&
+            s.includes('schema') &&
+            s.includes('error')) ||
+          (s.includes('yaml') && s.includes('error') && s.includes('rules')) ||
+          (s.includes('invalid') && s.includes('ruleset')) ||
+          (s.includes('could not load') && s.includes('rule'))
+        );
+      };
+
+      const ruleLoadFailure =
+        exitCode === 1 && looksLikeRuleLoadFailure(execResult.stderr);
+
+      if (execResult.timedOut) {
+        logger.error('ORL docker process timed out', {
+          timeoutMs: 90000,
+          signal: execResult.signal,
+        });
+      } else if (ruleLoadFailure) {
+        logger.warn(
+          'ORL exited with code 1 due to rule load error(s); continuing scan with available results',
+          { exitCode, stderrPreview: execResult.stderr.slice(0, 2000) },
+        );
+      } else if (exitCode && exitCode !== 0) {
+        logger.info('ORL completed with non-zero exit (continuing)', {
+          exitCode,
+        });
+      }
+
+      if (!nonFatal || execResult.timedOut) {
+        return {
+          success: false,
+          modifiedFiles: {},
+          exitCode: 2,
+          error: execResult.timedOut
+            ? 'ORL execution timed out'
+            : `ORL execution failed (exit code ${exitCode ?? 'unknown'})`,
+        };
+      }
+
+      return {
+        success: true,
+        modifiedFiles,
+        report: reportText,
+        exitCode: exitCode ?? 0,
+        // Surface recoverable rule-load failures for downstream reporting without blocking the scan.
+        error: ruleLoadFailure
+          ? `ORL recoverable failure: one or more rules failed to load (exit code ${exitCode}). See logs for details.`
+          : undefined,
+        // @ts-ignore add diagnostics for downstream usage
+        diagnostics,
+      };
     } catch (error) {
       logger.error('ORL remediation failed', { error });
       return {
         success: false,
         modifiedFiles: {},
+        exitCode:
+          typeof (error as any)?.code === 'number' ? (error as any).code : 2,
         error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
@@ -604,28 +625,39 @@ export class OrlClient {
 
     // reuse ORL's rules pull command
     // Note: We don't force --platform to allow Docker to use native architecture
-    const commandParts = ['docker run --rm'];
-    commandParts.push(
-      `-v '${rulesDir}:/output'`,
-      `-e RULE_SERVICE_TOKEN='${rulesServiceToken}'`,
-    );
-    if (opts?.searchQuery) {
-      commandParts.push(
-        `${this.config.containerImage} rules pull --url='${rulesServiceUrl}' --out=/output --search='${opts.searchQuery}'`,
-      );
-    } else {
-      commandParts.push(
-        `${this.config.containerImage} rules pull --url='${rulesServiceUrl}' --out=/output --channel='${channel}'`,
-      );
-    }
-    const pullCommand = commandParts.join(' \\\n      ');
+    const dockerArgs: string[] = [
+      'run',
+      '--rm',
+      '-v',
+      `${rulesDir}:/output`,
+      '-e',
+      `RULE_SERVICE_TOKEN=${rulesServiceToken}`,
+      this.config.containerImage,
+      'rules',
+      'pull',
+      `--url=${rulesServiceUrl}`,
+      '--out=/output',
+      opts?.searchQuery
+        ? `--search=${opts.searchQuery}`
+        : `--channel=${channel}`,
+    ];
 
-    logger.info('Pulling rules using ORL', { command: pullCommand });
+    logger.info('Pulling rules using ORL', {
+      command: 'docker',
+      args: dockerArgs,
+    });
 
     try {
-      const result = await execAsync(pullCommand, {
-        maxBuffer: 10 * 1024 * 1024, // 10MB buffer for verbose output
+      const result = await runProcess({
+        command: 'docker',
+        commandArgs: dockerArgs,
+        maxOutputBytes: 10 * 1024 * 1024,
       });
+      if (result.exitCode !== 0) {
+        throw new Error(
+          `docker exited with code ${result.exitCode ?? 'unknown'} (signal=${result.signal ?? 'none'}${result.timedOut ? ', timedOut' : ''})`,
+        );
+      }
       logger.info('Rules pulled successfully', {
         stdout: result.stdout,
         stderr: result.stderr,
@@ -687,38 +719,39 @@ export class OrlClient {
   /**
    * Build Docker command for ORL execution
    */
-  private buildDockerCommand(
+  private buildDockerArgs(
     workspacePath: string,
     language?: string,
     rulesDir?: string,
-  ): string {
+  ): string[] {
     const { containerImage } = this.config;
 
     // Note: We don't force --platform to allow Docker to use native architecture
     // This avoids emulation overhead on ARM Macs if the image supports ARM64
     // Docker Desktop on Windows automatically handles path conversion (C:\Users\... -> /c/Users/...)
-    const command: string[] = ['docker run --rm'];
-    command.push(
-      `-v '${workspacePath}:/workspace'`,
+    const args: string[] = [
+      'run',
+      '--rm',
+      '-v',
+      `${workspacePath}:/workspace`,
       containerImage,
-      'remediate /workspace --hooks-dir /workspace/.orl/hooks',
-    );
+      'remediate',
+      '/workspace',
+      '--hooks-dir',
+      '/workspace/.orl/hooks',
+    ];
 
-    // Add rulespace if rules directory exists
     if (rulesDir) {
-      command[command.length - 1] =
-        'remediate /workspace --rulespace /workspace/rules --hooks-dir /workspace/.orl/hooks';
+      // rulesDir is within the mounted workspacePath, so we reference it at /workspace/rules in-container.
+      args.push('--rulespace', '/workspace/rules');
     }
-
-    // Add language if specified
     if (language) {
-      command[command.length - 1] += ` --language ${language}`;
+      args.push('--language', language);
     }
 
     // Always write the report to a file so we can read/persist it reliably (stdout may be empty/truncated).
-    command[command.length - 1] += ' --out /workspace/.orl/report.yaml';
-
-    return command.join(' ');
+    args.push('--out', '/workspace/.orl/report.yaml');
+    return args;
   }
 
   /**
@@ -1011,16 +1044,32 @@ export class OrlClient {
   async testConnection(): Promise<boolean> {
     try {
       // Note: We don't force --platform to allow Docker to use native architecture
-      const testCommandParts: string[] = ['docker run --rm'];
-      testCommandParts.push(
-        `-e RULE_SERVICE_URL="${this.config.rulesServiceUrl}"`,
-        `-e RULE_SERVICE_TOKEN="${this.config.rulesServiceToken}"`,
+      const dockerArgs: string[] = [
+        'run',
+        '--rm',
+        '-e',
+        `RULE_SERVICE_URL=${this.config.rulesServiceUrl}`,
+        '-e',
+        `RULE_SERVICE_TOKEN=${this.config.rulesServiceToken}`,
         this.config.containerImage,
-        'rules list --help',
-      );
-      const testCommand = testCommandParts.join(' ');
+        'rules',
+        'list',
+        '--help',
+      ];
 
-      await execAsync(testCommand, { timeout: 30000 });
+      const result = await runProcess({
+        command: 'docker',
+        commandArgs: dockerArgs,
+        timeoutMs: 30000,
+        maxOutputBytes: 2 * 1024 * 1024,
+      });
+      if (result.exitCode !== 0) {
+        logger.warn('ORL connection test returned non-zero exit', {
+          exitCode: result.exitCode,
+          stderr: result.stderr,
+        });
+        return false;
+      }
       return true;
     } catch (error) {
       logger.error('ORL connection test failed', { error });
@@ -1110,28 +1159,23 @@ export class OrlClient {
       }
 
       // Execute ORL remediation with pulled rules.
-      const dockerCommand = this.buildDockerCommand(
-        tempDir,
-        language,
-        rulesDir,
-      );
-      logger.info('Executing Docker command (single-rule)', {
-        command: dockerCommand,
+      const dockerArgs = this.buildDockerArgs(tempDir, language, rulesDir);
+      logger.info('Executing ORL via Docker (single-rule)', {
+        command: 'docker',
+        args: dockerArgs,
       });
 
-      const { stdout, stderr } = await execAsync(dockerCommand, {
-        timeout: 90000,
-        maxBuffer: 10 * 1024 * 1024,
+      const execResult = await runProcess({
+        command: 'docker',
+        commandArgs: dockerArgs,
+        timeoutMs: 90000,
+        maxOutputBytes: 10 * 1024 * 1024,
         cwd: workspacePath,
       });
 
-      if (stderr && !stderr.includes('WARN')) {
-        logger.warn('ORL execution warnings (single-rule)', { stderr });
-      }
-
       const diagnostics = await this.readDiagnostics(tempDir);
       const reportFile = await this.readReportFile(tempDir);
-      const reportText = reportFile || stdout;
+      const reportText = reportFile || execResult.stdout;
       const changedRelPaths =
         this.extractChangedRelativePathsFromReport(reportText);
       const modifiedFiles = await this.readModifiedFilesFromTemp(tempDir, {
@@ -1146,15 +1190,34 @@ export class OrlClient {
 
       await fs.promises.rm(tempDir, { recursive: true, force: true });
 
+      const exitCode =
+        typeof execResult.exitCode === 'number'
+          ? execResult.exitCode
+          : undefined;
+      const nonFatal = exitCode === 0 || exitCode === 1 || exitCode === 2;
+
       logger.info('ORL single-rule remediation completed', {
         ruleName,
         filesModified: Object.keys(modifiedFiles).length,
+        exitCode,
       });
+
+      if (!nonFatal || execResult.timedOut) {
+        return {
+          success: false,
+          modifiedFiles: {},
+          exitCode: 2,
+          error: execResult.timedOut
+            ? 'ORL execution timed out'
+            : `ORL execution failed (exit code ${exitCode ?? 'unknown'})`,
+        };
+      }
 
       return {
         success: true,
         modifiedFiles,
-        report: reportFile || stdout,
+        report: reportText,
+        exitCode: exitCode ?? 0,
         // @ts-ignore add diagnostics for downstream usage
         diagnostics,
       };
@@ -1166,6 +1229,8 @@ export class OrlClient {
       return {
         success: false,
         modifiedFiles: {},
+        exitCode:
+          typeof (error as any)?.code === 'number' ? (error as any).code : 2,
         error:
           error instanceof Error
             ? error.message
@@ -1203,7 +1268,7 @@ export function createOrlClient(extensionPath?: string): OrlClient {
     '';
 
   return new OrlClient({
-    containerImage: config.get('orlContainerImage') || 'gomboc/orl:latest',
+    containerImage: ORL_CONTAINER_IMAGE,
     rulesServiceUrl:
       config.get('orlRulesServiceUrl') || 'https://rules.app.gomboc.ai',
     rulesServiceToken,

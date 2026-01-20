@@ -5,7 +5,12 @@ import settings from '../settings';
 // has to be ignored because we are compiling to commonjs and typescript complains
 // @ts-expect-error
 import { ApolloClient, createHttpLink, InMemoryCache } from '@apollo/client';
-import { HEALTH_CHECK, SECURITY_BENCHMARKS, INDIVIDUAL_FIXES } from './queries';
+import {
+  ACCOUNT_HAS_FEATURE_BOOLEAN,
+  HEALTH_CHECK,
+  INDIVIDUAL_FIXES,
+  SECURITY_BENCHMARKS,
+} from './queries';
 import {
   IndividualFixesQuery,
   IndividualFixesQueryVariables,
@@ -65,17 +70,25 @@ export type Fixes = {
 };
 
 export class CustomerApiClient {
+  private static featureBoolCache = new Map<
+    string,
+    { value: boolean; expiresAtMs: number }
+  >();
   private client;
+  private apiKey: string;
+  private customerApiUrl: string;
 
   constructor() {
     const _settings = settings();
 
     const config = vscode.workspace.getConfiguration('gomboc-vscode-extension');
-    const apiKey = config.get('apiKey');
+    const apiKey = (config.get('apiKey') as string | undefined) || '';
+    this.apiKey = apiKey;
+    this.customerApiUrl = `${_settings.CUSTOMER_API_URL}`;
     this.client = new ApolloClient({
       ssrMode: true,
       link: createHttpLink({
-        uri: `${_settings.CUSTOMER_API_URL}`,
+        uri: this.customerApiUrl,
         credentials: 'same-origin',
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -175,5 +188,63 @@ export class CustomerApiClient {
       logger.error('Scanning the scenario failed', { error });
       throw error;
     }
+  }
+
+  /**
+   * Check whether ORL processing is enabled for this user/account (server-side flag).
+   *
+   * Flag key is owned by CustomerAPI/OpenFeature. We intentionally keep this
+   * as a string constant (kebab-case) to match CustomerAPI usage.
+   *
+   * Cached in-memory for a short TTL to avoid calling CustomerAPI on every scan.
+   */
+  public async isProcessorOrlEnabled(opts?: {
+    /**
+     * Cache TTL in milliseconds (default: 5 minutes).
+     * Set to 0 to bypass cache.
+     */
+    ttlMs?: number;
+  }): Promise<boolean> {
+    const ttlMs = opts?.ttlMs ?? 5 * 60 * 1000;
+    const flagName = 'processor-orl-enabled';
+    const defaultValue = false;
+
+    const cacheKey = `${this.customerApiUrl}|${this.apiKey}|${flagName}`;
+    const now = Date.now();
+    if (ttlMs > 0) {
+      const cached = CustomerApiClient.featureBoolCache.get(cacheKey);
+      if (cached && cached.expiresAtMs > now) {
+        return cached.value;
+      }
+    }
+
+    type AccountHasFeatureBooleanData = {
+      account: { hasFeatureBoolean: boolean };
+    };
+    type AccountHasFeatureBooleanVars = {
+      name: string;
+      default: boolean;
+    };
+
+    const { data } = await this.client.query<
+      AccountHasFeatureBooleanData,
+      AccountHasFeatureBooleanVars
+    >({
+      query: ACCOUNT_HAS_FEATURE_BOOLEAN,
+      variables: {
+        name: flagName,
+        default: defaultValue,
+      },
+      fetchPolicy: 'no-cache',
+    });
+
+    const value = Boolean(data?.account?.hasFeatureBoolean);
+    if (ttlMs > 0) {
+      CustomerApiClient.featureBoolCache.set(cacheKey, {
+        value,
+        expiresAtMs: now + ttlMs,
+      });
+    }
+    return value;
   }
 }

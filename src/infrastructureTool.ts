@@ -1,14 +1,20 @@
 import * as vscode from 'vscode';
 import path from 'path';
-import { InfrastructureTool } from './api/__generated__/graphql';
 
 const TERRAFORM_EXTENSIONS = ['.tf', '.tfvars'];
 const CLOUDFORMATION_EXTENSIONS = ['.yaml', '.yml', '.json'];
 const DOCKERFILE_PREFIX = 'dockerfile';
 
+/**
+ * Local-only tooling classification used for diagnostic scoping and UX.
+ * Do NOT couple this to CustomerAPI's GraphQL `InfrastructureTool` enum — CustomerAPI
+ * may not support every local file type we want to handle (e.g. Dockerfile).
+ */
+export type LocalInfrastructureTool = 'Terraform' | 'Cloudformation' | 'Docker';
+
 export const getInfrastructureToolFromFileUri = (
   uri: vscode.Uri,
-): keyof typeof InfrastructureTool => {
+): LocalInfrastructureTool => {
   const fileName = path.basename(uri.fsPath).toLowerCase();
   if (fileName.startsWith(DOCKERFILE_PREFIX)) {
     return 'Docker';

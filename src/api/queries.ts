@@ -109,3 +109,15 @@ export const INDIVIDUAL_FIXES = gql`
     }
   }
 `;
+
+/**
+ * Feature flag evaluation (server-side via CustomerAPI/OpenFeature)
+ * We expose a generic Account.hasFeatureBoolean(name, default) and use that here.
+ */
+export const ACCOUNT_HAS_FEATURE_BOOLEAN = gql`
+  query accountHasFeatureBoolean($name: String!, $default: Boolean!) {
+    account {
+      hasFeatureBoolean(name: $name, default: $default)
+    }
+  }
+`;
