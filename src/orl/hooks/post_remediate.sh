@@ -32,11 +32,7 @@ rulesDir="$BASE/.orl/diagnostics/rules"
     case "$f" in
       */resources_*.json) continue ;;
     esac
-    # Validate JSON before including it
-    if ! jq empty "$f" 2>/dev/null; then
-      # Invalid JSON - skip this file
-      continue
-    fi
+    # Skip per-file JSON validation - we'll validate the aggregated result once at the end
     if [ $first -eq 0 ]; then printf ','; fi
     first=0
     cat "$f" 2>/dev/null || true

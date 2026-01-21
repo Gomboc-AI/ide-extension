@@ -38,16 +38,13 @@ ruleJsonTmp="$ruleJson.tmp"
 # Read modified resources if available
 modified_resources="$ruleDir/resources_modified.json"
 if [ -f "$modified_resources" ] && command -v jq >/dev/null 2>&1; then
-  # Include resource instances in the JSON
-  printf '{"ruleName":"%s","priority":%s,"files":[' "$rule_esc" "$prio" > "$ruleJsonTmp" || true
-  firstFile=1
-  
+  # Include resource instances in the JSON (single `jq` per rule; avoids per-file `jq` calls)
   if [ -n "$files_csv" ]; then
     split_files "$files_csv" | while IFS= read -r p; do
       t=$(printf '%s' "$p" | sed -e 's/^ *//' -e 's/ *$//' || echo "")
       [ -z "$t" ] && continue
-      
-      # Normalize path
+
+      # Normalize path to match keys written by other hooks
       if [ "${t#/workspace/}" != "$t" ]; then
         normalized_path="${t#/workspace/}"
       elif [ "${t#./}" != "$t" ]; then
@@ -55,19 +52,21 @@ if [ -f "$modified_resources" ] && command -v jq >/dev/null 2>&1; then
       else
         normalized_path="$t"
       fi
-      
-      if [ "$firstFile" -eq 0 ]; then printf ',' >> "$ruleJsonTmp" || true; fi
-      firstFile=0
-      
-      fileEsc=$(json_escape "$normalized_path")
-      
-      # Get resources for this file from modified_resources
-      resources_json=$(jq -r --arg file "$normalized_path" '.[$file] // []' "$modified_resources" 2>/dev/null || echo "[]")
-      
-      printf '{"path":"%s","resources":%s}' "$fileEsc" "$resources_json" >> "$ruleJsonTmp" || true
-    done
+      printf '%s\n' "$normalized_path"
+    done | jq -Rn \
+      --arg ruleName "$rule_esc" \
+      --argjson priority "$prio" \
+      --slurpfile res "$modified_resources" '
+        [inputs | select(length>0)] as $files |
+        {
+          ruleName: $ruleName,
+          priority: $priority,
+          files: ($files | map({ path: ., resources: ($res[0][.] // []) }))
+        }
+      ' > "$ruleJsonTmp" 2>/dev/null || printf '{"ruleName":"%s","priority":%s,"files":[]}\n' "$rule_esc" "$prio" > "$ruleJsonTmp"
+  else
+    printf '{"ruleName":"%s","priority":%s,"files":[]}\n' "$rule_esc" "$prio" > "$ruleJsonTmp" || true
   fi
-  printf ']}\n' >> "$ruleJsonTmp" || true
 else
   # Fallback: no resource instances, just file paths
   printf '{"ruleName":"%s","priority":%s,"files":[' "$rule_esc" "$prio" > "$ruleJsonTmp" || true

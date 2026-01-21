@@ -6,15 +6,11 @@
 # All hook scripts that source this file must define json_escape() before sourcing.
 
 # Function to extract resource content hash (for comparison)
+# NOTE: Hash calculation is disabled for performance - files aren't flushed when hooks run,
+# so hash comparison can't work effectively. Attribution uses startLine/endLine ranges instead.
 get_resource_hash() {
-  file_path="$1"
-  start_line="$2"
-  end_line="$3"
-  if [ ! -f "$file_path" ] || [ $start_line -le 0 ] || [ $end_line -lt $start_line ]; then
-    echo ""
-    return 0
-  fi
-  sed -n "${start_line},${end_line}p" "$file_path" 2>/dev/null | md5sum 2>/dev/null | cut -d' ' -f1 || echo ""
+  # Return empty hash - not used in attribution logic
+  echo ""
 }
 
 # Function to extract resource instances from a file (Terraform or Dockerfile)
@@ -126,12 +122,11 @@ extract_terraform_resources() {
       
       # If brace depth reaches 0, we've found the end of the resource
       if [ $brace_depth -le 0 ]; then
-        # Get content hash for comparison
-        content_hash=$(get_resource_hash "$file_path" "$resource_start" "$line_num")
         # Output the resource as JSON (with newline for line-by-line reading)
+        # Hash is omitted for performance - not used in attribution logic
         type_esc=$(json_escape "$resource_type")
         name_esc=$(json_escape "$resource_name")
-        printf '{"type":"%s","name":"%s","startLine":%d,"endLine":%d,"hash":"%s"}\n' "$type_esc" "$name_esc" "$resource_start" "$line_num" "$content_hash"
+        printf '{"type":"%s","name":"%s","startLine":%d,"endLine":%d,"hash":""}\n' "$type_esc" "$name_esc" "$resource_start" "$line_num"
         in_resource=0
         resource_type=""
         resource_name=""
@@ -172,10 +167,9 @@ extract_dockerfile_resources() {
         if [ $end_line -lt $last_from_line ]; then
           end_line=$last_from_line
         fi
-        content_hash=$(get_resource_hash "$file_path" "$last_from_line" "$end_line")
         type_esc=$(json_escape "docker_stage")
         name_esc=$(json_escape "${last_from_stage:-${last_from_image:-FROM}}")
-        printf '{"type":"%s","name":"%s","startLine":%d,"endLine":%d,"hash":"%s"}\n' "$type_esc" "$name_esc" "$last_from_line" "$end_line" "$content_hash"
+        printf '{"type":"%s","name":"%s","startLine":%d,"endLine":%d,"hash":""}\n' "$type_esc" "$name_esc" "$last_from_line" "$end_line"
       fi
       
       # Extract image name and optional stage name (AS alias)
@@ -196,10 +190,9 @@ extract_dockerfile_resources() {
   # Output the last FROM instruction if it exists
   if [ $last_from_line -gt 0 ]; then
     end_line=$total_lines
-    content_hash=$(get_resource_hash "$file_path" "$last_from_line" "$end_line")
     type_esc=$(json_escape "docker_stage")
     name_esc=$(json_escape "${last_from_stage:-${last_from_image:-FROM}}")
-    printf '{"type":"%s","name":"%s","startLine":%d,"endLine":%d,"hash":"%s"}\n' "$type_esc" "$name_esc" "$last_from_line" "$end_line" "$content_hash"
+    printf '{"type":"%s","name":"%s","startLine":%d,"endLine":%d,"hash":""}\n' "$type_esc" "$name_esc" "$last_from_line" "$end_line"
   fi
 }
 
