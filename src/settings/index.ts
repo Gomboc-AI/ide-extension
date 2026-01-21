@@ -1,19 +1,30 @@
 import * as vscode from 'vscode';
+import {
+  DEFAULTS,
+  getStringSetting,
+  getBooleanSetting,
+} from '../utils/configDefaults';
 
 const settings = () => {
-  const customerApiProdUrl = 'https://api.app.gomboc.ai/graphql';
-
   const config = vscode.workspace.getConfiguration('gomboc-vscode-extension');
-  const useCustomEndpoint = config.get('useCustomEndpoint');
+  const useCustomEndpoint = getBooleanSetting(
+    config,
+    'useCustomEndpoint',
+    false,
+  );
   if (useCustomEndpoint) {
-    const custom = config.get('serviceEndpoint');
+    const custom = getStringSetting(
+      config,
+      'serviceEndpoint',
+      DEFAULTS.customerApiUrl,
+    );
     return {
       CUSTOMER_API_URL: custom,
     };
   }
 
   return {
-    CUSTOMER_API_URL: customerApiProdUrl,
+    CUSTOMER_API_URL: DEFAULTS.customerApiUrl,
   };
 
   // return new InvalidEnvironment(parsedEnvs.error.message);

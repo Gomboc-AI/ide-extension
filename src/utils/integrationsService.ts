@@ -7,6 +7,11 @@ import { randomUUID } from 'crypto';
 import logger from './logger';
 import { parseOrlReport } from './orlReportParser';
 import { OrlResult } from '../orl/orlResultConverter';
+import {
+  DEFAULTS,
+  getBooleanSetting,
+  getStringSetting,
+} from './configDefaults';
 
 const execAsync = promisify(exec);
 
@@ -85,9 +90,11 @@ function getIntegrationsConfig(): {
 } {
   const config = vscode.workspace.getConfiguration('gomboc-vscode-extension');
   return {
-    integrationsServiceUrl: config.get('integrationsServiceUrl') as
-      | string
-      | undefined,
+    integrationsServiceUrl: getStringSetting(
+      config,
+      'integrationsServiceUrl',
+      DEFAULTS.integrationsServiceUrl,
+    ),
     apiKey: config.get('apiKey') as string | undefined,
   };
 }
@@ -98,10 +105,12 @@ function getFixAppliedAnalyticsConfig(): {
 } {
   const config = vscode.workspace.getConfiguration('gomboc-vscode-extension');
   return {
-    enabled: (config.get('orlFixAppliedAnalyticsEnabled') as boolean) || false,
-    endpointPath:
-      (config.get('integrationsFixAppliedEndpointPath') as string) ||
-      '/reporting/orl-fix-applied',
+    enabled: getBooleanSetting(config, 'orlFixAppliedAnalyticsEnabled', true),
+    endpointPath: getStringSetting(
+      config,
+      'integrationsFixAppliedEndpointPath',
+      DEFAULTS.integrationsFixAppliedEndpointPath,
+    ),
   };
 }
 
