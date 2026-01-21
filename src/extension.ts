@@ -175,7 +175,9 @@ const onConfigChange = (
     disposables.length = 0;
 
     for (const command of commands) {
-      disposables.push(vscode.commands.registerCommand(command.name, command.handler));
+      disposables.push(
+        vscode.commands.registerCommand(command.name, command.handler),
+      );
     }
   });
 };
