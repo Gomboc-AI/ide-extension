@@ -155,12 +155,27 @@ const onConfigChange = (
   disposables: vscode.Disposable[],
   commands: { name: string; handler: () => Promise<void> }[],
 ) => {
-  return vscode.workspace.onDidChangeConfiguration(() => {
-    for (const disposable of disposables) {
-      disposable.dispose();
+  return vscode.workspace.onDidChangeConfiguration(e => {
+    // Only react to our extension's settings.
+    if (!e.affectsConfiguration('gomboc-vscode-extension')) {
+      return;
     }
+
+    // Dispose existing command registrations.
+    for (const disposable of disposables) {
+      try {
+        disposable.dispose();
+      } catch {
+        // ignore
+      }
+    }
+
+    // IMPORTANT: clear and replace the list so subsequent config changes
+    // dispose the *latest* registrations (prevents "command already exists").
+    disposables.length = 0;
+
     for (const command of commands) {
-      vscode.commands.registerCommand(command.name, command.handler);
+      disposables.push(vscode.commands.registerCommand(command.name, command.handler));
     }
   });
 };
