@@ -400,10 +400,12 @@ export class ScanResultsProvider {
     for (const file of updatedFiles) {
       const uri = vscode.Uri.file(file);
       const infrastructureTool = getInfrastructureToolFromFileUri(uri);
-      this.diagnosticCollectionManager.clearDiagnosticCollection(
-        infrastructureTool,
-        uri,
-      );
+      if (infrastructureTool) {
+        this.diagnosticCollectionManager.clearDiagnosticCollection(
+          infrastructureTool,
+          uri,
+        );
+      }
     }
     if (ScanResultsProvider.codeActionDisposable) {
       ScanResultsProvider.codeActionDisposable.dispose();
@@ -488,7 +490,9 @@ export class ScanResultsProvider {
         await vscode.window.activeTextEditor?.document.save();
       }
       // once we apply a remediation we have to dispose and clear everything and re-run
-      this.diagnosticCollectionManager.clearDiagnosticCollection(iac, file);
+      if (iac) {
+        this.diagnosticCollectionManager.clearDiagnosticCollection(iac, file);
+      }
       if (ScanResultsProvider.codeActionDisposable) {
         ScanResultsProvider.codeActionDisposable.dispose();
       }
