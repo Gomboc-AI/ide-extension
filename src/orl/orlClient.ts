@@ -5,6 +5,11 @@ import * as fs from 'fs';
 import * as os from 'os';
 import logger from '../utils/logger';
 import { parseOrlReport } from '../utils/orlReportParser';
+import {
+  DEFAULTS,
+  getBooleanSetting,
+  getStringSetting,
+} from '../utils/configDefaults';
 
 type SpawnResult = {
   stdout: string;
@@ -1269,15 +1274,23 @@ export function createOrlClient(extensionPath?: string): OrlClient {
 
   return new OrlClient({
     containerImage: ORL_CONTAINER_IMAGE,
-    rulesServiceUrl:
-      config.get('orlRulesServiceUrl') || 'https://rules.app.gomboc.ai',
+    rulesServiceUrl: getStringSetting(
+      config,
+      'orlRulesServiceUrl',
+      DEFAULTS.orlRulesServiceUrl,
+    ),
     rulesServiceToken,
     channel: config.get('orlChannel') || 'default',
     extensionPath,
-    debugKeepTemp:
-      (config.get('orlDebugKeepTemp') as boolean | undefined) || false,
-    debugPersistDiagnostics:
-      (config.get('orlDebugPersistDiagnostics') as boolean | undefined) ??
-      false,
+    debugKeepTemp: getBooleanSetting(
+      config,
+      'orlDebugKeepTemp',
+      DEFAULTS.orlDebugKeepTemp,
+    ),
+    debugPersistDiagnostics: getBooleanSetting(
+      config,
+      'orlDebugPersistDiagnostics',
+      DEFAULTS.orlDebugPersistDiagnostics,
+    ),
   });
 }
