@@ -138,6 +138,11 @@
             ],
             "default": "error",
             "description": "Controls extension logging verbosity. Use 'debug' only when diagnosing issues (it can be very noisy)."
+          },
+          "gomboc-vscode-extension.profilingEnabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Emit structured timing logs to help diagnose scan performance. Filter logs by the marker string GOMBOC_PROFILING::V1::TIMING_EVENT."
           }
         }
       }
