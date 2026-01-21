@@ -66,6 +66,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const onEdit = vscode.workspace.onDidChangeTextDocument(({ document }) => {
     const currentDocumentIac = getInfrastructureToolFromFileUri(document.uri);
+    if (!currentDocumentIac) {
+      return;
+    }
     diagnosticCollectionManager.clearDiagnosticCollection(
       currentDocumentIac,
       document.uri,

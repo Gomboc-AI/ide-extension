@@ -14,18 +14,24 @@ export type LocalInfrastructureTool = 'Terraform' | 'Cloudformation' | 'Docker';
 
 export const getInfrastructureToolFromFileUri = (
   uri: vscode.Uri,
-): LocalInfrastructureTool => {
+): LocalInfrastructureTool | undefined => {
+  // Only classify on-disk files. VS Code fires document events for non-file schemes too
+  // (settings, virtual docs, etc.) and those should not crash the extension host.
+  if (uri.scheme !== 'file') {
+    return undefined;
+  }
+
   const fileName = path.basename(uri.fsPath).toLowerCase();
   if (fileName.startsWith(DOCKERFILE_PREFIX)) {
     return 'Docker';
   }
 
-  const extName = path.extname(uri.fsPath);
+  const extName = path.extname(uri.fsPath).toLowerCase();
   if (TERRAFORM_EXTENSIONS.includes(extName)) {
     return 'Terraform';
   }
   if (CLOUDFORMATION_EXTENSIONS.includes(extName)) {
     return 'Cloudformation';
   }
-  throw new Error('Unable to determine the infrastructure language');
+  return undefined;
 };
