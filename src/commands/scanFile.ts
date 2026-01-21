@@ -20,6 +20,7 @@ import {
   sendErrorToIntegrations,
 } from '../utils/integrationsService';
 import { setScanStatus } from '../utils/scanStatus';
+import { createProfiler } from '../utils/profiler';
 
 /**
  * ORL scans are executed by spawning a docker container (`orlClient.remediate`).
@@ -123,6 +124,13 @@ async function scanWithOrl(
   let language: string | undefined;
 
   try {
+    const scanId = `scanWithOrl:${Date.now()}:${Math.random()
+      .toString(16)
+      .slice(2, 10)}`;
+    const prof = createProfiler({
+      scanId,
+      component: 'scanFile.scanWithOrl',
+    });
     logger.info('ORL scan starting');
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
@@ -170,6 +178,10 @@ async function scanWithOrl(
     // Pass extension path so we know exactly where hooks are
     const orlClient = createOrlClient(context.extensionPath);
     const result = await orlClient.remediate(workspacePath, language);
+    prof.mark('orlClient.remediate', {
+      success: result.success,
+      exitCode: result.exitCode,
+    });
 
     // If ORL signaled a recoverable failure (exit code 1), keep going but log loudly.
     // This commonly happens when some rules fail to load/parse but other rules still run.
@@ -205,6 +217,10 @@ async function scanWithOrl(
         filetype,
         filePath,
       );
+      prof.mark('OrlResultConverter.convertToScanResponse', {
+        individualFixes: scanResponse.individualFixes?.length ?? 0,
+        groupedFixes: scanResponse.groupedFixes?.length ?? 0,
+      });
     } catch (error) {
       // Conversion error (500) - report parsing failed, file diff analysis failed, etc.
       const errorMessage =
@@ -233,7 +249,9 @@ async function scanWithOrl(
       modifiedFiles: Object.keys(result.modifiedFiles),
     });
     scanResultsProvider.generateComments(scanResponse);
+    prof.mark('scanResultsProvider.generateComments');
     scanResultsProvider.createDiagnostic();
+    prof.mark('scanResultsProvider.createDiagnostic');
 
     // Send ORL report to integrations service (non-blocking)
     // This runs asynchronously and won't break the remediation workflow if it fails
@@ -244,6 +262,7 @@ async function scanWithOrl(
         logger.debug('ORL report submission error handled', { error });
       },
     );
+    prof.end({ success: true });
   } catch (error) {
     // General catch-all for unexpected errors (500)
     const errorMessage =

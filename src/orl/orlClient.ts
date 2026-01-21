@@ -10,6 +10,7 @@ import {
   getBooleanSetting,
   getStringSetting,
 } from '../utils/configDefaults';
+import { createProfiler } from '../utils/profiler';
 
 type SpawnResult = {
   stdout: string;
@@ -17,6 +18,14 @@ type SpawnResult = {
   exitCode: number | null;
   signal: NodeJS.Signals | null;
   timedOut: boolean;
+};
+
+type HookManifestEvent = {
+  event: string;
+  time?: string;
+  ruleName?: string;
+  priority?: number;
+  rulesExecuted?: number;
 };
 
 /**
@@ -348,6 +357,120 @@ export class OrlClient {
     }
   }
 
+  private async readHookManifestEvents(
+    tempDir: string,
+  ): Promise<HookManifestEvent[]> {
+    const manifestPath = path.join(
+      tempDir,
+      '.orl',
+      'diagnostics',
+      'manifest.jsonl',
+    );
+    try {
+      await fs.promises.access(manifestPath, fs.constants.F_OK);
+      const raw = await fs.promises.readFile(manifestPath, 'utf8');
+      const out: HookManifestEvent[] = [];
+      for (const line of raw.split('\n')) {
+        const t = line.trim();
+        if (!t) {
+          continue;
+        }
+        try {
+          const parsed = JSON.parse(t) as HookManifestEvent;
+          if (
+            parsed &&
+            typeof parsed === 'object' &&
+            typeof parsed.event === 'string'
+          ) {
+            out.push(parsed);
+          }
+        } catch {
+          // ignore malformed lines
+        }
+      }
+      return out;
+    } catch {
+      return [];
+    }
+  }
+
+  private summarizeHookTimings(events: HookManifestEvent[]): {
+    overallHooksMs?: number;
+    rulesExecuted?: number;
+    slowestRules?: Array<{ ruleName: string; ms: number; priority?: number }>;
+  } {
+    if (!Array.isArray(events) || events.length === 0) {
+      return {};
+    }
+
+    const parseTimeMs = (t?: string): number | undefined => {
+      if (!t || typeof t !== 'string') {
+        return undefined;
+      }
+      const ms = Date.parse(t);
+      return Number.isFinite(ms) ? ms : undefined;
+    };
+
+    const pre = events.find(e => e.event === 'pre_remediate');
+    const post = events.find(e => e.event === 'post_remediate');
+    const preMs = parseTimeMs(pre?.time);
+    const postMs = parseTimeMs(post?.time);
+
+    // Per-rule durations using pre/post events.
+    const starts = new Map<string, number[]>();
+    const priorities = new Map<string, number>();
+    const durations: Array<{
+      ruleName: string;
+      ms: number;
+      priority?: number;
+    }> = [];
+
+    for (const e of events) {
+      if (typeof e.ruleName === 'string' && typeof e.priority === 'number') {
+        priorities.set(e.ruleName, e.priority);
+      }
+      if (e.event === 'pre_remediate_rule' && typeof e.ruleName === 'string') {
+        const ms = parseTimeMs(e.time);
+        if (ms !== undefined) {
+          const arr = starts.get(e.ruleName) || [];
+          arr.push(ms);
+          starts.set(e.ruleName, arr);
+        }
+      }
+      if (e.event === 'post_remediate_rule' && typeof e.ruleName === 'string') {
+        const endMs = parseTimeMs(e.time);
+        if (endMs !== undefined) {
+          const arr = starts.get(e.ruleName) || [];
+          const startMs = arr.shift();
+          if (startMs !== undefined) {
+            starts.set(e.ruleName, arr);
+            const ms = Math.max(0, endMs - startMs);
+            durations.push({
+              ruleName: e.ruleName,
+              ms,
+              priority: priorities.get(e.ruleName),
+            });
+          }
+        }
+      }
+    }
+
+    durations.sort((a, b) => b.ms - a.ms);
+    const slowestRules = durations.slice(0, 10);
+
+    return {
+      overallHooksMs:
+        preMs !== undefined && postMs !== undefined
+          ? postMs - preMs
+          : undefined,
+      rulesExecuted:
+        typeof post?.rulesExecuted === 'number'
+          ? post.rulesExecuted
+          : undefined,
+      slowestRules: slowestRules.length ? slowestRules : undefined,
+    };
+  }
+
   private async persistDiagnosticsArtifacts(
     workspacePath: string,
     tempDir: string,
@@ -424,23 +547,35 @@ export class OrlClient {
     language?: string,
   ): Promise<OrlResult> {
     try {
+      const scanId = `orl-scan:${Date.now()}:${Math.random()
+        .toString(16)
+        .slice(2, 10)}`;
+      const prof = createProfiler({
+        scanId,
+        component: 'orlClient.remediate',
+        baseFields: { workspacePath, language: language ?? '' },
+      });
       logger.info('Starting ORL remediation', { workspacePath });
 
       // Create a temporary directory for ORL execution
       const tempDir = path.join(workspacePath, '.orl-temp');
       await fs.promises.mkdir(tempDir, { recursive: true });
+      prof.mark('mkdirTemp');
 
       // Copy workspace files to temp directory
       await this.copyWorkspaceFiles(workspacePath, tempDir);
+      prof.mark('copyWorkspaceFiles');
 
       // Write ORL hook scripts into temp workspace so they are available inside the container
       await this.writeHooksToTempWorkspace(tempDir);
+      prof.mark('writeHooksToTempWorkspace');
 
       // Step 1: Pull rules using ORL's built-in rules pull command
       const rulesDir = path.join(tempDir, 'rules');
       await fs.promises.mkdir(rulesDir, { recursive: true });
 
       await this.pullRulesUsingOrl(rulesDir);
+      prof.mark('pullRulesUsingOrl');
 
       // Step 2: Execute ORL remediation with pulled rules
       const dockerArgs = this.buildDockerArgs(tempDir, language, rulesDir);
@@ -456,16 +591,34 @@ export class OrlClient {
         maxOutputBytes: 10 * 1024 * 1024,
         cwd: workspacePath,
       });
+      prof.mark('dockerRemediate', {
+        exitCode: execResult.exitCode,
+        timedOut: execResult.timedOut,
+      });
+
+      if (prof.enabled) {
+        const hookEvents = await this.readHookManifestEvents(tempDir);
+        const hookSummary = this.summarizeHookTimings(hookEvents);
+        prof.mark('hookTimingSummary', hookSummary);
+      }
 
       const diagnostics = await this.readDiagnostics(tempDir);
+      prof.mark('readDiagnostics');
       const reportFile = await this.readReportFile(tempDir);
+      prof.mark('readReportFile', { usedReportFile: Boolean(reportFile) });
       const reportText = reportFile || execResult.stdout;
 
       const changedRelPaths = reportText
         ? this.extractChangedRelativePathsFromReport(reportText)
         : [];
+      prof.mark('extractChangedRelativePaths', {
+        changedPathCount: changedRelPaths.length,
+      });
       const modifiedFiles = await this.readModifiedFilesFromTemp(tempDir, {
         onlyRelativePaths: changedRelPaths.length ? changedRelPaths : undefined,
+      });
+      prof.mark('readModifiedFilesFromTemp', {
+        modifiedFileCount: Object.keys(modifiedFiles).length,
       });
 
       await this.persistDiagnosticsArtifacts(
@@ -473,6 +626,7 @@ export class OrlClient {
         tempDir,
         reportText,
       );
+      prof.mark('persistDiagnosticsArtifacts');
 
       if (!this.config.debugKeepTemp) {
         await fs.promises.rm(tempDir, { recursive: true, force: true });
@@ -481,6 +635,7 @@ export class OrlClient {
           tempDir,
         });
       }
+      prof.mark('cleanupTemp', { kept: Boolean(this.config.debugKeepTemp) });
 
       const exitCode =
         typeof execResult.exitCode === 'number'
@@ -530,6 +685,7 @@ export class OrlClient {
       }
 
       if (!nonFatal || execResult.timedOut) {
+        prof.end({ success: false, exitCode: 2 });
         return {
           success: false,
           modifiedFiles: {},
@@ -540,6 +696,11 @@ export class OrlClient {
         };
       }
 
+      prof.end({
+        success: true,
+        exitCode: exitCode ?? 0,
+        modifiedFileCount: Object.keys(modifiedFiles).length,
+      });
       return {
         success: true,
         modifiedFiles,
@@ -1098,6 +1259,19 @@ export class OrlClient {
   }): Promise<OrlResult> {
     const { workspacePath, language, ruleName, targetFilePath } = args;
     try {
+      const scanId = `orl-single:${Date.now()}:${Math.random()
+        .toString(16)
+        .slice(2, 10)}`;
+      const prof = createProfiler({
+        scanId,
+        component: 'orlClient.remediateSingleRule',
+        baseFields: {
+          workspacePath,
+          language: language ?? '',
+          ruleName,
+          targetFilePath: targetFilePath ?? '',
+        },
+      });
       logger.info('Starting ORL single-rule remediation', {
         workspacePath,
         ruleName,
@@ -1108,6 +1282,7 @@ export class OrlClient {
       const tempDir = await fs.promises.mkdtemp(
         path.join(os.tmpdir(), 'orl-single-rule-'),
       );
+      prof.mark('mkdtemp');
 
       // Copy only the selected file when provided; otherwise keep directory-level behavior.
       if (targetFilePath) {
@@ -1119,9 +1294,11 @@ export class OrlClient {
       } else {
         await this.copyWorkspaceFiles(workspacePath, tempDir);
       }
+      prof.mark('copyWorkspaceInputs');
 
       // Write ORL hook scripts into temp workspace so they are available inside the container.
       await this.writeHooksToTempWorkspace(tempDir);
+      prof.mark('writeHooksToTempWorkspace');
 
       // Pull only this rule into a temp rulespace.
       const rulesDir = path.join(tempDir, 'rules');
@@ -1162,6 +1339,7 @@ export class OrlClient {
         );
         await this.pullRulesUsingOrl(rulesDir);
       }
+      prof.mark('pullRulesUsingOrl', { pulledSingleRule });
 
       // Execute ORL remediation with pulled rules.
       const dockerArgs = this.buildDockerArgs(tempDir, language, rulesDir);
@@ -1177,14 +1355,32 @@ export class OrlClient {
         maxOutputBytes: 10 * 1024 * 1024,
         cwd: workspacePath,
       });
+      prof.mark('dockerRemediate', {
+        exitCode: execResult.exitCode,
+        timedOut: execResult.timedOut,
+      });
+
+      if (prof.enabled) {
+        const hookEvents = await this.readHookManifestEvents(tempDir);
+        const hookSummary = this.summarizeHookTimings(hookEvents);
+        prof.mark('hookTimingSummary', hookSummary);
+      }
 
       const diagnostics = await this.readDiagnostics(tempDir);
+      prof.mark('readDiagnostics');
       const reportFile = await this.readReportFile(tempDir);
+      prof.mark('readReportFile', { usedReportFile: Boolean(reportFile) });
       const reportText = reportFile || execResult.stdout;
       const changedRelPaths =
         this.extractChangedRelativePathsFromReport(reportText);
+      prof.mark('extractChangedRelativePaths', {
+        changedPathCount: changedRelPaths.length,
+      });
       const modifiedFiles = await this.readModifiedFilesFromTemp(tempDir, {
         onlyRelativePaths: changedRelPaths.length ? changedRelPaths : undefined,
+      });
+      prof.mark('readModifiedFilesFromTemp', {
+        modifiedFileCount: Object.keys(modifiedFiles).length,
       });
 
       await this.persistDiagnosticsArtifacts(
@@ -1192,8 +1388,10 @@ export class OrlClient {
         tempDir,
         reportText,
       );
+      prof.mark('persistDiagnosticsArtifacts');
 
       await fs.promises.rm(tempDir, { recursive: true, force: true });
+      prof.mark('cleanupTemp');
 
       const exitCode =
         typeof execResult.exitCode === 'number'
@@ -1208,6 +1406,7 @@ export class OrlClient {
       });
 
       if (!nonFatal || execResult.timedOut) {
+        prof.end({ success: false, exitCode: 2 });
         return {
           success: false,
           modifiedFiles: {},
@@ -1218,6 +1417,11 @@ export class OrlClient {
         };
       }
 
+      prof.end({
+        success: true,
+        exitCode: exitCode ?? 0,
+        modifiedFileCount: Object.keys(modifiedFiles).length,
+      });
       return {
         success: true,
         modifiedFiles,
