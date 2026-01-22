@@ -159,7 +159,6 @@ export class OrlClient {
     // Read hook scripts from separate files for maintainability
     const hookFiles = [
       'pre_remediate',
-      'pre_remediate_rule',
       'pre_remediate_rule_finding',
       'post_remediate_rule_finding',
       'post_remediate_rule',
