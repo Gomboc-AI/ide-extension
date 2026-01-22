@@ -532,10 +532,10 @@ export class ScanResultsProvider {
       // ignore
     }
 
-    const orlClient = createOrlClient(
-      this.context.extensionPath,
-      this.context.globalStorageUri.fsPath,
-    );
+    const orlClient = createOrlClient({
+      extensionPath: this.context.extensionPath,
+      storagePath: this.context.globalStorageUri.fsPath,
+    });
     logger.info('Applying ORL single-rule remediation', {
       ruleName,
       workspacePath,

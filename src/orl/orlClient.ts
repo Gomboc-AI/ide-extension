@@ -1573,11 +1573,12 @@ export class OrlClient {
 /**
  * Factory function to create OrlClient from VS Code configuration
  */
-export function createOrlClient(
-  extensionPath?: string,
-  storagePath?: string,
-): OrlClient {
+export function createOrlClient(args: {
+  extensionPath?: string;
+  storagePath?: string;
+}): OrlClient {
   const config = vscode.workspace.getConfiguration('gomboc-vscode-extension');
+  let { extensionPath, storagePath } = args;
 
   // Get extension path if not provided
   if (!extensionPath) {

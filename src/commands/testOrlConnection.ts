@@ -18,10 +18,10 @@ export async function testOrlConnectionCommand(
       async progress => {
         progress.report({ increment: 0, message: 'Creating ORL client...' });
 
-        const orlClient = createOrlClient(
-          context.extensionPath,
-          context.globalStorageUri.fsPath,
-        );
+        const orlClient = createOrlClient({
+          extensionPath: context.extensionPath,
+          storagePath: context.globalStorageUri.fsPath,
+        });
 
         progress.report({
           increment: 50,
