@@ -8,15 +8,15 @@ rule_esc=$(json_escape "$rule")
 ruleDir="$BASE/.orl/diagnostics/rules/$rule_esc"
 mkdir -p "$ruleDir" || true
 
-# Source common functions (get_resource_hash, extract_resources)
-# common.sh is in the same directory as this script
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-. "$SCRIPT_DIR/common.sh"
-
 # Read before snapshot
 before_json="$ruleDir/resources_before.json"
 modified_json="$ruleDir/resources_modified.json"
 current_json="$ruleDir/resources_after.json"
+
+# If ORL didn't provide any file list, there's nothing useful to write.
+if [ -z "$files_csv" ]; then
+  exit 0
+fi
 
 # Cheap early-exit: ORL can call this per finding; once we've written the file for this
 # rule, there's no value in copying again.

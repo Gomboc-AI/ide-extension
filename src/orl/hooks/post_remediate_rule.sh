@@ -17,12 +17,15 @@ split_files() {
   input="$1"
   [ -z "$input" ] && return 0
   # If it has commas, treat commas as separators; otherwise split on whitespace.
-  if printf '%s' "$input" | grep -q ','; then
+  case "$input" in
+    *,*)
     printf '%s' "$input" | tr ',' '\n'
-  else
+    ;;
+  *)
     # shellcheck disable=SC2001
     printf '%s' "$input" | tr ' \t\r\n' '\n'
-  fi
+    ;;
+  esac
 }
 
 # Build per-rule JSON with file paths and resource instances
@@ -41,8 +44,9 @@ modified_resources="$ruleDir/resources_modified.json"
 # Skip all work if ORL didn't provide any file list for this rule.
 # (This hook can run even for audit-only rules; emitting an empty file list is not useful.)
 if [ -z "$files_csv" ]; then
-  printf '{"ruleName":"%s","priority":%s,"files":[]}\n' "$rule_esc" "$prio" > "$ruleJsonTmp" 2>/dev/null || true
-  mv "$ruleJsonTmp" "$ruleJson" 2>/dev/null || cp "$ruleJsonTmp" "$ruleJson" || true
+  # If ORL didn't provide any file list for this rule, skip writing any per-rule JSON.
+  # This hook can run for audit-only rules; emitting empty file lists creates lots of
+  # disk IO without providing attribution value.
   exit 0
 fi
 
