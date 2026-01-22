@@ -713,13 +713,12 @@ export class OrlClient {
               recursive: true,
             });
 
-            const dockerArgsDiscovery = this.buildDockerArgs(
-              discoveryDir,
+            const dockerArgsDiscovery = this.buildDockerArgs({
+              workspacePath: discoveryDir,
               language,
-              undefined,
-              cached.rulesDir,
-              { disableHooks: true },
-            );
+              mountedRulesDir: cached.rulesDir,
+              disableHooks: true,
+            });
             logger.info(
               'Executing ORL via Docker (two-pass discovery, hooks disabled)',
               {
@@ -805,18 +804,25 @@ export class OrlClient {
               ruleNames: changedRuleNames,
             });
             prof.mark('twoPass.copyRulesSubsetFromCache', copied);
-            if (copied.missingRules.length) {
-              logger.warn(
-                'Two-pass: some changed rules were not found in cached rules dir; results may be incomplete',
-                { missingRules: copied.missingRules.slice(0, 25) },
-              );
-            }
+          // Safety: If we fail to map any of the discovered rules back to concrete ruleset files,
+          // do not proceed with a partial subset run (it could miss fixes). Fall back to single-pass.
+          if (copied.missingRules.length || copied.copiedFiles === 0) {
+            logger.warn(
+              'Two-pass: failed to build a complete subset rulespace; falling back to single-pass remediation',
+              {
+                copiedFiles: copied.copiedFiles,
+                missingRuleCount: copied.missingRules.length,
+                missingRules: copied.missingRules.slice(0, 25),
+              },
+            );
+            return undefined;
+          }
 
-            const dockerArgs = this.buildDockerArgs(
-              tempDir,
+            const dockerArgs = this.buildDockerArgs({
+              workspacePath: tempDir,
               language,
               rulesDir,
-            );
+            });
             logger.info(
               'Executing ORL via Docker (two-pass, subset rules + hooks enabled)',
               {
@@ -947,12 +953,12 @@ export class OrlClient {
       await fs.promises.mkdir(rulesDir, { recursive: true });
 
       // Step 2: Execute ORL remediation with pulled rules
-      const dockerArgs = this.buildDockerArgs(
-        tempDir,
+      const dockerArgs = this.buildDockerArgs({
+        workspacePath: tempDir,
         language,
         rulesDir,
-        cached.rulesDir,
-      );
+        mountedRulesDir: cached.rulesDir,
+      });
       logger.info('Executing ORL via Docker', {
         command: 'docker',
         args: dockerArgs,
@@ -1259,44 +1265,51 @@ export class OrlClient {
   /**
    * Build Docker command for ORL execution
    */
-  private buildDockerArgs(
-    workspacePath: string,
-    language?: string,
-    rulesDir?: string,
-    mountedRulesDir?: string,
-    opts?: { disableHooks?: boolean },
-  ): string[] {
+  private buildDockerArgs(opts: {
+    workspacePath: string;
+    language?: string;
+    rulesDir?: string;
+    mountedRulesDir?: string;
+    disableHooks?: boolean;
+  }): string[] {
     const { containerImage } = this.config;
+    const { workspacePath, language, rulesDir, mountedRulesDir, disableHooks } =
+      opts;
 
     // Note: We don't force --platform to allow Docker to use native architecture
     // This avoids emulation overhead on ARM Macs if the image supports ARM64
     // Docker Desktop on Windows automatically handles path conversion (C:\Users\... -> /c/Users/...)
-    const args: string[] = ['run', '--rm', '-v', `${workspacePath}:/workspace`];
+    const dockerArgs: string[] = [
+      'run',
+      '--rm',
+      '-v',
+      `${workspacePath}:/workspace`,
+    ];
 
     if (mountedRulesDir) {
       // Mount cached rules directly into the container so we don't have to pull/copy into the temp workspace.
-      args.push('-v', `${mountedRulesDir}:/workspace/rules`);
+      dockerArgs.push('-v', `${mountedRulesDir}:/workspace/rules`);
     }
 
-    args.push(containerImage, 'remediate', '/workspace');
+    dockerArgs.push(containerImage, 'remediate', '/workspace');
 
-    if (opts?.disableHooks) {
-      args.push('--disable-hooks');
+    if (disableHooks) {
+      dockerArgs.push('--disable-hooks');
     } else {
-      args.push('--hooks-dir', '/workspace/.orl/hooks');
+      dockerArgs.push('--hooks-dir', '/workspace/.orl/hooks');
     }
 
     if (mountedRulesDir || rulesDir) {
       // rulesDir is within the mounted workspacePath, so we reference it at /workspace/rules in-container.
-      args.push('--rulespace', '/workspace/rules');
+      dockerArgs.push('--rulespace', '/workspace/rules');
     }
     if (language) {
-      args.push('--language', language);
+      dockerArgs.push('--language', language);
     }
 
     // Always write the report to a file so we can read/persist it reliably (stdout may be empty/truncated).
-    args.push('--out', '/workspace/.orl/report.yaml');
-    return args;
+    dockerArgs.push('--out', '/workspace/.orl/report.yaml');
+    return dockerArgs;
   }
 
   private extractChangedRuleNamesFromReport(report?: string): string[] {
@@ -1870,7 +1883,11 @@ export class OrlClient {
       prof.mark('pullRulesUsingOrl', { pulledSingleRule });
 
       // Execute ORL remediation with pulled rules.
-      const dockerArgs = this.buildDockerArgs(tempDir, language, rulesDir);
+      const dockerArgs = this.buildDockerArgs({
+        workspacePath: tempDir,
+        language,
+        rulesDir,
+      });
       logger.info('Executing ORL via Docker (single-rule)', {
         command: 'docker',
         args: dockerArgs,
