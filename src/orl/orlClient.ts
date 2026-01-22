@@ -3,6 +3,7 @@ import { spawn } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
+import * as crypto from 'crypto';
 import logger from '../utils/logger';
 import { parseOrlReport } from '../utils/orlReportParser';
 import {
@@ -116,6 +117,11 @@ export interface OrlConfig {
   rulesServiceToken: string;
   channel: string;
   extensionPath?: string; // Path to extension directory (from context.extensionPath)
+  /**
+   * Base directory for persistent caches (ideally VS Code's context.globalStorageUri.fsPath).
+   * Used to cache pulled ORL rules across scans to avoid repeated `rules pull` overhead.
+   */
+  storagePath?: string;
   debugKeepTemp?: boolean;
   debugPersistDiagnostics?: boolean;
 }
@@ -146,6 +152,110 @@ export class OrlClient {
 
   constructor(config: OrlConfig) {
     this.config = config;
+  }
+
+  private getRulesCacheDir(): string {
+    // Prefer VS Code's global storage so it persists across restarts.
+    const base =
+      (this.config.storagePath && this.config.storagePath.trim()) ||
+      // Fallback: best-effort persistent-ish temp. (Not guaranteed on Windows.)
+      path.join(os.tmpdir(), 'gomboc-vscode-extension');
+
+    const key = `${this.config.containerImage}::${this.config.rulesServiceUrl}::${this.config.channel}`;
+    const hash = crypto
+      .createHash('sha256')
+      .update(key)
+      .digest('hex')
+      .slice(0, 12);
+    return path.join(base, 'orl-rules-cache', `rules-${hash}`);
+  }
+
+  private async isRulesCacheWarm(cacheDir: string): Promise<boolean> {
+    const metaPath = path.join(cacheDir, 'meta.json');
+    try {
+      const raw = await fs.promises.readFile(metaPath, 'utf8');
+      const meta = JSON.parse(raw) as any;
+      const pulledAtMs =
+        typeof meta?.pulledAtMs === 'number' ? meta.pulledAtMs : undefined;
+      const rulesServiceUrl =
+        typeof meta?.rulesServiceUrl === 'string'
+          ? meta.rulesServiceUrl
+          : undefined;
+      const channel =
+        typeof meta?.channel === 'string' ? meta.channel : undefined;
+      const containerImage =
+        typeof meta?.containerImage === 'string'
+          ? meta.containerImage
+          : undefined;
+
+      // Keep TTL conservative so rules update in a reasonable timeframe without manual refresh.
+      const TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+      const fresh =
+        typeof pulledAtMs === 'number' && Date.now() - pulledAtMs < TTL_MS;
+
+      if (
+        !fresh ||
+        rulesServiceUrl !== this.config.rulesServiceUrl ||
+        channel !== this.config.channel ||
+        containerImage !== this.config.containerImage
+      ) {
+        return false;
+      }
+
+      return await this.hasAnyRulesInDir(cacheDir);
+    } catch {
+      return false;
+    }
+  }
+
+  private async ensureRulesCached(): Promise<{
+    rulesDir: string;
+    usedCache: boolean;
+    pulled: boolean;
+  }> {
+    const cacheDir = this.getRulesCacheDir();
+    await fs.promises.mkdir(cacheDir, { recursive: true }).catch(() => {});
+
+    const warm = await this.isRulesCacheWarm(cacheDir);
+    if (warm) {
+      logger.info('Using cached ORL rules (skipping pull)', { cacheDir });
+      return { rulesDir: cacheDir, usedCache: true, pulled: false };
+    }
+
+    // Cache miss/stale: repull into cache dir.
+    // Best-effort cleanup so we don't accumulate stale rule files.
+    try {
+      const entries = await fs.promises.readdir(cacheDir);
+      if (entries.length) {
+        await fs.promises.rm(cacheDir, { recursive: true, force: true });
+        await fs.promises.mkdir(cacheDir, { recursive: true });
+      }
+    } catch {
+      // ignore
+    }
+
+    await this.pullRulesUsingOrl(cacheDir);
+    try {
+      const metaPath = path.join(cacheDir, 'meta.json');
+      await fs.promises.writeFile(
+        metaPath,
+        JSON.stringify(
+          {
+            pulledAtMs: Date.now(),
+            rulesServiceUrl: this.config.rulesServiceUrl,
+            channel: this.config.channel,
+            containerImage: this.config.containerImage,
+          },
+          null,
+          2,
+        ),
+        'utf8',
+      );
+    } catch {
+      // ignore
+    }
+
+    return { rulesDir: cacheDir, usedCache: true, pulled: true };
   }
 
   /**
@@ -569,15 +679,23 @@ export class OrlClient {
       await this.writeHooksToTempWorkspace(tempDir);
       prof.mark('writeHooksToTempWorkspace');
 
-      // Step 1: Pull rules using ORL's built-in rules pull command
+      // Step 1: Ensure rules are available (use a persistent cache to avoid repeated pulls)
       const rulesDir = path.join(tempDir, 'rules');
       await fs.promises.mkdir(rulesDir, { recursive: true });
 
-      await this.pullRulesUsingOrl(rulesDir);
-      prof.mark('pullRulesUsingOrl');
+      const cached = await this.ensureRulesCached();
+      prof.mark('pullRulesUsingOrl', {
+        usedCache: cached.usedCache,
+        pulled: cached.pulled,
+      });
 
       // Step 2: Execute ORL remediation with pulled rules
-      const dockerArgs = this.buildDockerArgs(tempDir, language, rulesDir);
+      const dockerArgs = this.buildDockerArgs(
+        tempDir,
+        language,
+        rulesDir,
+        cached.rulesDir,
+      );
       logger.info('Executing ORL via Docker', {
         command: 'docker',
         args: dockerArgs,
@@ -888,25 +1006,29 @@ export class OrlClient {
     workspacePath: string,
     language?: string,
     rulesDir?: string,
+    mountedRulesDir?: string,
   ): string[] {
     const { containerImage } = this.config;
 
     // Note: We don't force --platform to allow Docker to use native architecture
     // This avoids emulation overhead on ARM Macs if the image supports ARM64
     // Docker Desktop on Windows automatically handles path conversion (C:\Users\... -> /c/Users/...)
-    const args: string[] = [
-      'run',
-      '--rm',
-      '-v',
-      `${workspacePath}:/workspace`,
+    const args: string[] = ['run', '--rm', '-v', `${workspacePath}:/workspace`];
+
+    if (mountedRulesDir) {
+      // Mount cached rules directly into the container so we don't have to pull/copy into the temp workspace.
+      args.push('-v', `${mountedRulesDir}:/workspace/rules`);
+    }
+
+    args.push(
       containerImage,
       'remediate',
       '/workspace',
       '--hooks-dir',
       '/workspace/.orl/hooks',
-    ];
+    );
 
-    if (rulesDir) {
+    if (mountedRulesDir || rulesDir) {
       // rulesDir is within the mounted workspacePath, so we reference it at /workspace/rules in-container.
       args.push('--rulespace', '/workspace/rules');
     }
@@ -1451,8 +1573,12 @@ export class OrlClient {
 /**
  * Factory function to create OrlClient from VS Code configuration
  */
-export function createOrlClient(extensionPath?: string): OrlClient {
+export function createOrlClient(args: {
+  extensionPath?: string;
+  storagePath?: string;
+}): OrlClient {
   const config = vscode.workspace.getConfiguration('gomboc-vscode-extension');
+  let { extensionPath, storagePath } = args;
 
   // Get extension path if not provided
   if (!extensionPath) {
@@ -1485,6 +1611,7 @@ export function createOrlClient(extensionPath?: string): OrlClient {
     rulesServiceToken,
     channel: config.get('orlChannel') || 'default',
     extensionPath,
+    storagePath,
     debugKeepTemp: getBooleanSetting(
       config,
       'orlDebugKeepTemp',
