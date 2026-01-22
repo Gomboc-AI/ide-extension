@@ -113,6 +113,11 @@
             "default": false,
             "description": "Debug: copy .orl-temp/.orl/diagnostics artifacts to <workspace>/.orl-debug/last-run before cleanup."
           },
+          "gomboc-vscode-extension.orlTwoPassEnabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Experimental: run a fast first pass with ORL hooks disabled to discover which rules actually produce changes, then rerun ORL with only those rules + hooks enabled. This can significantly speed up scans on some Windows/Docker setups."
+          },
           "gomboc-vscode-extension.orlFixAppliedAnalyticsEnabled": {
             "type": "boolean",
             "default": true,

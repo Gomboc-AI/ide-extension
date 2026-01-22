@@ -20,6 +20,19 @@ export interface Change {
  */
 export class FileDiffAnalyzer {
   /**
+   * Normalize all line endings so downstream diff logic behaves the same on
+   * Windows (CRLF) and Unix (LF).
+   *
+   * - Convert CRLF -> LF
+   * - Convert bare CR  -> LF (rare, but safe)
+   */
+  private static normalizeLineEndings(content: string): string {
+    // Important: use '\n' (not '') so we don't accidentally merge lines when
+    // encountering bare '\r' characters.
+    return (content || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  }
+
+  /**
    * Find differences between original and modified file content
    * Uses intelligent grouping to avoid syntax issues
    */
@@ -27,8 +40,11 @@ export class FileDiffAnalyzer {
     originalContent: string,
     modifiedContent: string,
   ): Difference[] {
-    const originalLines = originalContent.split('\n');
-    const modifiedLines = modifiedContent.split('\n');
+    const originalNormalized = this.normalizeLineEndings(originalContent);
+    const modifiedNormalized = this.normalizeLineEndings(modifiedContent);
+
+    const originalLines = originalNormalized.split('\n');
+    const modifiedLines = modifiedNormalized.split('\n');
     const differences: Difference[] = [];
 
     logger.info('Comparing files', {

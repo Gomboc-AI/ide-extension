@@ -7,6 +7,10 @@ export const DEFAULTS = {
   integrationsFixAppliedEndpointPath: '/reporting/orl-fix-applied',
   orlDebugKeepTemp: false,
   orlDebugPersistDiagnostics: false,
+  // Experimental: run a fast first pass with ORL hooks disabled to discover which rules
+  // actually produce changes, then run a second pass with only those rules + hooks enabled.
+  // Default off to avoid behavior changes.
+  orlTwoPassEnabled: true,
 };
 
 export function getStringSetting(

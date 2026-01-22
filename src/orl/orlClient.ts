@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as crypto from 'crypto';
+import yaml from 'js-yaml';
 import logger from '../utils/logger';
 import { parseOrlReport } from '../utils/orlReportParser';
 import {
@@ -124,6 +125,11 @@ export interface OrlConfig {
   storagePath?: string;
   debugKeepTemp?: boolean;
   debugPersistDiagnostics?: boolean;
+  /**
+   * Experimental: run a fast first pass with ORL hooks disabled to discover which rules
+   * actually produce changes, then rerun ORL with only those rules + hooks enabled.
+   */
+  twoPassEnabled?: boolean;
 }
 
 // Pinned ORL container image. Intentionally not configurable via VS Code settings
@@ -149,6 +155,9 @@ export interface OrlResult {
 
 export class OrlClient {
   private config: OrlConfig;
+  private rulesetIndexCache:
+    | { sourceRulesDir: string; index: Map<string, string[]> }
+    | undefined;
 
   constructor(config: OrlConfig) {
     this.config = config;
@@ -666,11 +675,272 @@ export class OrlClient {
       });
       logger.info('Starting ORL remediation', { workspacePath });
 
+      const twoPassEnabled =
+        typeof this.config.twoPassEnabled === 'boolean'
+          ? this.config.twoPassEnabled
+          : false;
+
       // Create a temporary directory for ORL execution
       const tempDir = path.join(workspacePath, '.orl-temp');
       await fs.promises.mkdir(tempDir, { recursive: true });
       prof.mark('mkdirTemp');
 
+      // Step 1: Ensure rules are available (use a persistent cache to avoid repeated pulls)
+      const cached = await this.ensureRulesCached();
+      prof.mark('pullRulesUsingOrl', {
+        usedCache: cached.usedCache,
+        pulled: cached.pulled,
+      });
+
+      // Optional two-pass mode:
+      // Pass 1 runs with hooks disabled to quickly discover which rules produced changes.
+      // Pass 2 runs with hooks enabled but only with the subset of rules that changed files.
+      //
+      // NOTE: default off; gated by config.
+      if (twoPassEnabled) {
+        const tryTwoPass = async (): Promise<OrlResult | undefined> => {
+          const discoveryDir = await fs.promises.mkdtemp(
+            path.join(os.tmpdir(), 'orl-discovery-'),
+          );
+          prof.mark('twoPass.mkdtempDiscovery');
+          try {
+            await this.copyWorkspaceFiles(workspacePath, discoveryDir);
+            prof.mark('twoPass.copyWorkspaceFilesDiscovery');
+
+            // ORL writes the report to /workspace/.orl/report.yaml; when hooks are disabled,
+            // nothing creates the `.orl` directory for us. Ensure it exists so ORL can write.
+            await fs.promises.mkdir(path.join(discoveryDir, '.orl'), {
+              recursive: true,
+            });
+
+            const dockerArgsDiscovery = this.buildDockerArgs({
+              workspacePath: discoveryDir,
+              language,
+              mountedRulesDir: cached.rulesDir,
+              disableHooks: true,
+            });
+            logger.info(
+              'Executing ORL via Docker (two-pass discovery, hooks disabled)',
+              {
+                command: 'docker',
+                args: dockerArgsDiscovery,
+              },
+            );
+
+            const execDiscovery = await runProcess({
+              command: 'docker',
+              commandArgs: dockerArgsDiscovery,
+              timeoutMs: 90000,
+              maxOutputBytes: 10 * 1024 * 1024,
+              cwd: workspacePath,
+            });
+            prof.mark('twoPass.dockerRemediateDiscovery', {
+              exitCode: execDiscovery.exitCode,
+              timedOut: execDiscovery.timedOut,
+            });
+
+            const reportFileDiscovery = await this.readReportFile(discoveryDir);
+            const reportTextDiscovery =
+              reportFileDiscovery || execDiscovery.stdout;
+            prof.mark('twoPass.readReportFileDiscovery', {
+              usedReportFile: Boolean(reportFileDiscovery),
+            });
+
+            // If ORL failed to produce a report (common when --out path is missing), do NOT
+            // treat that as "no changes" — fall back to the standard single-pass flow.
+            const looksLikeReport =
+              typeof reportTextDiscovery === 'string' &&
+              reportTextDiscovery.includes('type: Report');
+            if (!looksLikeReport) {
+              logger.warn(
+                'Two-pass discovery did not produce a valid ORL report; falling back to single-pass remediation',
+                {
+                  exitCode: execDiscovery.exitCode,
+                  timedOut: execDiscovery.timedOut,
+                  stdoutPreview: (execDiscovery.stdout || '').slice(0, 2000),
+                  stderrPreview: (execDiscovery.stderr || '').slice(0, 2000),
+                },
+              );
+              return undefined;
+            }
+
+            const changedRuleNames =
+              this.extractChangedRuleNamesFromReport(reportTextDiscovery);
+            prof.mark('twoPass.discoveredChangedRules', {
+              changedRuleCount: changedRuleNames.length,
+              sampleRules: changedRuleNames.slice(0, 20),
+            });
+
+            if (changedRuleNames.length === 0) {
+              // No changes: return early (no need for pass 2).
+              prof.end({
+                success: true,
+                exitCode: execDiscovery.exitCode ?? 0,
+              });
+              return {
+                success: true,
+                modifiedFiles: {},
+                report: reportTextDiscovery,
+                exitCode:
+                  typeof execDiscovery.exitCode === 'number'
+                    ? execDiscovery.exitCode
+                    : 0,
+              };
+            }
+
+            // Pass 2: run ORL with hooks enabled but only the subset of changed rules.
+            await this.copyWorkspaceFiles(workspacePath, tempDir);
+            prof.mark('copyWorkspaceFiles');
+
+            await this.writeHooksToTempWorkspace(tempDir);
+            prof.mark('writeHooksToTempWorkspace');
+
+            const rulesDir = path.join(tempDir, 'rules');
+            await fs.promises.mkdir(rulesDir, { recursive: true });
+
+            const copied = await this.copyRulesSubsetFromCache({
+              sourceRulesDir: cached.rulesDir,
+              destRulesDir: rulesDir,
+              ruleNames: changedRuleNames,
+            });
+            prof.mark('twoPass.copyRulesSubsetFromCache', copied);
+            // Safety: If we fail to map any of the discovered rules back to concrete ruleset files,
+            // do not proceed with a partial subset run (it could miss fixes). Fall back to single-pass.
+            if (copied.missingRules.length || copied.copiedFiles === 0) {
+              logger.warn(
+                'Two-pass: failed to build a complete subset rulespace; falling back to single-pass remediation',
+                {
+                  copiedFiles: copied.copiedFiles,
+                  missingRuleCount: copied.missingRules.length,
+                  missingRules: copied.missingRules.slice(0, 25),
+                },
+              );
+              return undefined;
+            }
+
+            const dockerArgs = this.buildDockerArgs({
+              workspacePath: tempDir,
+              language,
+              rulesDir,
+            });
+            logger.info(
+              'Executing ORL via Docker (two-pass, subset rules + hooks enabled)',
+              {
+                command: 'docker',
+                args: dockerArgs,
+              },
+            );
+
+            const execResult = await runProcess({
+              command: 'docker',
+              commandArgs: dockerArgs,
+              timeoutMs: 90000, // hooks add overhead but shouldn't take this long
+              maxOutputBytes: 10 * 1024 * 1024,
+              cwd: workspacePath,
+            });
+            prof.mark('dockerRemediate', {
+              exitCode: execResult.exitCode,
+              timedOut: execResult.timedOut,
+            });
+
+            if (prof.enabled) {
+              const hookEvents = await this.readHookManifestEvents(tempDir);
+              const hookSummary = this.summarizeHookTimings(hookEvents);
+              prof.mark('hookTimingSummary', hookSummary);
+            }
+
+            const diagnostics = await this.readDiagnostics(tempDir);
+            prof.mark('readDiagnostics');
+            const reportFile = await this.readReportFile(tempDir);
+            prof.mark('readReportFile', {
+              usedReportFile: Boolean(reportFile),
+            });
+            const reportText = reportFile || execResult.stdout;
+
+            const changedRelPaths = reportText
+              ? this.extractChangedRelativePathsFromReport(reportText)
+              : [];
+            prof.mark('extractChangedRelativePaths', {
+              changedPathCount: changedRelPaths.length,
+            });
+            const modifiedFiles = await this.readModifiedFilesFromTemp(
+              tempDir,
+              {
+                onlyRelativePaths: changedRelPaths.length
+                  ? changedRelPaths
+                  : undefined,
+              },
+            );
+            prof.mark('readModifiedFilesFromTemp', {
+              modifiedFileCount: Object.keys(modifiedFiles).length,
+            });
+
+            await this.persistDiagnosticsArtifacts(
+              workspacePath,
+              tempDir,
+              reportText,
+            );
+            prof.mark('persistDiagnosticsArtifacts');
+
+            if (!this.config.debugKeepTemp) {
+              await fs.promises.rm(tempDir, { recursive: true, force: true });
+            } else {
+              logger.warn('Debug: preserving .orl-temp after remediation', {
+                tempDir,
+              });
+            }
+            prof.mark('cleanupTemp', {
+              kept: Boolean(this.config.debugKeepTemp),
+            });
+
+            const exitCode =
+              typeof execResult.exitCode === 'number'
+                ? execResult.exitCode
+                : undefined;
+            const nonFatal = exitCode === 0 || exitCode === 1 || exitCode === 2;
+
+            if (!nonFatal || execResult.timedOut) {
+              prof.end({ success: false, exitCode: 2 });
+              return {
+                success: false,
+                modifiedFiles: {},
+                exitCode: 2,
+                error: execResult.timedOut
+                  ? 'ORL execution timed out'
+                  : `ORL execution failed (exit code ${exitCode ?? 'unknown'})`,
+              };
+            }
+
+            prof.end({
+              success: true,
+              exitCode: exitCode ?? 0,
+              modifiedFileCount: Object.keys(modifiedFiles).length,
+            });
+
+            return {
+              success: true,
+              modifiedFiles,
+              report: reportText,
+              exitCode: exitCode ?? 0,
+              // @ts-ignore add diagnostics for downstream usage
+              diagnostics,
+            };
+          } finally {
+            await fs.promises.rm(discoveryDir, {
+              recursive: true,
+              force: true,
+            });
+            prof.mark('twoPass.cleanupDiscovery');
+          }
+        };
+
+        const twoPassResult = await tryTwoPass();
+        if (twoPassResult) {
+          return twoPassResult;
+        }
+      }
+
+      // Default single-pass flow:
       // Copy workspace files to temp directory
       await this.copyWorkspaceFiles(workspacePath, tempDir);
       prof.mark('copyWorkspaceFiles');
@@ -679,23 +949,16 @@ export class OrlClient {
       await this.writeHooksToTempWorkspace(tempDir);
       prof.mark('writeHooksToTempWorkspace');
 
-      // Step 1: Ensure rules are available (use a persistent cache to avoid repeated pulls)
       const rulesDir = path.join(tempDir, 'rules');
       await fs.promises.mkdir(rulesDir, { recursive: true });
 
-      const cached = await this.ensureRulesCached();
-      prof.mark('pullRulesUsingOrl', {
-        usedCache: cached.usedCache,
-        pulled: cached.pulled,
-      });
-
       // Step 2: Execute ORL remediation with pulled rules
-      const dockerArgs = this.buildDockerArgs(
-        tempDir,
+      const dockerArgs = this.buildDockerArgs({
+        workspacePath: tempDir,
         language,
         rulesDir,
-        cached.rulesDir,
-      );
+        mountedRulesDir: cached.rulesDir,
+      });
       logger.info('Executing ORL via Docker', {
         command: 'docker',
         args: dockerArgs,
@@ -1002,43 +1265,200 @@ export class OrlClient {
   /**
    * Build Docker command for ORL execution
    */
-  private buildDockerArgs(
-    workspacePath: string,
-    language?: string,
-    rulesDir?: string,
-    mountedRulesDir?: string,
-  ): string[] {
+  private buildDockerArgs(opts: {
+    workspacePath: string;
+    language?: string;
+    rulesDir?: string;
+    mountedRulesDir?: string;
+    disableHooks?: boolean;
+  }): string[] {
     const { containerImage } = this.config;
+    const { workspacePath, language, rulesDir, mountedRulesDir, disableHooks } =
+      opts;
 
     // Note: We don't force --platform to allow Docker to use native architecture
     // This avoids emulation overhead on ARM Macs if the image supports ARM64
     // Docker Desktop on Windows automatically handles path conversion (C:\Users\... -> /c/Users/...)
-    const args: string[] = ['run', '--rm', '-v', `${workspacePath}:/workspace`];
+    const dockerArgs: string[] = [
+      'run',
+      '--rm',
+      '-v',
+      `${workspacePath}:/workspace`,
+    ];
 
     if (mountedRulesDir) {
       // Mount cached rules directly into the container so we don't have to pull/copy into the temp workspace.
-      args.push('-v', `${mountedRulesDir}:/workspace/rules`);
+      dockerArgs.push('-v', `${mountedRulesDir}:/workspace/rules`);
     }
 
-    args.push(
-      containerImage,
-      'remediate',
-      '/workspace',
-      '--hooks-dir',
-      '/workspace/.orl/hooks',
-    );
+    dockerArgs.push(containerImage, 'remediate', '/workspace');
+
+    if (disableHooks) {
+      dockerArgs.push('--disable-hooks');
+    } else {
+      dockerArgs.push('--hooks-dir', '/workspace/.orl/hooks');
+    }
 
     if (mountedRulesDir || rulesDir) {
       // rulesDir is within the mounted workspacePath, so we reference it at /workspace/rules in-container.
-      args.push('--rulespace', '/workspace/rules');
+      dockerArgs.push('--rulespace', '/workspace/rules');
     }
     if (language) {
-      args.push('--language', language);
+      dockerArgs.push('--language', language);
     }
 
     // Always write the report to a file so we can read/persist it reliably (stdout may be empty/truncated).
-    args.push('--out', '/workspace/.orl/report.yaml');
-    return args;
+    dockerArgs.push('--out', '/workspace/.orl/report.yaml');
+    return dockerArgs;
+  }
+
+  private extractChangedRuleNamesFromReport(report?: string): string[] {
+    const parsed = parseOrlReport(report);
+    if (!parsed || typeof parsed !== 'object') {
+      return [];
+    }
+    const spec = (parsed as any).spec;
+    const rules = spec?.rules;
+    if (!Array.isArray(rules)) {
+      return [];
+    }
+
+    const toInt = (v: unknown): number => {
+      if (typeof v === 'number' && Number.isFinite(v)) {
+        return v;
+      }
+      if (typeof v === 'string') {
+        const n = parseInt(v, 10);
+        return Number.isFinite(n) ? n : 0;
+      }
+      return 0;
+    };
+
+    const out = new Set<string>();
+    for (const r of rules) {
+      const ruleName: string | undefined =
+        (typeof r?.name === 'string' && r.name) ||
+        (typeof r?.metadata?.name === 'string' && r.metadata.name) ||
+        undefined;
+      if (!ruleName) {
+        continue;
+      }
+
+      const fixes = toInt(r?.fixes);
+      const changes = toInt(r?.changes);
+      const filesChanged =
+        r?.files_changed && typeof r.files_changed === 'object'
+          ? Object.keys(r.files_changed)
+          : [];
+      const hasFilesChanged = filesChanged.length > 0;
+
+      if (hasFilesChanged || fixes > 0 || changes > 0) {
+        // ORL report appends a 3-digit instance suffix in some cases; normalize so we
+        // can map back to ruleset files on disk.
+        out.add(this.stripOrlInstanceSuffix(ruleName));
+      }
+    }
+    return Array.from(out);
+  }
+
+  private async getRulesetIndex(
+    sourceRulesDir: string,
+  ): Promise<Map<string, string[]>> {
+    if (
+      this.rulesetIndexCache &&
+      this.rulesetIndexCache.sourceRulesDir === sourceRulesDir
+    ) {
+      return this.rulesetIndexCache.index;
+    }
+
+    const index = new Map<string, string[]>();
+
+    const walk = async (dir: string): Promise<void> => {
+      let entries: fs.Dirent[] = [];
+      try {
+        entries = await fs.promises.readdir(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+
+      for (const e of entries) {
+        const full = path.join(dir, e.name);
+        if (e.isDirectory()) {
+          await walk(full);
+          continue;
+        }
+        if (!e.isFile()) {
+          continue;
+        }
+        if (!full.toLowerCase().endsWith('.orl')) {
+          continue;
+        }
+
+        try {
+          const raw = await fs.promises.readFile(full, 'utf8');
+          const doc = (yaml.load(raw, {
+            schema: yaml.FAILSAFE_SCHEMA,
+          }) ?? null) as any;
+          if (!doc || typeof doc !== 'object') {
+            continue;
+          }
+
+          // Ruleset files have a top-level `name` in our rules repo; keep a few fallbacks
+          // to be resilient to format changes.
+          const name =
+            (typeof doc?.name === 'string' && doc.name.trim()) ||
+            (typeof doc?.metadata?.name === 'string' &&
+              doc.metadata.name.trim()) ||
+            undefined;
+          if (!name) {
+            continue;
+          }
+
+          const arr = index.get(name) ?? [];
+          arr.push(full);
+          index.set(name, arr);
+        } catch {
+          // ignore parse errors; index is best-effort
+        }
+      }
+    };
+
+    await walk(sourceRulesDir);
+    this.rulesetIndexCache = { sourceRulesDir, index };
+    return index;
+  }
+
+  private async copyRulesSubsetFromCache(args: {
+    sourceRulesDir: string;
+    destRulesDir: string;
+    ruleNames: string[];
+  }): Promise<{ copiedFiles: number; missingRules: string[] }> {
+    const { sourceRulesDir, destRulesDir } = args;
+    const ruleNames = Array.from(new Set(args.ruleNames.filter(Boolean)));
+
+    const index = await this.getRulesetIndex(sourceRulesDir);
+
+    let copiedFiles = 0;
+    const missingRules: string[] = [];
+
+    for (const ruleNameRaw of ruleNames) {
+      const ruleName = this.stripOrlInstanceSuffix(ruleNameRaw);
+      const files = index.get(ruleName) ?? index.get(ruleNameRaw) ?? [];
+      if (!files.length) {
+        missingRules.push(ruleNameRaw);
+        continue;
+      }
+
+      for (const src of files) {
+        const rel = path.relative(sourceRulesDir, src);
+        const dst = path.join(destRulesDir, rel);
+        await fs.promises.mkdir(path.dirname(dst), { recursive: true });
+        await fs.promises.copyFile(src, dst);
+        copiedFiles++;
+      }
+    }
+
+    return { copiedFiles, missingRules };
   }
 
   /**
@@ -1463,7 +1883,11 @@ export class OrlClient {
       prof.mark('pullRulesUsingOrl', { pulledSingleRule });
 
       // Execute ORL remediation with pulled rules.
-      const dockerArgs = this.buildDockerArgs(tempDir, language, rulesDir);
+      const dockerArgs = this.buildDockerArgs({
+        workspacePath: tempDir,
+        language,
+        rulesDir,
+      });
       logger.info('Executing ORL via Docker (single-rule)', {
         command: 'docker',
         args: dockerArgs,
@@ -1621,6 +2045,11 @@ export function createOrlClient(args: {
       config,
       'orlDebugPersistDiagnostics',
       DEFAULTS.orlDebugPersistDiagnostics,
+    ),
+    twoPassEnabled: getBooleanSetting(
+      config,
+      'orlTwoPassEnabled',
+      DEFAULTS.orlTwoPassEnabled,
     ),
   });
 }
