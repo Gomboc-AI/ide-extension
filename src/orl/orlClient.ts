@@ -804,19 +804,19 @@ export class OrlClient {
               ruleNames: changedRuleNames,
             });
             prof.mark('twoPass.copyRulesSubsetFromCache', copied);
-          // Safety: If we fail to map any of the discovered rules back to concrete ruleset files,
-          // do not proceed with a partial subset run (it could miss fixes). Fall back to single-pass.
-          if (copied.missingRules.length || copied.copiedFiles === 0) {
-            logger.warn(
-              'Two-pass: failed to build a complete subset rulespace; falling back to single-pass remediation',
-              {
-                copiedFiles: copied.copiedFiles,
-                missingRuleCount: copied.missingRules.length,
-                missingRules: copied.missingRules.slice(0, 25),
-              },
-            );
-            return undefined;
-          }
+            // Safety: If we fail to map any of the discovered rules back to concrete ruleset files,
+            // do not proceed with a partial subset run (it could miss fixes). Fall back to single-pass.
+            if (copied.missingRules.length || copied.copiedFiles === 0) {
+              logger.warn(
+                'Two-pass: failed to build a complete subset rulespace; falling back to single-pass remediation',
+                {
+                  copiedFiles: copied.copiedFiles,
+                  missingRuleCount: copied.missingRules.length,
+                  missingRules: copied.missingRules.slice(0, 25),
+                },
+              );
+              return undefined;
+            }
 
             const dockerArgs = this.buildDockerArgs({
               workspacePath: tempDir,
