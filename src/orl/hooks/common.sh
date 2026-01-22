@@ -49,92 +49,94 @@ extract_resources() {
 # Extract Terraform resources
 extract_terraform_resources() {
   file_path="$1"
-  
-  line_num=0
-  in_resource=0
-  resource_type=""
-  resource_name=""
-  resource_start=0
-  brace_depth=0
-  pending_resource=0
-  pending_start=0
-  pending_line=""
-  
-  while IFS= read -r line || [ -n "$line" ]; do
-    line_num=$((line_num + 1))
-    
-    # Check if line is a full-line comment (starts with # after optional whitespace)
-    is_comment=0
-    trimmed_line=$(echo "$line" | sed 's/^[[:space:]]*//')
-    case "$trimmed_line" in
-      \#*) is_comment=1 ;;
-    esac
-    
-    # If we're accumulating a multi-line resource declaration
-    if [ $pending_resource -eq 1 ]; then
-      # Accumulate lines until we find the opening brace
-      pending_line="$pending_line $line"
-      if echo "$line" | grep -qE '\{'; then
-        # Found opening brace - extract type and name from accumulated text
-        resource_type=$(echo "$pending_line" | sed -n 's/.*resource[[:space:]]*"\([^"]*\)".*/\1/p')
-        resource_name=$(echo "$pending_line" | sed -n 's/.*resource[[:space:]]*"[^"]*"[[:space:]]*"\([^"]*\)".*/\1/p')
-        resource_start=$pending_start
-        in_resource=1
-        brace_depth=1
-        pending_resource=0
-        pending_line=""
-        # Continue to brace counting below (don't skip this line)
-      else
-        # Still accumulating, skip to next line
-        continue
-      fi
-    fi
-    
-    # Check for resource definition start (single-line or start of multi-line)
-    if [ $in_resource -eq 0 ] && [ $pending_resource -eq 0 ]; then
-      # Check if line contains "resource" keyword
-      if echo "$line" | grep -qE '[[:space:]]*resource[[:space:]]+'; then
-        # Check if it's a complete single-line declaration with opening brace
-        if echo "$line" | grep -qE '^[[:space:]]*resource[[:space:]]+"[^"]+"[[:space:]]+"[^"]+"[[:space:]]*\{'; then
-          # Single-line: resource "type" "name" {
-          resource_type=$(echo "$line" | sed -n 's/.*resource[[:space:]]*"\([^"]*\)".*/\1/p')
-          resource_name=$(echo "$line" | sed -n 's/.*resource[[:space:]]*"[^"]*"[[:space:]]*"\([^"]*\)".*/\1/p')
-          resource_start=$line_num
-          in_resource=1
-          brace_depth=1
-          continue
-        else
-          # Multi-line: start accumulating (resource "type" "name" on this line, { on later line)
-          pending_resource=1
-          pending_start=$line_num
-          pending_line="$line"
-          continue
-        fi
-      fi
-    fi
-    
-    # If we're in a resource block, track braces (skip full-line comments)
-    if [ $in_resource -eq 1 ] && [ $is_comment -eq 0 ]; then
-      # Count opening and closing braces on this line
-      open_braces=$(echo "$line" | tr -cd '{' | wc -c)
-      close_braces=$(echo "$line" | tr -cd '}' | wc -c)
-      brace_depth=$((brace_depth + open_braces - close_braces))
-      
-      # If brace depth reaches 0, we've found the end of the resource
-      if [ $brace_depth -le 0 ]; then
-        # Output the resource as JSON (with newline for line-by-line reading)
-        # Hash is omitted for performance - not used in attribution logic
-        type_esc=$(json_escape "$resource_type")
-        name_esc=$(json_escape "$resource_name")
-        printf '{"type":"%s","name":"%s","startLine":%d,"endLine":%d,"hash":""}\n' "$type_esc" "$name_esc" "$resource_start" "$line_num"
-        in_resource=0
-        resource_type=""
-        resource_name=""
-        resource_start=0
-        brace_depth=0
-      fi
-    fi
-  done < "$file_path"
+  if [ ! -f "$file_path" ]; then return 0; fi
+
+  # Performance: use a single awk pass (avoid spawning sed/grep/tr/wc per line).
+  # Output must remain JSONL with: {"type":"...","name":"...","startLine":N,"endLine":M,"hash":""}
+  awk '
+    function json_escape(s,    t) {
+      t = s
+      gsub(/\\/, "\\\\", t)
+      gsub(/"/, "\\\"", t)
+      return t
+    }
+    function count_char(s, c,    t) {
+      t = s
+      return gsub(c, "", t)
+    }
+
+    BEGIN {
+      in_resource = 0
+      brace_depth = 0
+      resource_type = ""
+      resource_name = ""
+      resource_start = 0
+      pending = 0
+      pending_type = ""
+      pending_name = ""
+      pending_start = 0
+    }
+
+    {
+      line = $0
+      # full-line comment?
+      trimmed = line
+      sub(/^[ \t\r\n]+/, "", trimmed)
+      is_comment = (trimmed ~ /^#/)
+
+      if (!in_resource && pending) {
+        # waiting for opening brace of multi-line resource decl
+        if (line ~ /\{/) {
+          in_resource = 1
+          resource_type = pending_type
+          resource_name = pending_name
+          resource_start = pending_start
+          brace_depth = count_char(line, /\{/) - count_char(line, /\}/)
+          if (brace_depth <= 0) brace_depth = 1
+          pending = 0
+        }
+        next
+      }
+
+      if (!in_resource && !pending) {
+        # resource "type" "name" {   (single line)
+        if (match(line, /^[ \t]*resource[ \t]+\"([^\"]+)\"[ \t]+\"([^\"]+)\"[ \t]*\{/, m)) {
+          in_resource = 1
+          resource_type = m[1]
+          resource_name = m[2]
+          resource_start = NR
+          brace_depth = count_char(line, /\{/) - count_char(line, /\}/)
+          if (brace_depth <= 0) brace_depth = 1
+          next
+        }
+        # resource "type" "name"    (multi-line decl; brace on later line)
+        if (match(line, /^[ \t]*resource[ \t]+\"([^\"]+)\"[ \t]+\"([^\"]+)\"/, m)) {
+          pending = 1
+          pending_type = m[1]
+          pending_name = m[2]
+          pending_start = NR
+          next
+        }
+      }
+
+      if (in_resource && !is_comment) {
+        brace_depth += count_char(line, /\{/) - count_char(line, /\}/)
+        if (brace_depth <= 0) {
+          printf("{\"type\":\"%s\",\"name\":\"%s\",\"startLine\":%d,\"endLine\":%d,\"hash\":\"\"}\n",
+            json_escape(resource_type),
+            json_escape(resource_name),
+            resource_start,
+            NR
+          )
+          in_resource = 0
+          brace_depth = 0
+          resource_type = ""
+          resource_name = ""
+          resource_start = 0
+        }
+      }
+    }
+  ' "$file_path" 2>/dev/null || true
 }
 
 # Extract Dockerfile resources (FROM instructions/stages)
@@ -143,56 +145,78 @@ extract_dockerfile_resources() {
   file_path="$1"
   if [ ! -f "$file_path" ]; then return 0; fi
   
-  line_num=0
-  last_from_line=0
-  last_from_image=""
-  last_from_stage=""
-  total_lines=$(wc -l < "$file_path" 2>/dev/null || echo "0")
-  
-  while IFS= read -r line || [ -n "$line" ]; do
-    line_num=$((line_num + 1))
-    trimmed_line=$(echo "$line" | sed 's/^[[:space:]]*//')
-    
-    # Skip comments and empty lines
-    case "$trimmed_line" in
-      \#*|"") continue ;;
-    esac
-    
-    # Check for FROM instruction (case-insensitive)
-    if echo "$trimmed_line" | grep -qiE '^FROM[[:space:]]+'; then
-      # If we have a previous FROM, output it as a resource
-      if [ $last_from_line -gt 0 ]; then
-        # End line is the line before this FROM (or end of file if this is the last)
-        end_line=$((line_num - 1))
-        if [ $end_line -lt $last_from_line ]; then
-          end_line=$last_from_line
-        fi
-        type_esc=$(json_escape "docker_stage")
-        name_esc=$(json_escape "${last_from_stage:-${last_from_image:-FROM}}")
-        printf '{"type":"%s","name":"%s","startLine":%d,"endLine":%d,"hash":""}\n' "$type_esc" "$name_esc" "$last_from_line" "$end_line"
-      fi
-      
-      # Extract image name and optional stage name (AS alias)
-      # FROM image:tag AS stage_name
-      # FROM image:tag
-      last_from_line=$line_num
-      # Extract image (everything after FROM until AS or end of line)
-      last_from_image=$(echo "$trimmed_line" | sed -n 's/^[Ff][Rr][Oo][Mm][[:space:]]\+\([^[:space:]]*\).*/\1/p' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-      # Extract stage name if AS is present
-      last_from_stage=$(echo "$trimmed_line" | sed -n 's/.*[Aa][Ss][[:space:]]\+\([^[:space:]]*\).*/\1/p' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-      # If no stage name, use image name as identifier
-      if [ -z "$last_from_stage" ]; then
-        last_from_stage="$last_from_image"
-      fi
-    fi
-  done < "$file_path"
-  
-  # Output the last FROM instruction if it exists
-  if [ $last_from_line -gt 0 ]; then
-    end_line=$total_lines
-    type_esc=$(json_escape "docker_stage")
-    name_esc=$(json_escape "${last_from_stage:-${last_from_image:-FROM}}")
-    printf '{"type":"%s","name":"%s","startLine":%d,"endLine":%d,"hash":""}\n' "$type_esc" "$name_esc" "$last_from_line" "$end_line"
-  fi
+  # Performance: single awk pass.
+  awk '
+    function json_escape(s,    t) {
+      t = s
+      gsub(/\\/, "\\\\", t)
+      gsub(/"/, "\\\"", t)
+      return t
+    }
+
+    BEGIN {
+      IGNORECASE = 1
+      last_from_line = 0
+      last_from_name = ""
+    }
+
+    function flush(prev_end,    nm) {
+      if (last_from_line <= 0) return
+      nm = (last_from_name != "" ? last_from_name : "FROM")
+      printf("{\"type\":\"%s\",\"name\":\"%s\",\"startLine\":%d,\"endLine\":%d,\"hash\":\"\"}\n",
+        "docker_stage",
+        json_escape(nm),
+        last_from_line,
+        prev_end
+      )
+    }
+
+    {
+      line = $0
+      trimmed = line
+      sub(/^[ \t\r\n]+/, "", trimmed)
+      # Skip comments/empty
+      if (trimmed == "" || trimmed ~ /^#/) next
+
+      if (trimmed ~ /^FROM[ \t]+/) {
+        # If we have a previous stage, emit it ending on the previous line
+        if (last_from_line > 0) {
+          end_line = NR - 1
+          if (end_line < last_from_line) end_line = last_from_line
+          flush(end_line)
+        }
+
+        last_from_line = NR
+        last_from_name = ""
+
+        # Parse: FROM [--platform=...] image[:tag] [AS stage]
+        # Tokenize on whitespace
+        n = split(trimmed, tok, /[ \t]+/)
+        img = ""
+        stage = ""
+        # Find first token after FROM that is not a --flag
+        for (i = 2; i <= n; i++) {
+          if (tok[i] ~ /^--/) continue
+          img = tok[i]
+          break
+        }
+        # Find AS stage
+        for (j = 2; j <= n - 1; j++) {
+          if (tok[j] == "AS") {
+            stage = tok[j+1]
+            break
+          }
+        }
+        if (stage != "") last_from_name = stage
+        else if (img != "") last_from_name = img
+      }
+    }
+
+    END {
+      if (last_from_line > 0) {
+        flush(NR)
+      }
+    }
+  ' "$file_path" 2>/dev/null || true
 }
 
