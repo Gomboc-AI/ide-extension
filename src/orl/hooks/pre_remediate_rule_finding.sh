@@ -16,11 +16,14 @@ files_key="$ruleDir/files_key.txt"
 split_files() {
   input="$1"
   [ -z "$input" ] && return 0
-  if printf '%s' "$input" | grep -q ','; then
+  case "$input" in
+    *,*)
     printf '%s' "$input" | tr ',' '\n'
-  else
+    ;;
+  *)
     printf '%s' "$input" | tr ' \t\r\n' '\n'
-  fi
+    ;;
+  esac
 }
 
 normalize_orl_relpath() {
