@@ -1116,18 +1116,36 @@ export class OrlClient {
       vscode.Uri.file(sourcePath),
     );
 
+    const iacFiles: string[] = [];
     for (const [fileName, fileType] of files) {
-      if (fileType === vscode.FileType.File) {
+      if (fileType !== vscode.FileType.File) {
+        continue;
+      }
+      if (!this.isIacFile(fileName)) {
+        continue;
+      }
+      iacFiles.push(fileName);
+    }
+
+    // Copy in parallel with a small concurrency cap. This is particularly helpful on Windows,
+    // where many small file operations can be slow when done strictly serially.
+    const concurrency = 32;
+    let idx = 0;
+    const workers = Array.from({
+      length: Math.min(concurrency, iacFiles.length),
+    }).map(async () => {
+      while (true) {
+        const myIdx = idx++;
+        if (myIdx >= iacFiles.length) {
+          return;
+        }
+        const fileName = iacFiles[myIdx];
         const sourceFile = path.join(sourcePath, fileName);
         const destFile = path.join(destPath, fileName);
-
-        // Only copy IaC files
-        if (this.isIacFile(fileName)) {
-          const content = await fs.promises.readFile(sourceFile);
-          await fs.promises.writeFile(destFile, content);
-        }
+        await fs.promises.copyFile(sourceFile, destFile);
       }
-    }
+    });
+    await Promise.all(workers);
   }
 
   /**

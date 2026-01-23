@@ -19,7 +19,7 @@ This project is organzied under the central src directory, all of the commands a
   nvm i
 ```
 
-3. Run op-inject to get the env variables
+3. Run op-inject to get the env variables.
 
 ```bash
   op-inject
