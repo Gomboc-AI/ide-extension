@@ -19,6 +19,21 @@ export class ChannelResolver {
     { channel: string; expiresAtMs: number }
   >();
 
+  private static logResolvedChannel(args: {
+    channel: string;
+    source: 'override' | 'cache' | 'account' | 'fallback';
+    accountBasedChannel?: string;
+  }): void {
+    // Intentionally do not log api keys / tokens.
+    logger.info('ORL channel resolved', {
+      channel: args.channel,
+      source: args.source,
+      ...(args.accountBasedChannel
+        ? { accountBasedChannel: args.accountBasedChannel }
+        : {}),
+    });
+  }
+
   /**
    * Resolve the channel name to use for ORL.
    *
@@ -34,6 +49,10 @@ export class ChannelResolver {
     if (overrideChannel) {
       logger.info('Using channel override from settings', {
         channel: overrideChannel,
+      });
+      ChannelResolver.logResolvedChannel({
+        channel: overrideChannel,
+        source: 'override',
       });
       return overrideChannel;
     }
@@ -57,8 +76,9 @@ export class ChannelResolver {
     // Check cache first
     const cached = ChannelResolver.resolvedChannelCache.get(cacheKey);
     if (cached && cached.expiresAtMs > now) {
-      logger.debug('Using cached resolved channel', {
+      ChannelResolver.logResolvedChannel({
         channel: cached.channel,
+        source: 'cache',
       });
       return cached.channel;
     }
@@ -86,6 +106,11 @@ export class ChannelResolver {
         logger.info('Using account-based channel', {
           channel: resolvedChannel,
         });
+        ChannelResolver.logResolvedChannel({
+          channel: resolvedChannel,
+          source: 'account',
+          accountBasedChannel,
+        });
       } else {
         // Fall back to default channel
         resolvedChannel = 'default';
@@ -96,6 +121,11 @@ export class ChannelResolver {
             fallbackChannel: resolvedChannel,
           },
         );
+        ChannelResolver.logResolvedChannel({
+          channel: resolvedChannel,
+          source: 'fallback',
+          accountBasedChannel,
+        });
       }
 
       // Cache the result
@@ -113,6 +143,10 @@ export class ChannelResolver {
           error: error instanceof Error ? error.message : String(error),
         },
       );
+      ChannelResolver.logResolvedChannel({
+        channel: 'default',
+        source: 'fallback',
+      });
       return 'default';
     }
   }
