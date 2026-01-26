@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import logger from './logger';
 import { CustomerApiClient } from '../api/client';
 import { RulesServiceClient } from './rulesServiceClient';
+import { DEFAULTS, getStringSetting } from './configDefaults';
 
 /**
  * Resolves the channel name to use for ORL based on account ID and settings.
@@ -37,11 +38,21 @@ export class ChannelResolver {
       return overrideChannel;
     }
 
-    // Build cache key based on VS Code config (same approach as CustomerApiClient)
+    // Build cache key from the settings that affect resolution.
+    // Note: these caches are in-memory only; a VS Code reload clears them.
     const apiKey = (config.get('apiKey') as string | undefined) || '';
-    const cacheKey = `channel|${apiKey}`;
+    const rulesServiceUrl = getStringSetting(
+      config,
+      'orlRulesServiceUrl',
+      DEFAULTS.orlRulesServiceUrl,
+    );
+    const rulesServiceToken =
+      (config.get('orlRulesServiceToken') as string | undefined) ||
+      apiKey ||
+      '';
+    const cacheKey = `channel|${apiKey}|${rulesServiceUrl}|${rulesServiceToken}`;
     const now = Date.now();
-    const ttlMs = 60 * 60 * 1000; // 1 hour cache
+    const ttlMs = 2 * 24 * 60 * 60 * 1000; // 2 days cache
 
     // Check cache first
     const cached = ChannelResolver.resolvedChannelCache.get(cacheKey);
