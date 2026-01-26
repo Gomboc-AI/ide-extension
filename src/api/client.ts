@@ -256,7 +256,7 @@ export class CustomerApiClient {
   /**
    * Get the account ID for the authenticated user.
    *
-   * Cached in-memory for a long TTL since account ID rarely changes.
+   * Cached in-memory for a long TTL since there's no real reason for this to change.
    */
   public async getAccountId(opts?: {
     /**
