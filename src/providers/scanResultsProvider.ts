@@ -532,7 +532,7 @@ export class ScanResultsProvider {
       // ignore
     }
 
-    const orlClient = createOrlClient({
+    const orlClient = await createOrlClient({
       extensionPath: this.context.extensionPath,
       storagePath: this.context.globalStorageUri.fsPath,
     });

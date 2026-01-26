@@ -176,7 +176,7 @@ async function scanWithOrl(
 
     // Create ORL client and execute remediation
     // Pass extension path so we know exactly where hooks are
-    const orlClient = createOrlClient({
+    const orlClient = await createOrlClient({
       extensionPath: context.extensionPath,
       storagePath: context.globalStorageUri.fsPath,
     });
