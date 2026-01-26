@@ -74,7 +74,9 @@ export class RulesServiceClient {
       }
       return exists;
     } catch (error) {
-      // 404 means channel doesn't exist, other errors are unexpected
+      // 404 means channel doesn't exist.
+      // Other errors (401/403/5xx/network) should be treated as transient and MUST NOT
+      // be interpreted as "channel doesn't exist" (otherwise we'd cache a false negative).
       let statusCode: number | undefined;
       if (axios.isAxiosError(error)) {
         statusCode = error.response?.status;
@@ -93,13 +95,8 @@ export class RulesServiceClient {
         return exists;
       }
 
-      // For other errors, log and assume channel doesn't exist (safer fallback)
-      logger.warn('Error checking channel existence in rules service', {
-        channelName,
-        error: error instanceof Error ? error.message : String(error),
-        statusCode,
-      });
-      return false;
+      // For other errors, surface to caller so it can decide how to fall back.
+      throw error;
     }
   }
 }
