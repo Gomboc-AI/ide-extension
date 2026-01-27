@@ -121,3 +121,14 @@ export const ACCOUNT_HAS_FEATURE_BOOLEAN = gql`
     }
   }
 `;
+
+/**
+ * Get the account ID for the authenticated user.
+ */
+export const GET_ACCOUNT_ID = gql`
+  query getAccountId {
+    account {
+      id
+    }
+  }
+`;

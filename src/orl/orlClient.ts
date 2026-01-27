@@ -13,6 +13,7 @@ import {
   getStringSetting,
 } from '../utils/configDefaults';
 import { createProfiler } from '../utils/profiler';
+import { ChannelResolver } from '../utils/channelResolver';
 
 type SpawnResult = {
   stdout: string;
@@ -2013,12 +2014,17 @@ export class OrlClient {
 }
 
 /**
- * Factory function to create OrlClient from VS Code configuration
+ * Factory function to create OrlClient from VS Code configuration.
+ *
+ * Resolves the channel name based on account ID and settings:
+ * - If orlChannel setting is set, uses that (manual override)
+ * - Otherwise, uses account-based channel: `${accountId}/accounts/default`
+ * - Falls back to "default" if account-based channel doesn't exist
  */
-export function createOrlClient(args: {
+export async function createOrlClient(args: {
   extensionPath?: string;
   storagePath?: string;
-}): OrlClient {
+}): Promise<OrlClient> {
   const config = vscode.workspace.getConfiguration('gomboc-vscode-extension');
   let { extensionPath, storagePath } = args;
 
@@ -2043,6 +2049,9 @@ export function createOrlClient(args: {
     (config.get('apiKey') as string | undefined) ||
     '';
 
+  // Resolve channel name (account-based or override)
+  const channel = await ChannelResolver.resolveChannel();
+
   return new OrlClient({
     containerImage: ORL_CONTAINER_IMAGE,
     rulesServiceUrl: getStringSetting(
@@ -2051,7 +2060,7 @@ export function createOrlClient(args: {
       DEFAULTS.orlRulesServiceUrl,
     ),
     rulesServiceToken,
-    channel: config.get('orlChannel') || 'default',
+    channel,
     extensionPath,
     storagePath,
     debugKeepTemp: getBooleanSetting(

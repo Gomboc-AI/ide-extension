@@ -89,8 +89,8 @@
           },
           "gomboc-vscode-extension.orlRulesServiceUrl": {
             "type": "string",
-            "default": "https://rules.app.gomboc.ai",
-            "description": "Rules service URL for ORL"
+            "default": "",
+            "description": "Rules service URL for ORL. If empty, uses https://rules.app.gomboc.ai"
           },
           "gomboc-vscode-extension.orlRulesServiceToken": {
             "type": "string",
@@ -100,8 +100,8 @@
           },
           "gomboc-vscode-extension.orlChannel": {
             "type": "string",
-            "default": "default",
-            "description": "Channel name to pull rules from the rules service"
+            "default": "",
+            "description": "Channel name to pull rules from the rules service. If empty, uses account-based channel (${accountId}/accounts/default) or falls back to 'default'"
           },
           "gomboc-vscode-extension.orlDebugKeepTemp": {
             "type": "boolean",

@@ -7,6 +7,7 @@ import settings from '../settings';
 import { ApolloClient, createHttpLink, InMemoryCache } from '@apollo/client';
 import {
   ACCOUNT_HAS_FEATURE_BOOLEAN,
+  GET_ACCOUNT_ID,
   HEALTH_CHECK,
   INDIVIDUAL_FIXES,
   SECURITY_BENCHMARKS,
@@ -73,6 +74,10 @@ export class CustomerApiClient {
   private static featureBoolCache = new Map<
     string,
     { value: boolean; expiresAtMs: number }
+  >();
+  private static accountIdCache = new Map<
+    string,
+    { value: string; expiresAtMs: number }
   >();
   private client;
   private apiKey: string;
@@ -246,5 +251,51 @@ export class CustomerApiClient {
       });
     }
     return value;
+  }
+
+  /**
+   * Get the account ID for the authenticated user.
+   *
+   * Cached in-memory for a long TTL since there's no real reason for this to change.
+   */
+  public async getAccountId(opts?: {
+    /**
+     * Cache TTL in milliseconds (default: 1 hour).
+     * Set to 0 to bypass cache.
+     */
+    ttlMs?: number;
+  }): Promise<string> {
+    const ttlMs = opts?.ttlMs ?? 60 * 60 * 1000; // 1 hour default
+
+    const cacheKey = `${this.customerApiUrl}|${this.apiKey}`;
+    const now = Date.now();
+    if (ttlMs > 0) {
+      const cached = CustomerApiClient.accountIdCache.get(cacheKey);
+      if (cached && cached.expiresAtMs > now) {
+        return cached.value;
+      }
+    }
+
+    type GetAccountIdData = {
+      account: { id: string };
+    };
+
+    const { data } = await this.client.query<GetAccountIdData>({
+      query: GET_ACCOUNT_ID,
+      fetchPolicy: 'no-cache',
+    });
+
+    const accountId = data?.account?.id;
+    if (!accountId) {
+      throw new Error('Failed to retrieve account ID from CustomerAPI');
+    }
+
+    if (ttlMs > 0) {
+      CustomerApiClient.accountIdCache.set(cacheKey, {
+        value: accountId,
+        expiresAtMs: now + ttlMs,
+      });
+    }
+    return accountId;
   }
 }
