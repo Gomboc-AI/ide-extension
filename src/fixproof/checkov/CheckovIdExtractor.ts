@@ -98,14 +98,21 @@ export class CheckovIdExtractor {
       const existing = out.evidenceByCheckId[checkId];
       if (
         !existing.some(
-          e => e.ruleName === ev.ruleName && e.source === ev.source && e.key === ev.key,
+          e =>
+            e.ruleName === ev.ruleName &&
+            e.source === ev.source &&
+            e.key === ev.key,
         )
       ) {
         existing.push(ev);
       }
     };
 
-    const addRuleId = (ruleName: string, id: string, ev: Omit<CheckovEvidence, 'ruleName'>) => {
+    const addRuleId = (
+      ruleName: string,
+      id: string,
+      ev: Omit<CheckovEvidence, 'ruleName'>,
+    ) => {
       const n = normalize(id);
       if (!n) {
         return;
@@ -159,16 +166,17 @@ export class CheckovIdExtractor {
         r?.files_changed && typeof r.files_changed === 'object'
           ? Object.keys(r.files_changed)
           : [];
-      const changedByCounters = fixes > 0 || changes > 0 || filesChangedKeys.length > 0;
+      const changedByCounters =
+        fixes > 0 || changes > 0 || filesChangedKeys.length > 0;
       const selected =
         (changedRuleNames && changedRuleNames.has(ruleBaseName)) ||
-        (!changedRuleNames &&
-          (!onlyRulesThatChangedCode || changedByCounters));
+        (!changedRuleNames && (!onlyRulesThatChangedCode || changedByCounters));
       if (!selected) {
         continue;
       }
 
-      const metadata = r?.metadata && typeof r.metadata === 'object' ? r.metadata : undefined;
+      const metadata =
+        r?.metadata && typeof r.metadata === 'object' ? r.metadata : undefined;
 
       // Source 1: explicit annotations.
       const annotations =
@@ -183,7 +191,10 @@ export class CheckovIdExtractor {
           for (const item of v) {
             if (typeof item === 'string') {
               for (const id of splitIds(item)) {
-                addRuleId(ruleName, id, { source: 'annotation', key: multiKey });
+                addRuleId(ruleName, id, {
+                  source: 'annotation',
+                  key: multiKey,
+                });
               }
             }
           }
@@ -234,4 +245,3 @@ export class CheckovIdExtractor {
     return out;
   }
 }
-

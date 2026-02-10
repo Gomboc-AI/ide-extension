@@ -274,7 +274,9 @@ async function scanWithOrl(
           .catch(() => {});
       } else {
         // Still touch the TTL so the session cache expires after inactivity, not after "no new IDs".
-        scanResultsProvider.touchFixProofCheckovTargets({ workspacePath }).catch(() => {});
+        scanResultsProvider
+          .touchFixProofCheckovTargets({ workspacePath })
+          .catch(() => {});
       }
     } catch (e) {
       logger.debug('FixProof: failed to cache Checkov targets (ignored)', {

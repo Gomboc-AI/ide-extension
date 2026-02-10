@@ -9,10 +9,10 @@ export async function checkovScanWorkspaceCommand(
   scanResultsProvider: ScanResultsProvider,
 ): Promise<void> {
   const last = scanResultsProvider.getLastOrlScanContext();
-  const fallbackWorkspacePath =
-    vscode.window.activeTextEditor?.document?.uri?.fsPath
-      ? path.dirname(vscode.window.activeTextEditor.document.uri.fsPath)
-      : undefined;
+  const fallbackWorkspacePath = vscode.window.activeTextEditor?.document?.uri
+    ?.fsPath
+    ? path.dirname(vscode.window.activeTextEditor.document.uri.fsPath)
+    : undefined;
   const workspacePath = last?.workspacePath || fallbackWorkspacePath;
   if (!workspacePath) {
     vscode.window.showErrorMessage(
@@ -130,4 +130,3 @@ export async function checkovScanWorkspaceCommand(
     return;
   }
 }
-

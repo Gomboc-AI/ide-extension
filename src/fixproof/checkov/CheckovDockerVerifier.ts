@@ -67,7 +67,9 @@ async function runProcess(args: {
       const remaining = maxOutputBytes - state.len;
       if (remaining <= 0) {
         state.truncated = true;
-        chunks.push(`\n...[truncated ${state.label}: maxOutputBytes exceeded]...\n`);
+        chunks.push(
+          `\n...[truncated ${state.label}: maxOutputBytes exceeded]...\n`,
+        );
         return;
       }
       if (s.length <= remaining) {
@@ -78,7 +80,9 @@ async function runProcess(args: {
       chunks.push(s.slice(0, remaining));
       state.len += remaining;
       state.truncated = true;
-      chunks.push(`\n...[truncated ${state.label}: maxOutputBytes exceeded]...\n`);
+      chunks.push(
+        `\n...[truncated ${state.label}: maxOutputBytes exceeded]...\n`,
+      );
     };
 
     child.stdout?.on('data', (d: Buffer) => {
@@ -417,4 +421,3 @@ export class CheckovDockerVerifier {
     };
   }
 }
-

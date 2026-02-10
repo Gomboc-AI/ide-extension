@@ -11,10 +11,10 @@ export async function fixProofCheckovVerifyCommand(
   scanResultsProvider: ScanResultsProvider,
 ): Promise<void> {
   const last = scanResultsProvider.getLastOrlScanContext();
-  const fallbackWorkspacePath =
-    vscode.window.activeTextEditor?.document?.uri?.fsPath
-      ? path.dirname(vscode.window.activeTextEditor.document.uri.fsPath)
-      : undefined;
+  const fallbackWorkspacePath = vscode.window.activeTextEditor?.document?.uri
+    ?.fsPath
+    ? path.dirname(vscode.window.activeTextEditor.document.uri.fsPath)
+    : undefined;
   const workspacePath = last?.workspacePath || fallbackWorkspacePath;
   if (!workspacePath) {
     vscode.window.showErrorMessage(
@@ -29,11 +29,12 @@ export async function fixProofCheckovVerifyCommand(
   });
   if (cached) {
     // Sliding TTL: running verification counts as "activity".
-    scanResultsProvider.touchFixProofCheckovTargets({ workspacePath }).catch(() => {});
+    scanResultsProvider
+      .touchFixProofCheckovTargets({ workspacePath })
+      .catch(() => {});
   }
-  let extracted:
-    | ReturnType<CheckovIdExtractor['extract']>
-    | undefined = undefined;
+  let extracted: ReturnType<CheckovIdExtractor['extract']> | undefined =
+    undefined;
   if (!cached) {
     const report = last?.report;
     if (!report || typeof report !== 'string' || !report.trim()) {
@@ -165,7 +166,9 @@ export async function fixProofCheckovVerifyCommand(
   const copyFailing = async () => {
     const text = result.failingCheckIds.join('\n');
     await vscode.env.clipboard.writeText(text);
-    vscode.window.showInformationMessage('Copied failing Checkov IDs to clipboard.');
+    vscode.window.showInformationMessage(
+      'Copied failing Checkov IDs to clipboard.',
+    );
   };
 
   if (result.allPassed) {
@@ -205,4 +208,3 @@ export async function fixProofCheckovVerifyCommand(
     return;
   }
 }
-

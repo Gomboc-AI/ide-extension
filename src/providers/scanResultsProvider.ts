@@ -162,7 +162,10 @@ export class ScanResultsProvider {
 
   private pruneFixProofCheckovCache(
     cache: Record<string, FixProofCheckovTargetsCacheEntry>,
-  ): { pruned: Record<string, FixProofCheckovTargetsCacheEntry>; changed: boolean } {
+  ): {
+    pruned: Record<string, FixProofCheckovTargetsCacheEntry>;
+    changed: boolean;
+  } {
     const now = Date.now();
     let changed = false;
     const out: Record<string, FixProofCheckovTargetsCacheEntry> = {};
@@ -171,7 +174,10 @@ export class ScanResultsProvider {
         changed = true;
         continue;
       }
-      if (typeof v.expiresAtMs !== 'number' || !Number.isFinite(v.expiresAtMs)) {
+      if (
+        typeof v.expiresAtMs !== 'number' ||
+        !Number.isFinite(v.expiresAtMs)
+      ) {
         changed = true;
         continue;
       }
@@ -274,14 +280,21 @@ export class ScanResultsProvider {
           mergedEvidence![checkId] = [];
         }
         for (const e of entries) {
-          const ruleName = typeof (e as any)?.ruleName === 'string' ? (e as any).ruleName : '';
-          const source = typeof (e as any)?.source === 'string' ? (e as any).source : '';
+          const ruleName =
+            typeof (e as any)?.ruleName === 'string' ? (e as any).ruleName : '';
+          const source =
+            typeof (e as any)?.source === 'string' ? (e as any).source : '';
           const key = typeof (e as any)?.key === 'string' ? (e as any).key : '';
           if (!ruleName || !source || !key) {
             continue;
           }
           const arr = mergedEvidence![checkId]!;
-          if (!arr.some(x => x.ruleName === ruleName && x.source === source && x.key === key)) {
+          if (
+            !arr.some(
+              x =>
+                x.ruleName === ruleName && x.source === source && x.key === key,
+            )
+          ) {
             arr.push({ ruleName, source, key });
           }
         }
@@ -331,7 +344,11 @@ export class ScanResultsProvider {
 
     const { pruned } = this.pruneFixProofCheckovCache(current);
     const existing = pruned[workspacePath];
-    if (!existing || !Array.isArray(existing.checkIds) || existing.checkIds.length === 0) {
+    if (
+      !existing ||
+      !Array.isArray(existing.checkIds) ||
+      existing.checkIds.length === 0
+    ) {
       return;
     }
 
@@ -349,9 +366,7 @@ export class ScanResultsProvider {
 
   public getCachedFixProofCheckovTargets(args: {
     workspacePath: string;
-  }):
-    | (FixProofCheckovTargetsCacheEntry & { remainingMs: number })
-    | undefined {
+  }): (FixProofCheckovTargetsCacheEntry & { remainingMs: number }) | undefined {
     const workspacePath = (args.workspacePath || '').trim();
     if (!workspacePath) {
       return undefined;
