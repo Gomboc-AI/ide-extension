@@ -21,6 +21,8 @@ import {
 } from '../utils/integrationsService';
 import { setScanStatus } from '../utils/scanStatus';
 import { createProfiler } from '../utils/profiler';
+import { parseOrlReport } from '../utils/orlReportParser';
+import { CheckovIdExtractor } from '../fixproof/checkov/CheckovIdExtractor';
 
 /**
  * ORL scans are executed by spawning a docker container (`orlClient.remediate`).
@@ -186,6 +188,36 @@ async function scanWithOrl(
       exitCode: result.exitCode,
     });
 
+    // Dump the raw ORL report for debugging/parsing experiments.
+    //
+    // Important: ORL report payloads can be very large (MBs). Logging the entire report as one
+    // giant JSON log line can get truncated/dropped by VS Code log viewers. So we emit a small
+    // META line and then stream the full report in safe-sized chunks, each with the same prefix
+    // for filtering.
+    const rawOrlReport = typeof result.report === 'string' ? result.report : '';
+    const baseLogFields = {
+      scanId,
+      workspacePath,
+      language,
+      exitCode: result.exitCode,
+      reportLength: rawOrlReport.length,
+    };
+
+    logger.info('GOMBOC_ORL::REPORT META', baseLogFields);
+
+    // Keep chunks reasonably small so they reliably show up in "Log (Extension Host)" / output.
+    const chunkSize = 8_000;
+    const totalChunks = Math.max(1, Math.ceil(rawOrlReport.length / chunkSize));
+    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+      const start = chunkIndex * chunkSize;
+      const end = Math.min(rawOrlReport.length, start + chunkSize);
+      const chunk = rawOrlReport.slice(start, end);
+      logger.info(
+        `GOMBOC_ORL::REPORT CHUNK ${chunkIndex + 1}/${totalChunks}\n${chunk}`,
+        { ...baseLogFields, chunkIndex, chunkStart: start, chunkEnd: end },
+      );
+    }
+
     // If ORL signaled a recoverable failure (exit code 1), keep going but log loudly.
     // This commonly happens when some rules fail to load/parse but other rules still run.
     if (result.success && result.exitCode === 1) {
@@ -210,6 +242,44 @@ async function scanWithOrl(
         // Error already logged in sendErrorToIntegrations
       });
       return;
+    }
+
+    // Persist last ORL report + scope so FixProof verification steps can reuse it.
+    // We set this immediately after ORL succeeds, even if later conversion fails.
+    scanResultsProvider.setLastOrlScanContext({
+      workspacePath,
+      language,
+      report: result.report,
+    });
+
+    // Cache the (non-empty) targeted Checkov ID list for FixProof verification.
+    // This prevents the list from "disappearing" after the user applies fixes and a rescan
+    // produces a report with 0 fixes/changes.
+    try {
+      const parsed = parseOrlReport(result.report);
+      const extractor = new CheckovIdExtractor();
+      const extracted = extractor.extract({
+        parsedReport: parsed,
+        onlyRulesThatChangedCode: true,
+      });
+      if (extracted.checkIds.length) {
+        // Additive cache: only grows; never shrinks.
+        scanResultsProvider
+          .cacheFixProofCheckovTargets({
+            workspacePath,
+            checkIds: extracted.checkIds,
+            checkIdsByRule: extracted.checkIdsByRule,
+            evidenceByCheckId: extracted.evidenceByCheckId as any,
+          })
+          .catch(() => {});
+      } else {
+        // Still touch the TTL so the session cache expires after inactivity, not after "no new IDs".
+        scanResultsProvider.touchFixProofCheckovTargets({ workspacePath }).catch(() => {});
+      }
+    } catch (e) {
+      logger.debug('FixProof: failed to cache Checkov targets (ignored)', {
+        e: e instanceof Error ? e.message : String(e),
+      });
     }
 
     // Convert ORL result to IDE extension format

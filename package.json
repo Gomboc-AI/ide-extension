@@ -43,6 +43,14 @@
       {
         "command": "gomboc-vscode-extension.testOrlConnection",
         "title": "Gomboc: Test ORL Connection"
+      },
+      {
+        "command": "gomboc-vscode-extension.fixProofCheckovVerify",
+        "title": "Gomboc: FixProof – Verify targeted Checkov checks (Docker)"
+      },
+      {
+        "command": "gomboc-vscode-extension.checkovScanWorkspace",
+        "title": "Gomboc: Checkov – Scan workspace (full)"
       }
     ],
     "configuration": [
@@ -148,6 +156,11 @@
             "type": "boolean",
             "default": false,
             "description": "Emit structured timing logs to help diagnose scan performance. Filter logs by the marker string GOMBOC_PROFILING::V1::TIMING_EVENT."
+          },
+          "gomboc-vscode-extension.checkovContainerImage": {
+            "type": "string",
+            "default": "bridgecrew/checkov:latest",
+            "description": "Docker image to use for FixProof targeted Checkov verification."
           }
         }
       }

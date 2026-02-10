@@ -25,6 +25,18 @@ type IndividualFix = IndividualFixesRemediation['fixes'][number] &
     'benchmarkRecommendation'
   >;
 
+type FixProofCheckovTargetsCacheEntry = {
+  workspacePath: string;
+  capturedAtMs: number;
+  expiresAtMs: number;
+  checkIds: string[];
+  checkIdsByRule?: Record<string, string[]>;
+  evidenceByCheckId?: Record<
+    string,
+    Array<{ ruleName: string; source: string; key: string }>
+  >;
+};
+
 export class ScanResultsProvider {
   public static codeActionDisposable: vscode.Disposable | undefined;
   private static scanResultsProviderInstance: ScanResultsProvider | null = null;
@@ -32,6 +44,14 @@ export class ScanResultsProvider {
   private groupedRemediations: GroupedFixesRemediation[];
   private orlRuleDescriptions: Record<string, string>;
   private orlRuleShortNames: Record<string, string>;
+  private lastOrlScanContext:
+    | {
+        workspacePath: string;
+        language?: string;
+        report?: string;
+        scannedAt: string;
+      }
+    | undefined;
 
   private constructor(
     private context: vscode.ExtensionContext,
@@ -41,7 +61,12 @@ export class ScanResultsProvider {
     this.groupedRemediations = [];
     this.orlRuleDescriptions = {};
     this.orlRuleShortNames = {};
+    this.lastOrlScanContext = undefined;
   }
+
+  private static readonly FIXPROOF_CHECKOV_CACHE_KEY =
+    'gomboc.fixproof.checkovTargets.v1';
+  private static readonly FIXPROOF_CHECKOV_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
   static init(
     context: vscode.ExtensionContext,
@@ -105,6 +130,259 @@ export class ScanResultsProvider {
       typeof (remediations as any).orlRuleShortNames === 'object'
         ? ((remediations as any).orlRuleShortNames as Record<string, string>)
         : {};
+  }
+
+  /**
+   * Best-effort persistence of the last ORL scan context so FixProof-style post-scan
+   * verification steps (e.g. targeted Checkov revalidation) can reuse the same scope.
+   */
+  public setLastOrlScanContext(args: {
+    workspacePath: string;
+    language?: string;
+    report?: string;
+  }) {
+    this.lastOrlScanContext = {
+      workspacePath: args.workspacePath,
+      language: args.language,
+      report: args.report,
+      scannedAt: new Date().toISOString(),
+    };
+  }
+
+  public getLastOrlScanContext():
+    | {
+        workspacePath: string;
+        language?: string;
+        report?: string;
+        scannedAt: string;
+      }
+    | undefined {
+    return this.lastOrlScanContext;
+  }
+
+  private pruneFixProofCheckovCache(
+    cache: Record<string, FixProofCheckovTargetsCacheEntry>,
+  ): { pruned: Record<string, FixProofCheckovTargetsCacheEntry>; changed: boolean } {
+    const now = Date.now();
+    let changed = false;
+    const out: Record<string, FixProofCheckovTargetsCacheEntry> = {};
+    for (const [k, v] of Object.entries(cache || {})) {
+      if (!v || typeof v !== 'object') {
+        changed = true;
+        continue;
+      }
+      if (typeof v.expiresAtMs !== 'number' || !Number.isFinite(v.expiresAtMs)) {
+        changed = true;
+        continue;
+      }
+      if (v.expiresAtMs <= now) {
+        changed = true;
+        continue;
+      }
+      if (!Array.isArray(v.checkIds) || v.checkIds.length === 0) {
+        changed = true;
+        continue;
+      }
+      out[k] = v;
+    }
+    return { pruned: out, changed };
+  }
+
+  /**
+   * Cache FixProof Checkov targets for a given scan scope (`workspacePath`).
+   *
+   * Semantics:
+   * - TTL is 30 minutes (sliding) so the cache clears after inactivity.
+   * - The set of `checkIds` is **additive** (monotonic): new scans only add IDs; never remove.
+   * - Evidence maps are merged best-effort.
+   *
+   * Important:
+   * - Passing an empty list does NOT clear/replace existing IDs.
+   * - Use `touchFixProofCheckovTargets` to extend TTL without adding IDs.
+   */
+  public async cacheFixProofCheckovTargets(args: {
+    workspacePath: string;
+    checkIds: string[];
+    checkIdsByRule?: Record<string, string[]>;
+    evidenceByCheckId?: Record<
+      string,
+      Array<{ ruleName: string; source: string; key: string }>
+    >;
+  }): Promise<void> {
+    const workspacePath = (args.workspacePath || '').trim();
+    if (!workspacePath) {
+      return;
+    }
+    const incomingIds = Array.isArray(args.checkIds) ? args.checkIds : [];
+
+    const raw = this.context.globalState.get(
+      ScanResultsProvider.FIXPROOF_CHECKOV_CACHE_KEY,
+    ) as unknown;
+    const current: Record<string, FixProofCheckovTargetsCacheEntry> =
+      raw && typeof raw === 'object' ? (raw as any) : {};
+
+    const { pruned } = this.pruneFixProofCheckovCache(current);
+    const existing = pruned[workspacePath];
+    const now = Date.now();
+
+    const unionIds = Array.from(
+      new Set([...(existing?.checkIds || []), ...incomingIds].filter(Boolean)),
+    ).sort();
+    if (unionIds.length === 0) {
+      // Nothing to store (and we do not store empty entries).
+      return;
+    }
+
+    const mergedCheckIdsByRule: Record<string, string[]> = {};
+    const mergeRuleMap = (m?: Record<string, string[]>) => {
+      if (!m || typeof m !== 'object') {
+        return;
+      }
+      for (const [ruleName, ids] of Object.entries(m)) {
+        if (!Array.isArray(ids) || !ruleName) {
+          continue;
+        }
+        if (!mergedCheckIdsByRule[ruleName]) {
+          mergedCheckIdsByRule[ruleName] = [];
+        }
+        for (const id of ids) {
+          if (typeof id === 'string' && id.trim()) {
+            mergedCheckIdsByRule[ruleName].push(id.trim());
+          }
+        }
+      }
+    };
+    mergeRuleMap(existing?.checkIdsByRule);
+    mergeRuleMap(args.checkIdsByRule);
+    for (const [k, v] of Object.entries(mergedCheckIdsByRule)) {
+      mergedCheckIdsByRule[k] = Array.from(new Set(v)).sort();
+    }
+
+    const mergedEvidence: FixProofCheckovTargetsCacheEntry['evidenceByCheckId'] =
+      {};
+    const mergeEvidence = (
+      ev?: FixProofCheckovTargetsCacheEntry['evidenceByCheckId'],
+    ) => {
+      if (!ev || typeof ev !== 'object') {
+        return;
+      }
+      for (const [checkId, entries] of Object.entries(ev)) {
+        if (!Array.isArray(entries)) {
+          continue;
+        }
+        if (!mergedEvidence![checkId]) {
+          mergedEvidence![checkId] = [];
+        }
+        for (const e of entries) {
+          const ruleName = typeof (e as any)?.ruleName === 'string' ? (e as any).ruleName : '';
+          const source = typeof (e as any)?.source === 'string' ? (e as any).source : '';
+          const key = typeof (e as any)?.key === 'string' ? (e as any).key : '';
+          if (!ruleName || !source || !key) {
+            continue;
+          }
+          const arr = mergedEvidence![checkId]!;
+          if (!arr.some(x => x.ruleName === ruleName && x.source === source && x.key === key)) {
+            arr.push({ ruleName, source, key });
+          }
+        }
+      }
+    };
+    mergeEvidence(existing?.evidenceByCheckId);
+    mergeEvidence(args.evidenceByCheckId);
+
+    pruned[workspacePath] = {
+      workspacePath,
+      capturedAtMs: now,
+      expiresAtMs: now + ScanResultsProvider.FIXPROOF_CHECKOV_TTL_MS,
+      checkIds: unionIds,
+      checkIdsByRule:
+        Object.keys(mergedCheckIdsByRule).length > 0
+          ? mergedCheckIdsByRule
+          : existing?.checkIdsByRule || args.checkIdsByRule,
+      evidenceByCheckId:
+        mergedEvidence && Object.keys(mergedEvidence).length > 0
+          ? mergedEvidence
+          : existing?.evidenceByCheckId || args.evidenceByCheckId,
+    };
+    await this.context.globalState.update(
+      ScanResultsProvider.FIXPROOF_CHECKOV_CACHE_KEY,
+      pruned,
+    );
+  }
+
+  /**
+   * Extend the TTL for a workspace's FixProof Checkov cache entry without modifying IDs.
+   * This is useful when the user is actively scanning/verifying but the current scan
+   * doesn't yield additional Checkov IDs.
+   */
+  public async touchFixProofCheckovTargets(args: {
+    workspacePath: string;
+  }): Promise<void> {
+    const workspacePath = (args.workspacePath || '').trim();
+    if (!workspacePath) {
+      return;
+    }
+
+    const raw = this.context.globalState.get(
+      ScanResultsProvider.FIXPROOF_CHECKOV_CACHE_KEY,
+    ) as unknown;
+    const current: Record<string, FixProofCheckovTargetsCacheEntry> =
+      raw && typeof raw === 'object' ? (raw as any) : {};
+
+    const { pruned } = this.pruneFixProofCheckovCache(current);
+    const existing = pruned[workspacePath];
+    if (!existing || !Array.isArray(existing.checkIds) || existing.checkIds.length === 0) {
+      return;
+    }
+
+    const now = Date.now();
+    pruned[workspacePath] = {
+      ...existing,
+      capturedAtMs: now,
+      expiresAtMs: now + ScanResultsProvider.FIXPROOF_CHECKOV_TTL_MS,
+    };
+    await this.context.globalState.update(
+      ScanResultsProvider.FIXPROOF_CHECKOV_CACHE_KEY,
+      pruned,
+    );
+  }
+
+  public getCachedFixProofCheckovTargets(args: {
+    workspacePath: string;
+  }):
+    | (FixProofCheckovTargetsCacheEntry & { remainingMs: number })
+    | undefined {
+    const workspacePath = (args.workspacePath || '').trim();
+    if (!workspacePath) {
+      return undefined;
+    }
+
+    const raw = this.context.globalState.get(
+      ScanResultsProvider.FIXPROOF_CHECKOV_CACHE_KEY,
+    ) as unknown;
+    const current: Record<string, FixProofCheckovTargetsCacheEntry> =
+      raw && typeof raw === 'object' ? (raw as any) : {};
+
+    const { pruned, changed } = this.pruneFixProofCheckovCache(current);
+    if (changed) {
+      // Best-effort cleanup; don't await.
+      this.context.globalState
+        .update(ScanResultsProvider.FIXPROOF_CHECKOV_CACHE_KEY, pruned)
+        .then(
+          () => {},
+          () => {},
+        );
+    }
+
+    const hit = pruned[workspacePath];
+    if (!hit) {
+      return undefined;
+    }
+    const remainingMs = Math.max(0, hit.expiresAtMs - Date.now());
+    if (!remainingMs) {
+      return undefined;
+    }
+    return { ...hit, remainingMs };
   }
 
   // uses the scan response to generate a diagnostic for the diagnostic collection
