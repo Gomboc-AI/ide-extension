@@ -419,7 +419,10 @@ export class ScanResultsProvider {
     string,
     { fixStrategy?: string; checkovIds: string[] }
   > {
-    const out = new Map<string, { fixStrategy?: string; checkovIds: string[] }>();
+    const out = new Map<
+      string,
+      { fixStrategy?: string; checkovIds: string[] }
+    >();
     const reportText = this.getLastOrlScanContext()?.report;
     if (!reportText) {
       return out;
@@ -444,7 +447,8 @@ export class ScanResultsProvider {
             ? r.metadata.annotations
             : undefined;
         const fixStrategy =
-          annotations && typeof annotations['gomboc-ai/fix-strategy'] === 'string'
+          annotations &&
+          typeof annotations['gomboc-ai/fix-strategy'] === 'string'
             ? String(annotations['gomboc-ai/fix-strategy'])
             : undefined;
         const checkovIds = annotations
@@ -722,7 +726,9 @@ export class ScanResultsProvider {
 
     const pickBestAnchorLine = (remediation: any): number => {
       // Prefer anchoring to the resource header line for stability in the editor.
-      const obs = Number(remediation?.codeObservation?.codeResourceInstance?.line);
+      const obs = Number(
+        remediation?.codeObservation?.codeResourceInstance?.line,
+      );
       if (Number.isFinite(obs) && obs > 0) {
         return obs;
       }
@@ -845,7 +851,9 @@ export class ScanResultsProvider {
             resourceHeader: meta.resourceHeader,
             filePath: filepath,
             line,
-            checkovIds: metaHit?.checkovIds?.length ? metaHit.checkovIds : undefined,
+            checkovIds: metaHit?.checkovIds?.length
+              ? metaHit.checkovIds
+              : undefined,
             fixStrategy: metaHit?.fixStrategy,
           });
 

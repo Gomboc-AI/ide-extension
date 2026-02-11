@@ -37,7 +37,9 @@ export async function fixProofCheckovVerifyForPanel(
     workspacePath,
   });
   if (cached) {
-    scanResultsProvider.touchFixProofCheckovTargets({ workspacePath }).catch(() => {});
+    scanResultsProvider
+      .touchFixProofCheckovTargets({ workspacePath })
+      .catch(() => {});
   }
   let extracted: ReturnType<CheckovIdExtractor['extract']> | undefined =
     undefined;
@@ -70,7 +72,8 @@ export async function fixProofCheckovVerifyForPanel(
   if (!checkIds.length) {
     return {
       ok: false,
-      error: 'FixProof: No Checkov IDs were found (or cached) for the last ORL scan scope.',
+      error:
+        'FixProof: No Checkov IDs were found (or cached) for the last ORL scan scope.',
     };
   }
 

@@ -496,7 +496,9 @@ async function scanWithApiClient(scanResultsProvider: ScanResultsProvider) {
         );
         return;
       }
-      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(filePath));
+      const doc = await vscode.workspace.openTextDocument(
+        vscode.Uri.file(filePath),
+      );
       await vscode.window.showTextDocument(doc, { preview: false });
       editor = vscode.window.activeTextEditor;
       if (!editor) {

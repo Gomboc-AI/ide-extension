@@ -123,4 +123,3 @@ function backtrack(
   ops.reverse();
   return ops;
 }
-

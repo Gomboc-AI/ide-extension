@@ -9,20 +9,45 @@ type IssuesPanelToExtMessage =
   | { type: 'requestSnapshot' }
   | { type: 'openFile'; filePath: string; line?: number }
   | { type: 'rescan' }
-  | { type: 'applySelected'; issues: Array<{ ruleName: string; filePath: string }> }
-  | { type: 'previewSelected'; issues: Array<{ ruleName: string; filePath: string }> }
+  | {
+      type: 'applySelected';
+      issues: Array<{ ruleName: string; filePath: string }>;
+    }
+  | {
+      type: 'previewSelected';
+      issues: Array<{ ruleName: string; filePath: string }>;
+    }
   | { type: 'openDiffInEditor'; filePath: string; afterText: string }
   | { type: 'verify' };
 
 type ExtToIssuesPanelMessage =
   | { type: 'snapshot'; payload: any }
-  | { type: 'applyProgress'; payload: { done: number; total: number; ruleName?: string; filePath?: string } }
+  | {
+      type: 'applyProgress';
+      payload: {
+        done: number;
+        total: number;
+        ruleName?: string;
+        filePath?: string;
+      };
+    }
   | { type: 'applyResult'; payload: { ok: boolean; error?: string } }
-  | { type: 'previewProgress'; payload: { done: number; total: number; ruleName?: string; filePath?: string } }
+  | {
+      type: 'previewProgress';
+      payload: {
+        done: number;
+        total: number;
+        ruleName?: string;
+        filePath?: string;
+      };
+    }
   | { type: 'previewResult'; payload: any }
   | { type: 'previewError'; payload: { message: string } }
   | { type: 'verifyResult'; payload: { ok: boolean; summary: string } }
-  | { type: 'toast'; payload: { kind: 'info' | 'warn' | 'error'; message: string } };
+  | {
+      type: 'toast';
+      payload: { kind: 'info' | 'warn' | 'error'; message: string };
+    };
 
 export class IssuesPanel {
   private static currentPanel: IssuesPanel | undefined;
@@ -52,7 +77,11 @@ export class IssuesPanel {
       },
     );
 
-    IssuesPanel.currentPanel = new IssuesPanel(panel, context, scanResultsProvider);
+    IssuesPanel.currentPanel = new IssuesPanel(
+      panel,
+      context,
+      scanResultsProvider,
+    );
     return IssuesPanel.currentPanel;
   }
 
@@ -110,16 +139,23 @@ export class IssuesPanel {
         if (!fp) {
           return;
         }
-        const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(fp));
+        const doc = await vscode.workspace.openTextDocument(
+          vscode.Uri.file(fp),
+        );
         const editor = await vscode.window.showTextDocument(doc, {
           preview: false,
           viewColumn: vscode.ViewColumn.One,
         });
-        const line = Number.isFinite(message.line) ? (message.line as number) : undefined;
+        const line = Number.isFinite(message.line)
+          ? (message.line as number)
+          : undefined;
         if (line && line > 0) {
           const pos = new vscode.Position(line - 1, 0);
           editor.selection = new vscode.Selection(pos, pos);
-          editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
+          editor.revealRange(
+            new vscode.Range(pos, pos),
+            vscode.TextEditorRevealType.InCenter,
+          );
         }
         return;
       }
@@ -157,7 +193,12 @@ export class IssuesPanel {
           const cur = capped[i];
           this.post({
             type: 'applyProgress',
-            payload: { done: i, total, ruleName: cur.ruleName, filePath: cur.filePath },
+            payload: {
+              done: i,
+              total,
+              ruleName: cur.ruleName,
+              filePath: cur.filePath,
+            },
           });
           try {
             await this.scanResultsProvider.applyOrlRuleRemediation([cur]);
@@ -247,7 +288,8 @@ export class IssuesPanel {
         if (!filePath) {
           return;
         }
-        const afterText = typeof message.afterText === 'string' ? message.afterText : '';
+        const afterText =
+          typeof message.afterText === 'string' ? message.afterText : '';
         const left = vscode.Uri.file(filePath);
         const rightDoc = await vscode.workspace.openTextDocument({
           content: afterText,
@@ -308,7 +350,7 @@ export class IssuesPanel {
   private getHtmlForWebview(webview: vscode.Webview): string {
     const nonce = crypto.randomBytes(16).toString('hex');
     const csp = [
-      'default-src \'none\'',
+      "default-src 'none'",
       `img-src ${webview.cspSource} https: data:`,
       `style-src ${webview.cspSource} 'unsafe-inline'`,
       `script-src 'nonce-${nonce}'`,
@@ -698,4 +740,3 @@ export class IssuesPanel {
     }
   }
 }
-

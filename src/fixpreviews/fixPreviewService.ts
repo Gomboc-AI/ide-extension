@@ -40,7 +40,9 @@ export class FixPreviewService {
     const scanWorkspacePath = (args.scanScope.workspacePath || '').trim();
     const scanLanguage = (args.scanScope.language || '').trim();
     if (!scanWorkspacePath || !scanLanguage) {
-      throw new Error('Preview requires an ORL scan scope (workspacePath + language).');
+      throw new Error(
+        'Preview requires an ORL scan scope (workspacePath + language).',
+      );
     }
     if (!selectedIssues.length) {
       return { scannedAt: args.scanScope.scannedAt, files: [] };
@@ -58,7 +60,10 @@ export class FixPreviewService {
     }
 
     // Group by directory (ORL scan scope is directory of the file).
-    const byDir = new Map<string, Array<{ ruleName: string; filePath: string }>>();
+    const byDir = new Map<
+      string,
+      Array<{ ruleName: string; filePath: string }>
+    >();
     for (const i of selectedIssues) {
       const fp = (i.filePath || '').trim();
       const rn = (i.ruleName || '').trim();
@@ -95,10 +100,7 @@ export class FixPreviewService {
       // Copy each directory into a temp subfolder (non-recursive; scan scope is a single directory).
       const tempDirBySourceDir = new Map<string, string>();
       for (const sourceDir of byDir.keys()) {
-        const destDir = path.join(
-          tempRoot,
-          safeSegment(sourceDir),
-        );
+        const destDir = path.join(tempRoot, safeSegment(sourceDir));
         await fs.mkdir(destDir, { recursive: true });
         await copyScanScopeDirectory({ sourceDir, destDir });
         tempDirBySourceDir.set(sourceDir, destDir);
@@ -127,7 +129,10 @@ export class FixPreviewService {
             current: { ruleName: issue.ruleName, filePath: issue.filePath },
           });
 
-          const tempFilePath = path.join(tempDir, path.basename(issue.filePath));
+          const tempFilePath = path.join(
+            tempDir,
+            path.basename(issue.filePath),
+          );
           const result = await orlClient.remediateSingleRule({
             workspacePath: tempDir,
             language: scanLanguage,
@@ -177,7 +182,9 @@ export class FixPreviewService {
         let afterText = beforeText;
         if (tempDir) {
           const tempFilePath = path.join(tempDir, path.basename(filePath));
-          afterText = await fs.readFile(tempFilePath, 'utf8').catch(() => beforeText);
+          afterText = await fs
+            .readFile(tempFilePath, 'utf8')
+            .catch(() => beforeText);
         }
         files.push({
           filePath,
@@ -258,4 +265,3 @@ function shouldSkip(name: string): boolean {
   const exts = ['.tf', '.hcl', '.tfvars', '.yaml', '.yml', '.json', '.tpl'];
   return !exts.some(ext => lower.endsWith(ext));
 }
-

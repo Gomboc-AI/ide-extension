@@ -8,4 +8,3 @@ export async function showIssuesCommand(
 ): Promise<void> {
   IssuesPanel.show(context, scanResultsProvider);
 }
-
