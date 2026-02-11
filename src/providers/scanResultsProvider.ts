@@ -213,8 +213,8 @@ export class ScanResultsProvider {
       ruleName.toLowerCase().includes('ai-restrict-ssh-ingress');
 
     const taskBody = isSshOpenIngress
-      ? `### Task\n\nUpdate Terraform security groups under \`${workspacePath}\` so that **SSH ingress (22/tcp)** is no longer open to the world.\n\n- Find every \`ingress { ... }\` block under \`resource \"aws_security_group\" ...\` where:\n  - \`from_port = 22\`\n  - \`to_port = 22\`\n  - \`cidr_blocks = [\"0.0.0.0/0\"]\` (or otherwise contains \`0.0.0.0/0\`)\n\nFor each of those SSH ingress blocks, replace it with a safer, configurable pattern:\n\n- Prefer **conditional SSH ingress** controlled by \`var.ssh_ingress_cidr_blocks\`:\n  - If \`var.ssh_ingress_cidr_blocks\` is empty, **do not create** an SSH ingress rule.\n  - If it’s non-empty, create SSH ingress with \`cidr_blocks = var.ssh_ingress_cidr_blocks\`.\n\nConstraints:\n- Do **not** change non-SSH ingress rules.\n- Preserve formatting as much as possible.\n- Remove any temporary marker comments like \`FIXPROOF_AI:\` once the real fix is implemented.\n\n### Notes\n- The variable is defined in \`dolphinscheduler-variables.tf\` as \`list(string)\`.\n- Implementing conditional ingress typically means converting the static SSH \`ingress { ... }\` block into:\n  - a \`dynamic \"ingress\" { for_each = length(var.ssh_ingress_cidr_blocks) > 0 ? [1] : [] ... }\`\n\n`
-      : `### Task\n\nImplement a safe fix for this finding. Keep changes minimal and avoid altering unrelated behavior.\n`;
+      ? `### Task\n\nUpdate Terraform security groups under \`${workspacePath}\` so that **SSH ingress (22/tcp)** is no longer open to the world.\n\n- Find every \`ingress { ... }\` block under \`resource "aws_security_group" ...\` where:\n  - \`from_port = 22\`\n  - \`to_port = 22\`\n  - \`cidr_blocks = ["0.0.0.0/0"]\` (or otherwise contains \`0.0.0.0/0\`)\n\nFor each of those SSH ingress blocks, replace it with a safer, configurable pattern:\n\n- Prefer **conditional SSH ingress** controlled by \`var.ssh_ingress_cidr_blocks\`:\n  - If \`var.ssh_ingress_cidr_blocks\` is empty, **do not create** an SSH ingress rule.\n  - If it’s non-empty, create SSH ingress with \`cidr_blocks = var.ssh_ingress_cidr_blocks\`.\n\nConstraints:\n- Do **not** change non-SSH ingress rules.\n- Preserve formatting as much as possible.\n- Remove any temporary marker comments like \`FIXPROOF_AI:\` once the real fix is implemented.\n\n### Notes\n- The variable is defined in \`dolphinscheduler-variables.tf\` as \`list(string)\`.\n- Implementing conditional ingress typically means converting the static SSH \`ingress { ... }\` block into:\n  - a \`dynamic "ingress" { for_each = length(var.ssh_ingress_cidr_blocks) > 0 ? [1] : [] ... }\`\n\n`
+      : '### Task\\n\\nImplement a safe fix for this finding. Keep changes minimal and avoid altering unrelated behavior.\\n';
 
     return `# AI Fix Prompt (validated)\n\n## Context\n- **Rule**: \`${ruleName}\`\n- **Fix strategy**: \`${fixStrategy || 'unknown'}\`\n- **File**: \`${filePath}\`\n- **Resource**: ${resourceHeader ? `\`${resourceHeader}\`` : '(unknown)'}\n\n## Rule description\n${ruleDescription ? ruleDescription : '(no description available)'}\n\n## Related Checkov IDs\n${checkList}\n\n${taskBody}## After you apply the fix\n1. Run **Gomboc: FixProof – Verify targeted Checkov checks (Docker)**.\n2. Run **Gomboc: Scan current file or scenario** again to confirm the finding is gone.\n`;
   }
@@ -260,7 +260,9 @@ export class ScanResultsProvider {
             (typeof r?.name === 'string' && r.name.trim()) ||
             (typeof r?.metadata?.name === 'string' && r.metadata.name.trim()) ||
             undefined;
-          if (!n) return false;
+          if (!n) {
+            return false;
+          }
           const nb = this.stripOrlInstanceSuffix(n);
           return wanted.has(n) || wanted.has(nb);
         });
@@ -299,7 +301,11 @@ export class ScanResultsProvider {
     });
 
     // Copy to clipboard for easy paste into Cursor Chat.
-    await vscode.env.clipboard.writeText(markdown).catch(() => {});
+    try {
+      await vscode.env.clipboard.writeText(markdown);
+    } catch {
+      // ignore
+    }
 
     // Open in an editor for visibility.
     const doc = await vscode.workspace.openTextDocument({
