@@ -227,7 +227,7 @@
   },
   "dependencies": {
     "@apollo/client": "^3.12.11",
-    "axios": "^1.12.2",
+    "axios": "^1.13.5",
     "dotenv": "^16.4.7",
     "file-type": "^20.1.0",
     "graphql-tag": "^2.12.6",
