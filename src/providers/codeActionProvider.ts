@@ -38,7 +38,11 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
       } else if (this._isGombocIndividualFixDiagnostic(cur)) {
         return [...acc, this._createIndividualFixCommandCodeAction(cur)];
       } else if (this._isOrlRuleFixDiagnostic(cur)) {
-        return [...acc, this._createOrlRuleFixCommandCodeAction(cur)];
+        return [
+          ...acc,
+          this._createOrlRuleFixCommandCodeAction(cur),
+          this._createAiFixPromptCodeAction(cur),
+        ];
       }
       return acc;
     }, [] as vscode.CodeAction[]);
@@ -125,6 +129,38 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
             filePath: diagnostic.filePath,
           },
         ],
+      ],
+    };
+    action.diagnostics = [diagnostic];
+    return action;
+  }
+
+  /**
+   * ORL-only: open an AI prompt for non-deterministic fixes, then revalidate via FixProof.
+   *
+   * Note: VS Code itself does not have Cursor AI. This action prepares a safe, structured prompt
+   * (and copies it to clipboard) so the user can run it in Cursor, then come back and verify.
+   */
+  private _createAiFixPromptCodeAction(
+    diagnostic: OrlRuleFixGombocDiagnostic,
+  ): vscode.CodeAction {
+    const action = new vscode.CodeAction(
+      'Try AI Fix (validated)',
+      vscode.CodeActionKind.QuickFix,
+    );
+    action.command = {
+      command: 'gomboc-results.openAiFixPrompt',
+      title: 'Try AI Fix (validated)',
+      tooltip:
+        'Opens a structured AI fix prompt and guides FixProof revalidation',
+      arguments: [
+        {
+          ruleName: diagnostic.ruleName,
+          filePath: diagnostic.filePath,
+          resourceHeader: (diagnostic as any).resourceHeader,
+          ruleShortName: (diagnostic as any).ruleShortName,
+          ruleDescription: (diagnostic as any).ruleDescription,
+        },
       ],
     };
     action.diagnostics = [diagnostic];

@@ -18,6 +18,7 @@ import { queueOrlFixAppliedEvent } from '../utils/integrationsService';
 import { createOrlClient } from '../orl/orlClient';
 import { detectLanguageFromFile } from '../utils/scanValidator';
 import logger from '../utils/logger';
+import { parseOrlReport } from '../utils/orlReportParser';
 
 type IndividualFix = IndividualFixesRemediation['fixes'][number] &
   Pick<
@@ -110,6 +111,216 @@ export class ScanResultsProvider {
         },
       ),
     );
+
+    // ORL-only: open a structured AI prompt (for Cursor) and guide FixProof revalidation.
+    this.context.subscriptions.push(
+      vscode.commands.registerCommand(
+        'gomboc-results.openAiFixPrompt',
+        (args: {
+          ruleName: string;
+          filePath: string;
+          resourceHeader?: string;
+          ruleShortName?: string;
+          ruleDescription?: string;
+        }) => {
+          this.openAiFixPrompt(args).catch(err => {
+            logger.error('Failed to open AI fix prompt', {
+              err: err instanceof Error ? err.message : String(err),
+            });
+            vscode.window.showErrorMessage(
+              `Failed to open AI fix prompt: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          });
+        },
+      ),
+    );
+  }
+
+  private stripOrlInstanceSuffix(ruleName: string): string {
+    if (!ruleName || typeof ruleName !== 'string') {
+      return ruleName;
+    }
+    const m = ruleName.match(/^(.*?)(\d{3})$/);
+    if (!m) {
+      return ruleName;
+    }
+    const base = m[1] ?? '';
+    if (!base) {
+      return ruleName;
+    }
+    const prev = base[base.length - 1];
+    if (prev && /[0-9]/.test(prev)) {
+      return ruleName;
+    }
+    return base;
+  }
+
+  private extractCheckovIdsFromAnnotations(annotations: any): string[] {
+    const out = new Set<string>();
+    if (!annotations || typeof annotations !== 'object') {
+      return [];
+    }
+    const validIdRe = /^(CKV|BC)_[A-Z0-9_]+$/;
+    const splitIds = (raw: unknown): string[] => {
+      if (typeof raw !== 'string') {
+        return [];
+      }
+      return raw
+        .split(/[\s,]+/g)
+        .map(x => x.trim().toUpperCase())
+        .filter(Boolean)
+        .filter(x => validIdRe.test(x));
+    };
+    for (const id of splitIds(annotations['gomboc-ai/checkov/id'])) {
+      out.add(id);
+    }
+    // optional plural form
+    for (const id of splitIds(annotations['gomboc-ai/checkov-ids'])) {
+      out.add(id);
+    }
+    return Array.from(out).sort();
+  }
+
+  private buildAiPromptMarkdown(args: {
+    workspacePath: string;
+    ruleName: string;
+    filePath: string;
+    resourceHeader?: string;
+    ruleShortName?: string;
+    ruleDescription?: string;
+    fixStrategy?: string;
+    checkovIds?: string[];
+  }): string {
+    const {
+      workspacePath,
+      ruleName,
+      filePath,
+      resourceHeader,
+      ruleShortName,
+      ruleDescription,
+      fixStrategy,
+      checkovIds,
+    } = args;
+
+    const title = ruleShortName || ruleName;
+    const checkList = (checkovIds || []).length
+      ? (checkovIds || []).map(id => `- ${id}`).join('\n')
+      : '- (none found)';
+
+    // Special-case starter: dolphinscheduler SSH ingress 0.0.0.0/0 (CKV_AWS_24)
+    const isSshOpenIngress =
+      (checkovIds || []).includes('CKV_AWS_24') ||
+      ruleName.toLowerCase().includes('ai-restrict-ssh-ingress');
+
+    const taskBody = isSshOpenIngress
+      ? `### Task\n\nUpdate Terraform security groups under \`${workspacePath}\` so that **SSH ingress (22/tcp)** is no longer open to the world.\n\n- Find every \`ingress { ... }\` block under \`resource \"aws_security_group\" ...\` where:\n  - \`from_port = 22\`\n  - \`to_port = 22\`\n  - \`cidr_blocks = [\"0.0.0.0/0\"]\` (or otherwise contains \`0.0.0.0/0\`)\n\nFor each of those SSH ingress blocks, replace it with a safer, configurable pattern:\n\n- Prefer **conditional SSH ingress** controlled by \`var.ssh_ingress_cidr_blocks\`:\n  - If \`var.ssh_ingress_cidr_blocks\` is empty, **do not create** an SSH ingress rule.\n  - If it’s non-empty, create SSH ingress with \`cidr_blocks = var.ssh_ingress_cidr_blocks\`.\n\nConstraints:\n- Do **not** change non-SSH ingress rules.\n- Preserve formatting as much as possible.\n- Remove any temporary marker comments like \`FIXPROOF_AI:\` once the real fix is implemented.\n\n### Notes\n- The variable is defined in \`dolphinscheduler-variables.tf\` as \`list(string)\`.\n- Implementing conditional ingress typically means converting the static SSH \`ingress { ... }\` block into:\n  - a \`dynamic \"ingress\" { for_each = length(var.ssh_ingress_cidr_blocks) > 0 ? [1] : [] ... }\`\n\n`
+      : `### Task\n\nImplement a safe fix for this finding. Keep changes minimal and avoid altering unrelated behavior.\n`;
+
+    return `# AI Fix Prompt (validated)\n\n## Context\n- **Rule**: \`${ruleName}\`\n- **Fix strategy**: \`${fixStrategy || 'unknown'}\`\n- **File**: \`${filePath}\`\n- **Resource**: ${resourceHeader ? `\`${resourceHeader}\`` : '(unknown)'}\n\n## Rule description\n${ruleDescription ? ruleDescription : '(no description available)'}\n\n## Related Checkov IDs\n${checkList}\n\n${taskBody}## After you apply the fix\n1. Run **Gomboc: FixProof – Verify targeted Checkov checks (Docker)**.\n2. Run **Gomboc: Scan current file or scenario** again to confirm the finding is gone.\n`;
+  }
+
+  /**
+   * ORL-only: open a generated Markdown prompt for AI-assisted fixes.
+   * We copy it to clipboard and open it in an editor so the user can run it in Cursor.
+   */
+  public async openAiFixPrompt(args: {
+    ruleName: string;
+    filePath: string;
+    resourceHeader?: string;
+    ruleShortName?: string;
+    ruleDescription?: string;
+  }): Promise<void> {
+    const ruleNameRaw = (args.ruleName || '').trim();
+    const filePath = (args.filePath || '').trim();
+    if (!ruleNameRaw || !filePath) {
+      vscode.window.showErrorMessage(
+        'AI fix prompt: missing ruleName or filePath',
+      );
+      return;
+    }
+
+    const last = this.getLastOrlScanContext();
+    const workspacePath =
+      last?.workspacePath ||
+      (filePath ? path.dirname(filePath) : undefined) ||
+      '';
+    const reportText = last?.report;
+
+    let fixStrategy: string | undefined = undefined;
+    let checkovIds: string[] | undefined = undefined;
+
+    try {
+      const parsed = parseOrlReport(reportText);
+      const rules = (parsed as any)?.spec?.rules;
+      if (Array.isArray(rules)) {
+        const base = this.stripOrlInstanceSuffix(ruleNameRaw);
+        const wanted = new Set([ruleNameRaw, base]);
+        const hit = rules.find((r: any) => {
+          const n: string | undefined =
+            (typeof r?.name === 'string' && r.name.trim()) ||
+            (typeof r?.metadata?.name === 'string' && r.metadata.name.trim()) ||
+            undefined;
+          if (!n) return false;
+          const nb = this.stripOrlInstanceSuffix(n);
+          return wanted.has(n) || wanted.has(nb);
+        });
+        const annotations =
+          hit?.metadata?.annotations &&
+          typeof hit.metadata.annotations === 'object'
+            ? hit.metadata.annotations
+            : undefined;
+        if (annotations) {
+          fixStrategy =
+            typeof annotations['gomboc-ai/fix-strategy'] === 'string'
+              ? String(annotations['gomboc-ai/fix-strategy'])
+              : undefined;
+          checkovIds = this.extractCheckovIdsFromAnnotations(annotations);
+        }
+      }
+    } catch (e) {
+      // Ignore: prompt generation still works without report metadata.
+      logger.debug(
+        'AI fix prompt: failed to parse ORL report metadata (ignored)',
+        {
+          e: e instanceof Error ? e.message : String(e),
+        },
+      );
+    }
+
+    const markdown = this.buildAiPromptMarkdown({
+      workspacePath,
+      ruleName: ruleNameRaw,
+      filePath,
+      resourceHeader: args.resourceHeader,
+      ruleShortName: args.ruleShortName,
+      ruleDescription: args.ruleDescription,
+      fixStrategy,
+      checkovIds,
+    });
+
+    // Copy to clipboard for easy paste into Cursor Chat.
+    await vscode.env.clipboard.writeText(markdown).catch(() => {});
+
+    // Open in an editor for visibility.
+    const doc = await vscode.workspace.openTextDocument({
+      content: markdown,
+      language: 'markdown',
+    });
+    await vscode.window.showTextDocument(doc, { preview: true });
+
+    const choice = await vscode.window.showInformationMessage(
+      'AI fix prompt opened and copied to clipboard. After applying edits (in Cursor), run FixProof targeted Checkov verify.',
+      { modal: false },
+      'Run FixProof verify',
+    );
+    if (choice === 'Run FixProof verify') {
+      vscode.commands
+        .executeCommand('gomboc-vscode-extension.fixProofCheckovVerify')
+        .then(
+          () => {},
+          () => {},
+        );
+    }
   }
 
   public generateComments(
