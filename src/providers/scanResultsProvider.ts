@@ -38,6 +38,20 @@ type FixProofCheckovTargetsCacheEntry = {
   >;
 };
 
+export type OrlIssuesSnapshot = {
+  scanScope?: { workspacePath: string; language?: string; scannedAt?: string };
+  issues: Array<{
+    ruleName: string;
+    ruleShortName: string;
+    ruleDescription: string;
+    resourceHeader?: string;
+    filePath: string;
+    line?: number;
+    checkovIds?: string[];
+    fixStrategy?: string;
+  }>;
+};
+
 export class ScanResultsProvider {
   public static codeActionDisposable: vscode.Disposable | undefined;
   private static scanResultsProviderInstance: ScanResultsProvider | null = null;
@@ -54,6 +68,11 @@ export class ScanResultsProvider {
       }
     | undefined;
 
+  private lastIssuesSnapshot: OrlIssuesSnapshot;
+  private readonly issuesDidUpdateEmitter =
+    new vscode.EventEmitter<OrlIssuesSnapshot>();
+  public readonly onDidUpdateIssues = this.issuesDidUpdateEmitter.event;
+
   private constructor(
     private context: vscode.ExtensionContext,
     private diagnosticCollectionManager: DiagnosticCollectionManager,
@@ -63,6 +82,7 @@ export class ScanResultsProvider {
     this.orlRuleDescriptions = {};
     this.orlRuleShortNames = {};
     this.lastOrlScanContext = undefined;
+    this.lastIssuesSnapshot = { issues: [] };
   }
 
   private static readonly FIXPROOF_CHECKOV_CACHE_KEY =
@@ -377,6 +397,76 @@ export class ScanResultsProvider {
     return this.lastOrlScanContext;
   }
 
+  public getCurrentIssuesSnapshot(): OrlIssuesSnapshot {
+    // Always return a stable object shape for the webview.
+    const last = this.getLastOrlScanContext();
+    const scanScope = last
+      ? {
+          workspacePath: last.workspacePath,
+          language: last.language,
+          scannedAt: last.scannedAt,
+        }
+      : undefined;
+    return {
+      scanScope,
+      issues: Array.isArray(this.lastIssuesSnapshot?.issues)
+        ? this.lastIssuesSnapshot.issues
+        : [],
+    };
+  }
+
+  private buildOrlRuleMetaIndex(): Map<
+    string,
+    { fixStrategy?: string; checkovIds: string[] }
+  > {
+    const out = new Map<string, { fixStrategy?: string; checkovIds: string[] }>();
+    const reportText = this.getLastOrlScanContext()?.report;
+    if (!reportText) {
+      return out;
+    }
+    try {
+      const parsed = parseOrlReport(reportText);
+      const rules = (parsed as any)?.spec?.rules;
+      if (!Array.isArray(rules)) {
+        return out;
+      }
+      for (const r of rules) {
+        const n: string | undefined =
+          (typeof r?.name === 'string' && r.name.trim()) ||
+          (typeof r?.metadata?.name === 'string' && r.metadata.name.trim()) ||
+          undefined;
+        if (!n) {
+          continue;
+        }
+        const base = this.stripOrlInstanceSuffix(n);
+        const annotations =
+          r?.metadata?.annotations && typeof r.metadata.annotations === 'object'
+            ? r.metadata.annotations
+            : undefined;
+        const fixStrategy =
+          annotations && typeof annotations['gomboc-ai/fix-strategy'] === 'string'
+            ? String(annotations['gomboc-ai/fix-strategy'])
+            : undefined;
+        const checkovIds = annotations
+          ? this.extractCheckovIdsFromAnnotations(annotations)
+          : [];
+        const payload = { fixStrategy, checkovIds };
+        if (!out.has(n)) {
+          out.set(n, payload);
+        }
+        if (base && !out.has(base)) {
+          out.set(base, payload);
+        }
+      }
+    } catch (e) {
+      // Ignore: snapshot still works without report metadata.
+      logger.debug('Issues snapshot: failed to parse ORL report metadata', {
+        e: e instanceof Error ? e.message : String(e),
+      });
+    }
+    return out;
+  }
+
   private pruneFixProofCheckovCache(
     cache: Record<string, FixProofCheckovTargetsCacheEntry>,
   ): {
@@ -619,6 +709,9 @@ export class ScanResultsProvider {
 
   // uses the scan response to generate a diagnostic for the diagnostic collection
   createDiagnostic() {
+    const issues: OrlIssuesSnapshot['issues'] = [];
+    const metaIndex = this.buildOrlRuleMetaIndex();
+
     // the key represents the file path to the file that needs remediation
     const existingResourceBenchmarkFixes: Record<
       string,
@@ -626,6 +719,19 @@ export class ScanResultsProvider {
     > = {};
     const existingGroupedFixes: Record<string, GroupedFixesRemediation> = {};
     let diagnosticTotal = 0;
+
+    const pickBestAnchorLine = (remediation: any): number => {
+      // Prefer anchoring to the resource header line for stability in the editor.
+      const obs = Number(remediation?.codeObservation?.codeResourceInstance?.line);
+      if (Number.isFinite(obs) && obs > 0) {
+        return obs;
+      }
+      const fixLine = Number(remediation?.fixes?.[0]?.codePosition?.line);
+      if (Number.isFinite(fixLine) && fixLine > 0) {
+        return fixLine;
+      }
+      return 1;
+    };
 
     for (const remediation of this.individualRemediations) {
       const filepath =
@@ -697,10 +803,7 @@ export class ScanResultsProvider {
               : [];
 
           // Pick a reasonable anchor line for diagnostics.
-          let line: number =
-            remediation?.codeObservation?.codeResourceInstance?.line ||
-            remediation?.fixes?.[0]?.codePosition?.line ||
-            1;
+          let line: number = pickBestAnchorLine(remediation);
           if (!Number.isFinite(line) || line <= 0) {
             line = 1;
           }
@@ -731,6 +834,21 @@ export class ScanResultsProvider {
           const shortNameRaw = this.orlRuleShortNames?.[ruleName] || ruleName;
           const shortName = prettifyShortName(shortNameRaw);
           const description = this.orlRuleDescriptions?.[ruleName] || ruleName;
+
+          const metaHit =
+            metaIndex.get(ruleName) ||
+            metaIndex.get(this.stripOrlInstanceSuffix(ruleName));
+          issues.push({
+            ruleName,
+            ruleShortName: shortName,
+            ruleDescription: description,
+            resourceHeader: meta.resourceHeader,
+            filePath: filepath,
+            line,
+            checkovIds: metaHit?.checkovIds?.length ? metaHit.checkovIds : undefined,
+            fixStrategy: metaHit?.fixStrategy,
+          });
+
           diagnosticTotal++;
           uniqueLines.add(line);
           const message = meta.resourceHeader
@@ -812,6 +930,19 @@ export class ScanResultsProvider {
     vscode.window.showInformationMessage(
       `Gomboc found ${diagnosticTotal} fixes`,
     );
+
+    const last = this.getLastOrlScanContext();
+    this.lastIssuesSnapshot = {
+      scanScope: last
+        ? {
+            workspacePath: last.workspacePath,
+            language: last.language,
+            scannedAt: last.scannedAt,
+          }
+        : undefined,
+      issues,
+    };
+    this.issuesDidUpdateEmitter.fire(this.lastIssuesSnapshot);
   }
 
   // Uses the scan result + diagnostic in order to apply a fix

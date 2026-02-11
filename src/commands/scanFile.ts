@@ -135,19 +135,41 @@ async function scanWithOrl(
     });
     logger.info('ORL scan starting');
     const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      return;
-    }
 
-    // Validate file type and prepare scan parameters
-    let filePath: string;
-    let filetype: string;
+    // Validate file type and prepare scan parameters.
+    // Important: when a webview is focused, VS Code may not have an active text editor.
+    // In that case, fall back to the last ORL scan scope so "Rescan" from the Issues panel works.
+    let filePath: string | undefined;
+    let filetype: string | undefined;
     try {
-      const scanPrep = ScanValidator.validateAndPrepareScan(editor);
-      filePath = scanPrep.filePath;
-      workspacePath = scanPrep.workspacePath;
-      filetype = scanPrep.filetype;
-      language = scanPrep.language;
+      if (editor) {
+        const scanPrep = ScanValidator.validateAndPrepareScan(editor);
+        filePath = scanPrep.filePath;
+        workspacePath = scanPrep.workspacePath;
+        filetype = scanPrep.filetype;
+        language = scanPrep.language;
+      } else {
+        const last = scanResultsProvider.getLastOrlScanContext();
+        workspacePath = last?.workspacePath;
+        language = last?.language;
+        if (!workspacePath || !language) {
+          vscode.window.showErrorMessage(
+            'Scan requires an active IaC file. Open a Terraform/CloudFormation file (or run one scan first) then try again.',
+          );
+          return;
+        }
+        filePath = await pickRepresentativeFileInDirectory({
+          workspacePath,
+          language,
+        });
+        if (!filePath) {
+          vscode.window.showErrorMessage(
+            `Scan could not find a representative IaC file under: ${workspacePath}`,
+          );
+          return;
+        }
+        filetype = getFileType(filePath);
+      }
     } catch (error) {
       // Validation error (400) - file type not supported, language detection failed, etc.
       const errorMessage =
@@ -156,16 +178,32 @@ async function scanWithOrl(
       vscode.window.showErrorMessage(`Scan validation failed: ${errorMessage}`);
 
       // Report validation error to integrations service (non-blocking)
-      const editorPath = editor.document.uri.fsPath;
-      const editorWorkspacePath = path.dirname(editorPath);
+      const editorPath = editor?.document?.uri?.fsPath;
+      const editorWorkspacePath =
+        editorPath ||
+        workspacePath ||
+        (vscode.window.activeTextEditor?.document?.uri?.fsPath
+          ? path.dirname(vscode.window.activeTextEditor.document.uri.fsPath)
+          : undefined);
       sendErrorToIntegrations(
-        editorWorkspacePath,
+        editorWorkspacePath || '',
         undefined,
         errorMessage,
         400,
         'Scan validation',
       ).catch(() => {
         // Error already logged in sendErrorToIntegrations
+      });
+      return;
+    }
+
+    // Safety: should be set by validation/fallback above.
+    if (!filePath || !filetype || !workspacePath || !language) {
+      logger.warn('ORL scan missing required parameters (skipping)', {
+        filePath,
+        filetype,
+        workspacePath,
+        language,
       });
       return;
     }
@@ -367,14 +405,103 @@ async function scanWithOrl(
   }
 }
 
+async function pickRepresentativeFileInDirectory(args: {
+  workspacePath: string;
+  language: string;
+}): Promise<string | undefined> {
+  const workspacePath = (args.workspacePath || '').trim();
+  const language = (args.language || '').trim().toLowerCase();
+  if (!workspacePath || !language) {
+    return undefined;
+  }
+
+  const entries = await vscode.workspace.fs.readDirectory(
+    vscode.Uri.file(workspacePath),
+  );
+  const files = entries
+    .filter(([_, t]) => t === vscode.FileType.File)
+    .map(([name]) => name);
+
+  const pickBy = (pred: (name: string) => boolean): string | undefined => {
+    const hit = files.find(pred);
+    return hit ? path.join(workspacePath, hit) : undefined;
+  };
+
+  // Terraform
+  if (language === 'terraform') {
+    return (
+      pickBy(n => n.toLowerCase().endsWith('.tf')) ||
+      pickBy(n => n.toLowerCase().endsWith('.hcl')) ||
+      pickBy(n => n.toLowerCase().endsWith('.tfvars')) ||
+      undefined
+    );
+  }
+
+  // Docker
+  if (language === 'docker') {
+    return pickBy(n => n.toLowerCase().startsWith('dockerfile'));
+  }
+
+  // Helm
+  if (language === 'helm') {
+    return (
+      pickBy(n => n.toLowerCase().endsWith('.tpl')) ||
+      pickBy(n => n.toLowerCase().endsWith('.yaml')) ||
+      pickBy(n => n.toLowerCase().endsWith('.yml')) ||
+      undefined
+    );
+  }
+
+  // CloudFormation / Kubernetes / YAML-ish
+  if (
+    language.startsWith('cloudformation') ||
+    language === 'kubernetes' ||
+    language.endsWith('-yaml') ||
+    language.endsWith('-json')
+  ) {
+    return (
+      pickBy(n => n.toLowerCase().endsWith('.yaml')) ||
+      pickBy(n => n.toLowerCase().endsWith('.yml')) ||
+      pickBy(n => n.toLowerCase().endsWith('.json')) ||
+      undefined
+    );
+  }
+
+  // Fallback: any file in the directory.
+  return files.length ? path.join(workspacePath, files[0]) : undefined;
+}
+
 async function scanWithApiClient(scanResultsProvider: ScanResultsProvider) {
   setScanStatus({ running: true, queued: false });
   try {
     const apiClient = new CustomerApiClient();
     // ----- Gather input ------- //
-    const editor = vscode.window.activeTextEditor;
+    let editor = vscode.window.activeTextEditor;
     if (!editor) {
-      return;
+      const last = scanResultsProvider.getLastOrlScanContext();
+      if (!last?.workspacePath) {
+        vscode.window.showErrorMessage(
+          'Scan requires an active IaC file. Open a Terraform/CloudFormation file then try again.',
+        );
+        return;
+      }
+      // API mode needs a concrete file scope; pick one in the last scanned directory.
+      const filePath = await pickRepresentativeFileInDirectory({
+        workspacePath: last.workspacePath,
+        language: last.language || 'terraform',
+      });
+      if (!filePath) {
+        vscode.window.showErrorMessage(
+          `Scan could not find a representative IaC file under: ${last.workspacePath}`,
+        );
+        return;
+      }
+      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(filePath));
+      await vscode.window.showTextDocument(doc, { preview: false });
+      editor = vscode.window.activeTextEditor;
+      if (!editor) {
+        return;
+      }
     }
     const document = editor.document;
     const filePath = document.uri.fsPath;

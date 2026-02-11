@@ -7,6 +7,133 @@ import { CheckovIdExtractor } from '../fixproof/checkov/CheckovIdExtractor';
 import { CheckovDockerVerifier } from '../fixproof/checkov/CheckovDockerVerifier';
 import { CheckovScanCoordinator } from '../fixproof/checkov/CheckovScanCoordinator';
 
+export type FixProofCheckovVerifyPanelSummary =
+  | {
+      ok: true;
+      allPassed: boolean;
+      checkCount: number;
+      failingCheckIds: string[];
+    }
+  | { ok: false; error: string };
+
+export async function fixProofCheckovVerifyForPanel(
+  scanResultsProvider: ScanResultsProvider,
+): Promise<FixProofCheckovVerifyPanelSummary> {
+  const last = scanResultsProvider.getLastOrlScanContext();
+  const fallbackWorkspacePath = vscode.window.activeTextEditor?.document?.uri
+    ?.fsPath
+    ? path.dirname(vscode.window.activeTextEditor.document.uri.fsPath)
+    : undefined;
+  const workspacePath = last?.workspacePath || fallbackWorkspacePath;
+  if (!workspacePath) {
+    return {
+      ok: false,
+      error:
+        'FixProof Checkov verification requires a scan scope. Run an ORL scan first or open a file in the target directory.',
+    };
+  }
+
+  const cached = scanResultsProvider.getCachedFixProofCheckovTargets({
+    workspacePath,
+  });
+  if (cached) {
+    scanResultsProvider.touchFixProofCheckovTargets({ workspacePath }).catch(() => {});
+  }
+  let extracted: ReturnType<CheckovIdExtractor['extract']> | undefined =
+    undefined;
+  if (!cached) {
+    const report = last?.report;
+    if (!report || typeof report !== 'string' || !report.trim()) {
+      return {
+        ok: false,
+        error:
+          'FixProof Checkov verification could not find cached Checkov targets, and the last ORL report was missing. Run an ORL scan first.',
+      };
+    }
+    const parsed = parseOrlReport(report);
+    const extractor = new CheckovIdExtractor();
+    extracted = extractor.extract({
+      parsedReport: parsed,
+      onlyRulesThatChangedCode: true,
+    });
+    if (extracted.checkIds.length) {
+      await scanResultsProvider.cacheFixProofCheckovTargets({
+        workspacePath,
+        checkIds: extracted.checkIds,
+        checkIdsByRule: extracted.checkIdsByRule,
+        evidenceByCheckId: extracted.evidenceByCheckId as any,
+      });
+    }
+  }
+
+  const checkIds = cached?.checkIds || extracted?.checkIds || [];
+  if (!checkIds.length) {
+    return {
+      ok: false,
+      error: 'FixProof: No Checkov IDs were found (or cached) for the last ORL scan scope.',
+    };
+  }
+
+  const cfg = vscode.workspace.getConfiguration('gomboc-vscode-extension');
+  const image =
+    (cfg.get('checkovContainerImage') as string | undefined) ||
+    'bridgecrew/checkov:latest';
+
+  const defaultSkipPaths = [
+    '.git',
+    '.terraform',
+    '.orl-temp',
+    '.orl-debug',
+    'node_modules',
+  ];
+  const frameworks =
+    last?.language === 'terraform'
+      ? ['terraform']
+      : typeof last?.language === 'string' &&
+          last.language.toLowerCase().startsWith('cloudformation')
+        ? ['cloudformation']
+        : undefined;
+
+  const verifier = new CheckovDockerVerifier({
+    image,
+    frameworks,
+    skipPaths: defaultSkipPaths,
+  });
+
+  const result = await CheckovScanCoordinator.runExclusive({
+    title: 'FixProof targeted verify',
+    task: async () => {
+      return await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: `FixProof: Running Checkov verification (${checkIds.length} checks)`,
+          cancellable: false,
+        },
+        async () => {
+          return await verifier.verify({
+            workspacePath,
+            checkIds,
+          });
+        },
+      );
+    },
+  });
+
+  if (!result) {
+    return {
+      ok: false,
+      error: 'FixProof verify did not run (possibly already running).',
+    };
+  }
+
+  return {
+    ok: true,
+    allPassed: result.allPassed,
+    checkCount: checkIds.length,
+    failingCheckIds: result.failingCheckIds,
+  };
+}
+
 export async function fixProofCheckovVerifyCommand(
   scanResultsProvider: ScanResultsProvider,
 ): Promise<void> {

@@ -51,6 +51,10 @@
       {
         "command": "gomboc-vscode-extension.checkovScanWorkspace",
         "title": "Gomboc: Checkov – Scan workspace (full)"
+      },
+      {
+        "command": "gomboc-vscode-extension.showIssues",
+        "title": "Gomboc: Show issues (ORL + FixProof)"
       }
     ],
     "configuration": [
