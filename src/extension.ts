@@ -3,7 +3,10 @@ import * as path from 'path';
 import { testApiKeyCommand } from './commands/testApiKey';
 import { scanFileCommand } from './commands/scanFile';
 import { showBenchmarksCommand } from './commands/showFrameworks';
+import { showIssuesCommand } from './commands/showIssues';
 import { testOrlConnectionCommand } from './commands/testOrlConnection';
+import { fixProofCheckovVerifyCommand } from './commands/fixProofCheckovVerify';
+import { checkovScanWorkspaceCommand } from './commands/checkovScanWorkspace';
 import logger, { setLoggerLevel } from './utils/logger';
 import { ScanResultsProvider } from './providers/scanResultsProvider';
 import { CodeActionProvider } from './providers/codeActionProvider';
@@ -57,6 +60,18 @@ export async function activate(context: vscode.ExtensionContext) {
     {
       name: 'gomboc-vscode-extension.testOrlConnection',
       handler: () => testOrlConnectionCommand(context),
+    },
+    {
+      name: 'gomboc-vscode-extension.fixProofCheckovVerify',
+      handler: () => fixProofCheckovVerifyCommand(scanResults),
+    },
+    {
+      name: 'gomboc-vscode-extension.checkovScanWorkspace',
+      handler: () => checkovScanWorkspaceCommand(scanResults),
+    },
+    {
+      name: 'gomboc-vscode-extension.showIssues',
+      handler: () => showIssuesCommand(context, scanResults),
     },
   ];
 

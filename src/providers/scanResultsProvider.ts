@@ -18,12 +18,39 @@ import { queueOrlFixAppliedEvent } from '../utils/integrationsService';
 import { createOrlClient } from '../orl/orlClient';
 import { detectLanguageFromFile } from '../utils/scanValidator';
 import logger from '../utils/logger';
+import { parseOrlReport } from '../utils/orlReportParser';
 
 type IndividualFix = IndividualFixesRemediation['fixes'][number] &
   Pick<
     Pick<IndividualFixesQuerySuccess, 'remediations'>['remediations'][number],
     'benchmarkRecommendation'
   >;
+
+type FixProofCheckovTargetsCacheEntry = {
+  workspacePath: string;
+  capturedAtMs: number;
+  expiresAtMs: number;
+  checkIds: string[];
+  checkIdsByRule?: Record<string, string[]>;
+  evidenceByCheckId?: Record<
+    string,
+    Array<{ ruleName: string; source: string; key: string }>
+  >;
+};
+
+export type OrlIssuesSnapshot = {
+  scanScope?: { workspacePath: string; language?: string; scannedAt?: string };
+  issues: Array<{
+    ruleName: string;
+    ruleShortName: string;
+    ruleDescription: string;
+    resourceHeader?: string;
+    filePath: string;
+    line?: number;
+    checkovIds?: string[];
+    fixStrategy?: string;
+  }>;
+};
 
 export class ScanResultsProvider {
   public static codeActionDisposable: vscode.Disposable | undefined;
@@ -32,6 +59,19 @@ export class ScanResultsProvider {
   private groupedRemediations: GroupedFixesRemediation[];
   private orlRuleDescriptions: Record<string, string>;
   private orlRuleShortNames: Record<string, string>;
+  private lastOrlScanContext:
+    | {
+        workspacePath: string;
+        language?: string;
+        report?: string;
+        scannedAt: string;
+      }
+    | undefined;
+
+  private lastIssuesSnapshot: OrlIssuesSnapshot;
+  private readonly issuesDidUpdateEmitter =
+    new vscode.EventEmitter<OrlIssuesSnapshot>();
+  public readonly onDidUpdateIssues = this.issuesDidUpdateEmitter.event;
 
   private constructor(
     private context: vscode.ExtensionContext,
@@ -41,7 +81,13 @@ export class ScanResultsProvider {
     this.groupedRemediations = [];
     this.orlRuleDescriptions = {};
     this.orlRuleShortNames = {};
+    this.lastOrlScanContext = undefined;
+    this.lastIssuesSnapshot = { issues: [] };
   }
+
+  private static readonly FIXPROOF_CHECKOV_CACHE_KEY =
+    'gomboc.fixproof.checkovTargets.v1';
+  private static readonly FIXPROOF_CHECKOV_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
   static init(
     context: vscode.ExtensionContext,
@@ -85,6 +131,222 @@ export class ScanResultsProvider {
         },
       ),
     );
+
+    // ORL-only: open a structured AI prompt (for Cursor) and guide FixProof revalidation.
+    this.context.subscriptions.push(
+      vscode.commands.registerCommand(
+        'gomboc-results.openAiFixPrompt',
+        (args: {
+          ruleName: string;
+          filePath: string;
+          resourceHeader?: string;
+          ruleShortName?: string;
+          ruleDescription?: string;
+        }) => {
+          this.openAiFixPrompt(args).catch(err => {
+            logger.error('Failed to open AI fix prompt', {
+              err: err instanceof Error ? err.message : String(err),
+            });
+            vscode.window.showErrorMessage(
+              `Failed to open AI fix prompt: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          });
+        },
+      ),
+    );
+  }
+
+  private stripOrlInstanceSuffix(ruleName: string): string {
+    if (!ruleName || typeof ruleName !== 'string') {
+      return ruleName;
+    }
+    const m = ruleName.match(/^(.*?)(\d{3})$/);
+    if (!m) {
+      return ruleName;
+    }
+    const base = m[1] ?? '';
+    if (!base) {
+      return ruleName;
+    }
+    const prev = base[base.length - 1];
+    if (prev && /[0-9]/.test(prev)) {
+      return ruleName;
+    }
+    return base;
+  }
+
+  private extractCheckovIdsFromAnnotations(annotations: any): string[] {
+    const out = new Set<string>();
+    if (!annotations || typeof annotations !== 'object') {
+      return [];
+    }
+    const validIdRe = /^(CKV|BC)_[A-Z0-9_]+$/;
+    const splitIds = (raw: unknown): string[] => {
+      if (typeof raw !== 'string') {
+        return [];
+      }
+      return raw
+        .split(/[\s,]+/g)
+        .map(x => x.trim().toUpperCase())
+        .filter(Boolean)
+        .filter(x => validIdRe.test(x));
+    };
+    for (const id of splitIds(annotations['gomboc-ai/checkov/id'])) {
+      out.add(id);
+    }
+    // optional plural form
+    for (const id of splitIds(annotations['gomboc-ai/checkov-ids'])) {
+      out.add(id);
+    }
+    return Array.from(out).sort();
+  }
+
+  private buildAiPromptMarkdown(args: {
+    workspacePath: string;
+    ruleName: string;
+    filePath: string;
+    resourceHeader?: string;
+    ruleShortName?: string;
+    ruleDescription?: string;
+    fixStrategy?: string;
+    checkovIds?: string[];
+  }): string {
+    const {
+      workspacePath,
+      ruleName,
+      filePath,
+      resourceHeader,
+      ruleShortName,
+      ruleDescription,
+      fixStrategy,
+      checkovIds,
+    } = args;
+
+    const title = ruleShortName || ruleName;
+    const checkList = (checkovIds || []).length
+      ? (checkovIds || []).map(id => `- ${id}`).join('\n')
+      : '- (none found)';
+
+    // Special-case starter: dolphinscheduler SSH ingress 0.0.0.0/0 (CKV_AWS_24)
+    const isSshOpenIngress =
+      (checkovIds || []).includes('CKV_AWS_24') ||
+      ruleName.toLowerCase().includes('ai-restrict-ssh-ingress');
+
+    const taskBody = isSshOpenIngress
+      ? `### Task\n\nUpdate Terraform security groups under \`${workspacePath}\` so that **SSH ingress (22/tcp)** is no longer open to the world.\n\n- Find every \`ingress { ... }\` block under \`resource "aws_security_group" ...\` where:\n  - \`from_port = 22\`\n  - \`to_port = 22\`\n  - \`cidr_blocks = ["0.0.0.0/0"]\` (or otherwise contains \`0.0.0.0/0\`)\n\nFor each of those SSH ingress blocks, replace it with a safer, configurable pattern:\n\n- Prefer **conditional SSH ingress** controlled by \`var.ssh_ingress_cidr_blocks\`:\n  - If \`var.ssh_ingress_cidr_blocks\` is empty, **do not create** an SSH ingress rule.\n  - If it’s non-empty, create SSH ingress with \`cidr_blocks = var.ssh_ingress_cidr_blocks\`.\n\nConstraints:\n- Do **not** change non-SSH ingress rules.\n- Preserve formatting as much as possible.\n- Remove any temporary marker comments like \`FIXPROOF_AI:\` once the real fix is implemented.\n\n### Notes\n- The variable is defined in \`dolphinscheduler-variables.tf\` as \`list(string)\`.\n- Implementing conditional ingress typically means converting the static SSH \`ingress { ... }\` block into:\n  - a \`dynamic "ingress" { for_each = length(var.ssh_ingress_cidr_blocks) > 0 ? [1] : [] ... }\`\n\n`
+      : '### Task\\n\\nImplement a safe fix for this finding. Keep changes minimal and avoid altering unrelated behavior.\\n';
+
+    return `# AI Fix Prompt (validated)\n\n## Context\n- **Rule**: \`${ruleName}\`\n- **Fix strategy**: \`${fixStrategy || 'unknown'}\`\n- **File**: \`${filePath}\`\n- **Resource**: ${resourceHeader ? `\`${resourceHeader}\`` : '(unknown)'}\n\n## Rule description\n${ruleDescription ? ruleDescription : '(no description available)'}\n\n## Related Checkov IDs\n${checkList}\n\n${taskBody}## After you apply the fix\n1. Run **Gomboc: Third Party Compare – Verify targeted Checkov checks (Docker)**.\n2. Run **Gomboc: Scan current file or scenario** again to confirm the finding is gone.\n`;
+  }
+
+  /**
+   * ORL-only: open a generated Markdown prompt for AI-assisted fixes.
+   * We copy it to clipboard and open it in an editor so the user can run it in Cursor.
+   */
+  public async openAiFixPrompt(args: {
+    ruleName: string;
+    filePath: string;
+    resourceHeader?: string;
+    ruleShortName?: string;
+    ruleDescription?: string;
+  }): Promise<void> {
+    const ruleNameRaw = (args.ruleName || '').trim();
+    const filePath = (args.filePath || '').trim();
+    if (!ruleNameRaw || !filePath) {
+      vscode.window.showErrorMessage(
+        'AI fix prompt: missing ruleName or filePath',
+      );
+      return;
+    }
+
+    const last = this.getLastOrlScanContext();
+    const workspacePath =
+      last?.workspacePath ||
+      (filePath ? path.dirname(filePath) : undefined) ||
+      '';
+    const reportText = last?.report;
+
+    let fixStrategy: string | undefined = undefined;
+    let checkovIds: string[] | undefined = undefined;
+
+    try {
+      const parsed = parseOrlReport(reportText);
+      const rules = (parsed as any)?.spec?.rules;
+      if (Array.isArray(rules)) {
+        const base = this.stripOrlInstanceSuffix(ruleNameRaw);
+        const wanted = new Set([ruleNameRaw, base]);
+        const hit = rules.find((r: any) => {
+          const n: string | undefined =
+            (typeof r?.name === 'string' && r.name.trim()) ||
+            (typeof r?.metadata?.name === 'string' && r.metadata.name.trim()) ||
+            undefined;
+          if (!n) {
+            return false;
+          }
+          const nb = this.stripOrlInstanceSuffix(n);
+          return wanted.has(n) || wanted.has(nb);
+        });
+        const annotations =
+          hit?.metadata?.annotations &&
+          typeof hit.metadata.annotations === 'object'
+            ? hit.metadata.annotations
+            : undefined;
+        if (annotations) {
+          fixStrategy =
+            typeof annotations['gomboc-ai/fix-strategy'] === 'string'
+              ? String(annotations['gomboc-ai/fix-strategy'])
+              : undefined;
+          checkovIds = this.extractCheckovIdsFromAnnotations(annotations);
+        }
+      }
+    } catch (e) {
+      // Ignore: prompt generation still works without report metadata.
+      logger.debug(
+        'AI fix prompt: failed to parse ORL report metadata (ignored)',
+        {
+          e: e instanceof Error ? e.message : String(e),
+        },
+      );
+    }
+
+    const markdown = this.buildAiPromptMarkdown({
+      workspacePath,
+      ruleName: ruleNameRaw,
+      filePath,
+      resourceHeader: args.resourceHeader,
+      ruleShortName: args.ruleShortName,
+      ruleDescription: args.ruleDescription,
+      fixStrategy,
+      checkovIds,
+    });
+
+    // Copy to clipboard for easy paste into Cursor Chat.
+    try {
+      await vscode.env.clipboard.writeText(markdown);
+    } catch {
+      // ignore
+    }
+
+    // Open in an editor for visibility.
+    const doc = await vscode.workspace.openTextDocument({
+      content: markdown,
+      language: 'markdown',
+    });
+    await vscode.window.showTextDocument(doc, { preview: true });
+
+    const choice = await vscode.window.showInformationMessage(
+      'AI fix prompt opened and copied to clipboard. After applying edits (in Cursor), run Third Party Compare (targeted Checkov).',
+      { modal: false },
+      'Run Third Party Compare',
+    );
+    if (choice === 'Run Third Party Compare') {
+      vscode.commands
+        .executeCommand('gomboc-vscode-extension.fixProofCheckovVerify')
+        .then(
+          () => {},
+          () => {},
+        );
+    }
   }
 
   public generateComments(
@@ -107,8 +369,353 @@ export class ScanResultsProvider {
         : {};
   }
 
+  /**
+   * Best-effort persistence of the last ORL scan context so FixProof-style post-scan
+   * verification steps (e.g. targeted Checkov revalidation) can reuse the same scope.
+   */
+  public setLastOrlScanContext(args: {
+    workspacePath: string;
+    language?: string;
+    report?: string;
+  }) {
+    this.lastOrlScanContext = {
+      workspacePath: args.workspacePath,
+      language: args.language,
+      report: args.report,
+      scannedAt: new Date().toISOString(),
+    };
+  }
+
+  public getLastOrlScanContext():
+    | {
+        workspacePath: string;
+        language?: string;
+        report?: string;
+        scannedAt: string;
+      }
+    | undefined {
+    return this.lastOrlScanContext;
+  }
+
+  public getCurrentIssuesSnapshot(): OrlIssuesSnapshot {
+    // Always return a stable object shape for the webview.
+    const last = this.getLastOrlScanContext();
+    const scanScope = last
+      ? {
+          workspacePath: last.workspacePath,
+          language: last.language,
+          scannedAt: last.scannedAt,
+        }
+      : undefined;
+    return {
+      scanScope,
+      issues: Array.isArray(this.lastIssuesSnapshot?.issues)
+        ? this.lastIssuesSnapshot.issues
+        : [],
+    };
+  }
+
+  private buildOrlRuleMetaIndex(): Map<
+    string,
+    { fixStrategy?: string; checkovIds: string[] }
+  > {
+    const out = new Map<
+      string,
+      { fixStrategy?: string; checkovIds: string[] }
+    >();
+    const reportText = this.getLastOrlScanContext()?.report;
+    if (!reportText) {
+      return out;
+    }
+    try {
+      const parsed = parseOrlReport(reportText);
+      const rules = (parsed as any)?.spec?.rules;
+      if (!Array.isArray(rules)) {
+        return out;
+      }
+      for (const r of rules) {
+        const n: string | undefined =
+          (typeof r?.name === 'string' && r.name.trim()) ||
+          (typeof r?.metadata?.name === 'string' && r.metadata.name.trim()) ||
+          undefined;
+        if (!n) {
+          continue;
+        }
+        const base = this.stripOrlInstanceSuffix(n);
+        const annotations =
+          r?.metadata?.annotations && typeof r.metadata.annotations === 'object'
+            ? r.metadata.annotations
+            : undefined;
+        const fixStrategy =
+          annotations &&
+          typeof annotations['gomboc-ai/fix-strategy'] === 'string'
+            ? String(annotations['gomboc-ai/fix-strategy'])
+            : undefined;
+        const checkovIds = annotations
+          ? this.extractCheckovIdsFromAnnotations(annotations)
+          : [];
+        const payload = { fixStrategy, checkovIds };
+        if (!out.has(n)) {
+          out.set(n, payload);
+        }
+        if (base && !out.has(base)) {
+          out.set(base, payload);
+        }
+      }
+    } catch (e) {
+      // Ignore: snapshot still works without report metadata.
+      logger.debug('Issues snapshot: failed to parse ORL report metadata', {
+        e: e instanceof Error ? e.message : String(e),
+      });
+    }
+    return out;
+  }
+
+  private pruneFixProofCheckovCache(
+    cache: Record<string, FixProofCheckovTargetsCacheEntry>,
+  ): {
+    pruned: Record<string, FixProofCheckovTargetsCacheEntry>;
+    changed: boolean;
+  } {
+    const now = Date.now();
+    let changed = false;
+    const out: Record<string, FixProofCheckovTargetsCacheEntry> = {};
+    for (const [k, v] of Object.entries(cache || {})) {
+      if (!v || typeof v !== 'object') {
+        changed = true;
+        continue;
+      }
+      if (
+        typeof v.expiresAtMs !== 'number' ||
+        !Number.isFinite(v.expiresAtMs)
+      ) {
+        changed = true;
+        continue;
+      }
+      if (v.expiresAtMs <= now) {
+        changed = true;
+        continue;
+      }
+      if (!Array.isArray(v.checkIds) || v.checkIds.length === 0) {
+        changed = true;
+        continue;
+      }
+      out[k] = v;
+    }
+    return { pruned: out, changed };
+  }
+
+  /**
+   * Cache FixProof Checkov targets for a given scan scope (`workspacePath`).
+   *
+   * Semantics:
+   * - TTL is 30 minutes (sliding) so the cache clears after inactivity.
+   * - The set of `checkIds` is **additive** (monotonic): new scans only add IDs; never remove.
+   * - Evidence maps are merged best-effort.
+   *
+   * Important:
+   * - Passing an empty list does NOT clear/replace existing IDs.
+   * - Use `touchFixProofCheckovTargets` to extend TTL without adding IDs.
+   */
+  public async cacheFixProofCheckovTargets(args: {
+    workspacePath: string;
+    checkIds: string[];
+    checkIdsByRule?: Record<string, string[]>;
+    evidenceByCheckId?: Record<
+      string,
+      Array<{ ruleName: string; source: string; key: string }>
+    >;
+  }): Promise<void> {
+    const workspacePath = (args.workspacePath || '').trim();
+    if (!workspacePath) {
+      return;
+    }
+    const incomingIds = Array.isArray(args.checkIds) ? args.checkIds : [];
+
+    const raw = this.context.globalState.get(
+      ScanResultsProvider.FIXPROOF_CHECKOV_CACHE_KEY,
+    ) as unknown;
+    const current: Record<string, FixProofCheckovTargetsCacheEntry> =
+      raw && typeof raw === 'object' ? (raw as any) : {};
+
+    const { pruned } = this.pruneFixProofCheckovCache(current);
+    const existing = pruned[workspacePath];
+    const now = Date.now();
+
+    const unionIds = Array.from(
+      new Set([...(existing?.checkIds || []), ...incomingIds].filter(Boolean)),
+    ).sort();
+    if (unionIds.length === 0) {
+      // Nothing to store (and we do not store empty entries).
+      return;
+    }
+
+    const mergedCheckIdsByRule: Record<string, string[]> = {};
+    const mergeRuleMap = (m?: Record<string, string[]>) => {
+      if (!m || typeof m !== 'object') {
+        return;
+      }
+      for (const [ruleName, ids] of Object.entries(m)) {
+        if (!Array.isArray(ids) || !ruleName) {
+          continue;
+        }
+        if (!mergedCheckIdsByRule[ruleName]) {
+          mergedCheckIdsByRule[ruleName] = [];
+        }
+        for (const id of ids) {
+          if (typeof id === 'string' && id.trim()) {
+            mergedCheckIdsByRule[ruleName].push(id.trim());
+          }
+        }
+      }
+    };
+    mergeRuleMap(existing?.checkIdsByRule);
+    mergeRuleMap(args.checkIdsByRule);
+    for (const [k, v] of Object.entries(mergedCheckIdsByRule)) {
+      mergedCheckIdsByRule[k] = Array.from(new Set(v)).sort();
+    }
+
+    const mergedEvidence: FixProofCheckovTargetsCacheEntry['evidenceByCheckId'] =
+      {};
+    const mergeEvidence = (
+      ev?: FixProofCheckovTargetsCacheEntry['evidenceByCheckId'],
+    ) => {
+      if (!ev || typeof ev !== 'object') {
+        return;
+      }
+      for (const [checkId, entries] of Object.entries(ev)) {
+        if (!Array.isArray(entries)) {
+          continue;
+        }
+        if (!mergedEvidence![checkId]) {
+          mergedEvidence![checkId] = [];
+        }
+        for (const e of entries) {
+          const ruleName =
+            typeof (e as any)?.ruleName === 'string' ? (e as any).ruleName : '';
+          const source =
+            typeof (e as any)?.source === 'string' ? (e as any).source : '';
+          const key = typeof (e as any)?.key === 'string' ? (e as any).key : '';
+          if (!ruleName || !source || !key) {
+            continue;
+          }
+          const arr = mergedEvidence![checkId]!;
+          if (
+            !arr.some(
+              x =>
+                x.ruleName === ruleName && x.source === source && x.key === key,
+            )
+          ) {
+            arr.push({ ruleName, source, key });
+          }
+        }
+      }
+    };
+    mergeEvidence(existing?.evidenceByCheckId);
+    mergeEvidence(args.evidenceByCheckId);
+
+    pruned[workspacePath] = {
+      workspacePath,
+      capturedAtMs: now,
+      expiresAtMs: now + ScanResultsProvider.FIXPROOF_CHECKOV_TTL_MS,
+      checkIds: unionIds,
+      checkIdsByRule:
+        Object.keys(mergedCheckIdsByRule).length > 0
+          ? mergedCheckIdsByRule
+          : existing?.checkIdsByRule || args.checkIdsByRule,
+      evidenceByCheckId:
+        mergedEvidence && Object.keys(mergedEvidence).length > 0
+          ? mergedEvidence
+          : existing?.evidenceByCheckId || args.evidenceByCheckId,
+    };
+    await this.context.globalState.update(
+      ScanResultsProvider.FIXPROOF_CHECKOV_CACHE_KEY,
+      pruned,
+    );
+  }
+
+  /**
+   * Extend the TTL for a workspace's FixProof Checkov cache entry without modifying IDs.
+   * This is useful when the user is actively scanning/verifying but the current scan
+   * doesn't yield additional Checkov IDs.
+   */
+  public async touchFixProofCheckovTargets(args: {
+    workspacePath: string;
+  }): Promise<void> {
+    const workspacePath = (args.workspacePath || '').trim();
+    if (!workspacePath) {
+      return;
+    }
+
+    const raw = this.context.globalState.get(
+      ScanResultsProvider.FIXPROOF_CHECKOV_CACHE_KEY,
+    ) as unknown;
+    const current: Record<string, FixProofCheckovTargetsCacheEntry> =
+      raw && typeof raw === 'object' ? (raw as any) : {};
+
+    const { pruned } = this.pruneFixProofCheckovCache(current);
+    const existing = pruned[workspacePath];
+    if (
+      !existing ||
+      !Array.isArray(existing.checkIds) ||
+      existing.checkIds.length === 0
+    ) {
+      return;
+    }
+
+    const now = Date.now();
+    pruned[workspacePath] = {
+      ...existing,
+      capturedAtMs: now,
+      expiresAtMs: now + ScanResultsProvider.FIXPROOF_CHECKOV_TTL_MS,
+    };
+    await this.context.globalState.update(
+      ScanResultsProvider.FIXPROOF_CHECKOV_CACHE_KEY,
+      pruned,
+    );
+  }
+
+  public getCachedFixProofCheckovTargets(args: {
+    workspacePath: string;
+  }): (FixProofCheckovTargetsCacheEntry & { remainingMs: number }) | undefined {
+    const workspacePath = (args.workspacePath || '').trim();
+    if (!workspacePath) {
+      return undefined;
+    }
+
+    const raw = this.context.globalState.get(
+      ScanResultsProvider.FIXPROOF_CHECKOV_CACHE_KEY,
+    ) as unknown;
+    const current: Record<string, FixProofCheckovTargetsCacheEntry> =
+      raw && typeof raw === 'object' ? (raw as any) : {};
+
+    const { pruned, changed } = this.pruneFixProofCheckovCache(current);
+    if (changed) {
+      // Best-effort cleanup; don't await.
+      this.context.globalState
+        .update(ScanResultsProvider.FIXPROOF_CHECKOV_CACHE_KEY, pruned)
+        .then(
+          () => {},
+          () => {},
+        );
+    }
+
+    const hit = pruned[workspacePath];
+    if (!hit) {
+      return undefined;
+    }
+    const remainingMs = Math.max(0, hit.expiresAtMs - Date.now());
+    if (!remainingMs) {
+      return undefined;
+    }
+    return { ...hit, remainingMs };
+  }
+
   // uses the scan response to generate a diagnostic for the diagnostic collection
   createDiagnostic() {
+    const issues: OrlIssuesSnapshot['issues'] = [];
+    const metaIndex = this.buildOrlRuleMetaIndex();
+
     // the key represents the file path to the file that needs remediation
     const existingResourceBenchmarkFixes: Record<
       string,
@@ -116,6 +723,21 @@ export class ScanResultsProvider {
     > = {};
     const existingGroupedFixes: Record<string, GroupedFixesRemediation> = {};
     let diagnosticTotal = 0;
+
+    const pickBestAnchorLine = (remediation: any): number => {
+      // Prefer anchoring to the resource header line for stability in the editor.
+      const obs = Number(
+        remediation?.codeObservation?.codeResourceInstance?.line,
+      );
+      if (Number.isFinite(obs) && obs > 0) {
+        return obs;
+      }
+      const fixLine = Number(remediation?.fixes?.[0]?.codePosition?.line);
+      if (Number.isFinite(fixLine) && fixLine > 0) {
+        return fixLine;
+      }
+      return 1;
+    };
 
     for (const remediation of this.individualRemediations) {
       const filepath =
@@ -187,10 +809,7 @@ export class ScanResultsProvider {
               : [];
 
           // Pick a reasonable anchor line for diagnostics.
-          let line: number =
-            remediation?.codeObservation?.codeResourceInstance?.line ||
-            remediation?.fixes?.[0]?.codePosition?.line ||
-            1;
+          let line: number = pickBestAnchorLine(remediation);
           if (!Number.isFinite(line) || line <= 0) {
             line = 1;
           }
@@ -221,6 +840,23 @@ export class ScanResultsProvider {
           const shortNameRaw = this.orlRuleShortNames?.[ruleName] || ruleName;
           const shortName = prettifyShortName(shortNameRaw);
           const description = this.orlRuleDescriptions?.[ruleName] || ruleName;
+
+          const metaHit =
+            metaIndex.get(ruleName) ||
+            metaIndex.get(this.stripOrlInstanceSuffix(ruleName));
+          issues.push({
+            ruleName,
+            ruleShortName: shortName,
+            ruleDescription: description,
+            resourceHeader: meta.resourceHeader,
+            filePath: filepath,
+            line,
+            checkovIds: metaHit?.checkovIds?.length
+              ? metaHit.checkovIds
+              : undefined,
+            fixStrategy: metaHit?.fixStrategy,
+          });
+
           diagnosticTotal++;
           uniqueLines.add(line);
           const message = meta.resourceHeader
@@ -302,6 +938,19 @@ export class ScanResultsProvider {
     vscode.window.showInformationMessage(
       `Gomboc found ${diagnosticTotal} fixes`,
     );
+
+    const last = this.getLastOrlScanContext();
+    this.lastIssuesSnapshot = {
+      scanScope: last
+        ? {
+            workspacePath: last.workspacePath,
+            language: last.language,
+            scannedAt: last.scannedAt,
+          }
+        : undefined,
+      issues,
+    };
+    this.issuesDidUpdateEmitter.fire(this.lastIssuesSnapshot);
   }
 
   // Uses the scan result + diagnostic in order to apply a fix

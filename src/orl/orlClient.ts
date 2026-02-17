@@ -693,6 +693,10 @@ export class OrlClient {
         pulled: cached.pulled,
       });
 
+      // NOTE: Local dev rulespace injection is intentionally disabled.
+      // We do not automatically mount `.orl-dev-rules/` into production ORL runs.
+      const injectedDevRulesHostDir = undefined;
+
       // Optional two-pass mode:
       // Pass 1 runs with hooks disabled to quickly discover which rules produced changes.
       // Pass 2 runs with hooks enabled but only with the subset of rules that changed files.
@@ -1290,6 +1294,8 @@ export class OrlClient {
     rulesDir?: string;
     mountedRulesDir?: string;
     disableHooks?: boolean;
+    // NOTE: Local dev rulespace injection is intentionally disabled.
+    // devRulesHostDir?: string;
   }): string[] {
     const { containerImage } = this.config;
     const { workspacePath, language, rulesDir, mountedRulesDir, disableHooks } =
@@ -1900,6 +1906,9 @@ export class OrlClient {
         await this.pullRulesUsingOrl(rulesDir);
       }
       prof.mark('pullRulesUsingOrl', { pulledSingleRule });
+
+      // NOTE: Local dev rulespace injection is intentionally disabled.
+      const injectedDevRulesHostDir = undefined;
 
       // Execute ORL remediation with pulled rules.
       const dockerArgs = this.buildDockerArgs({
