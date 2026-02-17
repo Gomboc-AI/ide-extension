@@ -85,7 +85,7 @@ export class IssuesPanel {
 
     const panel = vscode.window.createWebviewPanel(
       'gombocIssues',
-      'Gomboc Reviewer (webview)',
+      'Gomboc: Open Fix Reviewer',
       vscode.ViewColumn.One,
       {
         enableScripts: true,
@@ -522,7 +522,7 @@ export class IssuesPanel {
     <meta charset="UTF-8" />
     <meta http-equiv="Content-Security-Policy" content="${csp}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Gomboc Reviewer (webview)</title>
+    <title>Gomboc: Open Fix Reviewer</title>
     <style>
       :root {
         --pad: 12px;
