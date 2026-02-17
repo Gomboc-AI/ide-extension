@@ -2,7 +2,8 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { createOrlClient } from '../orl/orlClient';
-import { diffLines, DiffLine } from './diffRender';
+import { diffToHunks, DiffHunk, DiffLine } from './diffRender';
+import { extractResourceContexts, ResourceContext } from './resourceContext';
 
 export type FixPreviewPayload = {
   scannedAt?: string;
@@ -11,6 +12,8 @@ export type FixPreviewPayload = {
     beforeText: string;
     afterText: string;
     diff: DiffLine[];
+    hunks: DiffHunk[];
+    contexts: ResourceContext[];
     appliedRules: string[];
   }>;
 };
@@ -186,11 +189,20 @@ export class FixPreviewService {
             .readFile(tempFilePath, 'utf8')
             .catch(() => beforeText);
         }
+        const diff = diffToHunks(beforeText, afterText);
+        const contexts = extractResourceContexts({
+          filePath,
+          languageHint: scanLanguage,
+          text: afterText,
+          hunks: diff.hunks,
+        });
         files.push({
           filePath,
           beforeText,
           afterText,
-          diff: diffLines(beforeText, afterText).slice(0, 4000),
+          diff: diff.lines.slice(0, 4000),
+          hunks: diff.hunks,
+          contexts,
           appliedRules: appliedRulesByFile.get(filePath) || [],
         });
       }

@@ -54,7 +54,7 @@
       },
       {
         "command": "gomboc-vscode-extension.showIssues",
-        "title": "Gomboc: Show issues (ORL + FixProof)"
+        "title": "Gomboc Reviewer (Webview)"
       }
     ],
     "configuration": [

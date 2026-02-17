@@ -1,7 +1,21 @@
-export type DiffLine =
-  | { kind: 'context'; text: string }
-  | { kind: 'add'; text: string }
-  | { kind: 'del'; text: string };
+import * as crypto from 'crypto';
+
+export type DiffLine = {
+  kind: 'context' | 'add' | 'del';
+  text: string;
+  oldLine?: number;
+  newLine?: number;
+};
+
+export type DiffHunk = {
+  id: string;
+  fingerprint: string;
+  oldStart: number;
+  oldLines: number;
+  newStart: number;
+  newLines: number;
+  lines: DiffLine[];
+};
 
 type Op =
   | { kind: 'equal'; a: string; b: string }
@@ -13,26 +27,146 @@ type Op =
  * Produces a sequence of operations that can be rendered in a webview.
  */
 export function diffLines(before: string, after: string): DiffLine[] {
+  return diffToHunks(before, after).lines;
+}
+
+export function diffToHunks(
+  before: string,
+  after: string,
+  contextLines: number = 3,
+): { lines: DiffLine[]; hunks: DiffHunk[] } {
   const a = splitLines(before);
   const b = splitLines(after);
   const ops = myers(a, b);
-  const out: DiffLine[] = [];
+
+  let oldLine = 1;
+  let newLine = 1;
+  const lines: DiffLine[] = [];
   for (const op of ops) {
     if (op.kind === 'equal') {
-      out.push({ kind: 'context', text: op.a });
+      lines.push({
+        kind: 'context',
+        text: op.a,
+        oldLine,
+        newLine,
+      });
+      oldLine++;
+      newLine++;
     } else if (op.kind === 'insert') {
-      out.push({ kind: 'add', text: op.b });
+      lines.push({
+        kind: 'add',
+        text: op.b,
+        newLine,
+      });
+      newLine++;
     } else {
-      out.push({ kind: 'del', text: op.a });
+      lines.push({
+        kind: 'del',
+        text: op.a,
+        oldLine,
+      });
+      oldLine++;
     }
   }
-  return out;
+
+  const hunks = buildHunks(lines, contextLines);
+  return { lines, hunks };
 }
 
 function splitLines(s: string): string[] {
   // Preserve empty last line behavior.
   const parts = (s ?? '').split('\n');
   return parts;
+}
+
+function buildHunks(lines: DiffLine[], contextLines: number): DiffHunk[] {
+  const changeIdx: number[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].kind !== 'context') {
+      changeIdx.push(i);
+    }
+  }
+  if (!changeIdx.length) {
+    return [];
+  }
+
+  const ranges: Array<{ start: number; end: number }> = [];
+  for (const i of changeIdx) {
+    const start = Math.max(0, i - contextLines);
+    const end = Math.min(lines.length - 1, i + contextLines);
+    const prev = ranges[ranges.length - 1];
+    if (!prev) {
+      ranges.push({ start, end });
+      continue;
+    }
+    if (start <= prev.end + 1) {
+      prev.end = Math.max(prev.end, end);
+    } else {
+      ranges.push({ start, end });
+    }
+  }
+
+  const hunks: DiffHunk[] = [];
+  for (let idx = 0; idx < ranges.length; idx++) {
+    const r = ranges[idx];
+    const hunkLines = lines.slice(r.start, r.end + 1);
+
+    const oldStart =
+      firstDefined(hunkLines.map(l => l.oldLine)) ??
+      lastDefined(lines.slice(0, r.start).map(l => l.oldLine))?.value ??
+      1;
+    const newStart =
+      firstDefined(hunkLines.map(l => l.newLine)) ??
+      lastDefined(lines.slice(0, r.start).map(l => l.newLine))?.value ??
+      1;
+
+    const oldLinesCount = hunkLines.filter(l => l.kind !== 'add').length;
+    const newLinesCount = hunkLines.filter(l => l.kind !== 'del').length;
+
+    const fingerprint = hashFingerprint({
+      oldStart,
+      oldLines: oldLinesCount,
+      newStart,
+      newLines: newLinesCount,
+      lines: hunkLines.map(l => `${l.kind}:${l.text}`),
+    });
+
+    hunks.push({
+      id: `h${idx + 1}`,
+      fingerprint,
+      oldStart,
+      oldLines: oldLinesCount,
+      newStart,
+      newLines: newLinesCount,
+      lines: hunkLines,
+    });
+  }
+
+  return hunks;
+}
+
+function firstDefined(values: Array<number | undefined>): number | undefined {
+  for (const v of values) {
+    if (Number.isFinite(v)) {
+      return v as number;
+    }
+  }
+  return undefined;
+}
+
+function lastDefined(values: Array<number | undefined>): { value: number } | undefined {
+  for (let i = values.length - 1; i >= 0; i--) {
+    const v = values[i];
+    if (Number.isFinite(v)) {
+      return { value: v as number };
+    }
+  }
+  return undefined;
+}
+
+function hashFingerprint(obj: any): string {
+  const raw = JSON.stringify(obj);
+  return crypto.createHash('sha1').update(raw, 'utf8').digest('hex').slice(0, 12);
 }
 
 function myers(a: string[], b: string[]): Op[] {
