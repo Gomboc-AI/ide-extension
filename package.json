@@ -54,7 +54,7 @@
       },
       {
         "command": "gomboc-vscode-extension.showIssues",
-        "title": "Gombov Reviewer (webview)"
+        "title": "Gomboc Reviewer (webview)"
       }
     ],
     "configuration": [
