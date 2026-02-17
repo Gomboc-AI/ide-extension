@@ -693,13 +693,9 @@ export class OrlClient {
         pulled: cached.pulled,
       });
 
-      // LOCAL-ONLY DEV HACK (REMOVE BEFORE MERGE):
-      // If the scanned workspace contains `.orl-dev-rules/`, inject it as an extra rulespace.
-      const devRulesHostDir = path.join(workspacePath, '.orl-dev-rules');
-      const injectedDevRulesHostDir = await fs.promises
-        .access(devRulesHostDir, fs.constants.F_OK)
-        .then(() => devRulesHostDir)
-        .catch(() => undefined);
+      // NOTE: Local dev rulespace injection is intentionally disabled.
+      // We do not automatically mount `.orl-dev-rules/` into production ORL runs.
+      const injectedDevRulesHostDir = undefined;
 
       // Optional two-pass mode:
       // Pass 1 runs with hooks disabled to quickly discover which rules produced changes.
@@ -727,7 +723,6 @@ export class OrlClient {
               language,
               mountedRulesDir: cached.rulesDir,
               disableHooks: true,
-              devRulesHostDir: injectedDevRulesHostDir,
             });
             logger.info(
               'Executing ORL via Docker (two-pass discovery, hooks disabled)',
@@ -832,7 +827,6 @@ export class OrlClient {
               workspacePath: tempDir,
               language,
               rulesDir,
-              devRulesHostDir: injectedDevRulesHostDir,
             });
             logger.info(
               'Executing ORL via Docker (two-pass, subset rules + hooks enabled)',
@@ -969,7 +963,6 @@ export class OrlClient {
         language,
         rulesDir,
         mountedRulesDir: cached.rulesDir,
-        devRulesHostDir: injectedDevRulesHostDir,
       });
       logger.info('Executing ORL via Docker', {
         command: 'docker',
@@ -1301,22 +1294,12 @@ export class OrlClient {
     rulesDir?: string;
     mountedRulesDir?: string;
     disableHooks?: boolean;
-    /**
-     * LOCAL-ONLY DEV HACK (REMOVE BEFORE MERGE):
-     * Additional host directory containing ORL rules to inject into IDE scans.
-     * If set, this directory is mounted read-only at `/dev-rules` and appended as an extra `--rulespace`.
-     */
-    devRulesHostDir?: string;
+    // NOTE: Local dev rulespace injection is intentionally disabled.
+    // devRulesHostDir?: string;
   }): string[] {
     const { containerImage } = this.config;
-    const {
-      workspacePath,
-      language,
-      rulesDir,
-      mountedRulesDir,
-      disableHooks,
-      devRulesHostDir,
-    } = opts;
+    const { workspacePath, language, rulesDir, mountedRulesDir, disableHooks } =
+      opts;
 
     // Note: We don't force --platform to allow Docker to use native architecture
     // This avoids emulation overhead on ARM Macs if the image supports ARM64
@@ -1333,13 +1316,6 @@ export class OrlClient {
       dockerArgs.push('-v', `${mountedRulesDir}:/workspace/rules`);
     }
 
-    // LOCAL-ONLY DEV HACK (REMOVE BEFORE MERGE):
-    // Allow injecting a tiny local rulespace into IDE scans for rapid iteration.
-    // Mount read-only to avoid accidental writes.
-    if (devRulesHostDir && devRulesHostDir.trim()) {
-      dockerArgs.push('-v', `${devRulesHostDir}:/dev-rules:ro`);
-    }
-
     dockerArgs.push(containerImage, 'remediate', '/workspace');
 
     if (disableHooks) {
@@ -1351,10 +1327,6 @@ export class OrlClient {
     if (mountedRulesDir || rulesDir) {
       // rulesDir is within the mounted workspacePath, so we reference it at /workspace/rules in-container.
       dockerArgs.push('--rulespace', '/workspace/rules');
-    }
-    // LOCAL-ONLY DEV HACK (REMOVE BEFORE MERGE): Injected rulespace.
-    if (devRulesHostDir && devRulesHostDir.trim()) {
-      dockerArgs.push('--rulespace', '/dev-rules');
     }
     if (language) {
       dockerArgs.push('--language', language);
@@ -1935,20 +1907,14 @@ export class OrlClient {
       }
       prof.mark('pullRulesUsingOrl', { pulledSingleRule });
 
-      // LOCAL-ONLY DEV HACK (REMOVE BEFORE MERGE):
-      // If the scanned workspace contains `.orl-dev-rules/`, inject it as an extra rulespace.
-      const devRulesHostDir = path.join(workspacePath, '.orl-dev-rules');
-      const injectedDevRulesHostDir = await fs.promises
-        .access(devRulesHostDir, fs.constants.F_OK)
-        .then(() => devRulesHostDir)
-        .catch(() => undefined);
+      // NOTE: Local dev rulespace injection is intentionally disabled.
+      const injectedDevRulesHostDir = undefined;
 
       // Execute ORL remediation with pulled rules.
       const dockerArgs = this.buildDockerArgs({
         workspacePath: tempDir,
         language,
         rulesDir,
-        devRulesHostDir: injectedDevRulesHostDir,
       });
       logger.info('Executing ORL via Docker (single-rule)', {
         command: 'docker',
