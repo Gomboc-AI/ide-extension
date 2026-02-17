@@ -29,7 +29,7 @@ export async function fixProofCheckovVerifyForPanel(
     return {
       ok: false,
       error:
-        'FixProof Checkov verification requires a scan scope. Run an ORL scan first or open a file in the target directory.',
+        'Third Party Compare (Checkov) requires a scan scope. Run an ORL scan first or open a file in the target directory.',
     };
   }
 
@@ -49,7 +49,7 @@ export async function fixProofCheckovVerifyForPanel(
       return {
         ok: false,
         error:
-          'FixProof Checkov verification could not find cached Checkov targets, and the last ORL report was missing. Run an ORL scan first.',
+          'Third Party Compare (Checkov) could not find cached Checkov targets, and the last ORL report was missing. Run an ORL scan first.',
       };
     }
     const parsed = parseOrlReport(report);
@@ -73,7 +73,7 @@ export async function fixProofCheckovVerifyForPanel(
     return {
       ok: false,
       error:
-        'FixProof: No Checkov IDs were found (or cached) for the last ORL scan scope.',
+        'Third Party Compare: No Checkov IDs were found (or cached) for the last ORL scan scope.',
     };
   }
 
@@ -104,12 +104,12 @@ export async function fixProofCheckovVerifyForPanel(
   });
 
   const result = await CheckovScanCoordinator.runExclusive({
-    title: 'FixProof targeted verify',
+    title: 'Third Party Compare',
     task: async () => {
       return await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: `FixProof: Running Checkov verification (${checkIds.length} checks)`,
+          title: `Third Party Compare: Running Checkov verification (${checkIds.length} checks)`,
           cancellable: false,
         },
         async () => {
@@ -125,7 +125,7 @@ export async function fixProofCheckovVerifyForPanel(
   if (!result) {
     return {
       ok: false,
-      error: 'FixProof verify did not run (possibly already running).',
+      error: 'Third Party Compare did not run (possibly already running).',
     };
   }
 
@@ -148,7 +148,7 @@ export async function fixProofCheckovVerifyCommand(
   const workspacePath = last?.workspacePath || fallbackWorkspacePath;
   if (!workspacePath) {
     vscode.window.showErrorMessage(
-      'FixProof Checkov verification requires a scan scope. Run an ORL scan first or open a file in the target directory.',
+      'Third Party Compare (Checkov) requires a scan scope. Run an ORL scan first or open a file in the target directory.',
     );
     return;
   }
@@ -169,7 +169,7 @@ export async function fixProofCheckovVerifyCommand(
     const report = last?.report;
     if (!report || typeof report !== 'string' || !report.trim()) {
       vscode.window.showErrorMessage(
-        'FixProof Checkov verification could not find cached Checkov targets, and the last ORL report was missing. Run an ORL scan first.',
+        'Third Party Compare (Checkov) could not find cached Checkov targets, and the last ORL report was missing. Run an ORL scan first.',
       );
       return;
     }
@@ -194,7 +194,7 @@ export async function fixProofCheckovVerifyCommand(
 
   if (!checkIds.length) {
     await vscode.window.showInformationMessage(
-      'FixProof: No Checkov IDs were found (or cached) for the last ORL scan scope.',
+      'Third Party Compare: No Checkov IDs were found (or cached) for the last ORL scan scope.',
       { modal: true },
     );
     return;
@@ -205,7 +205,7 @@ export async function fixProofCheckovVerifyCommand(
     (cfg.get('checkovContainerImage') as string | undefined) ||
     'bridgecrew/checkov:latest';
 
-  logger.info('FixProof Checkov verification starting', {
+  logger.info('Third Party Compare (Checkov) starting', {
     workspacePath,
     checkCount: checkIds.length,
     cached: Boolean(cached),
@@ -234,12 +234,12 @@ export async function fixProofCheckovVerifyCommand(
   });
 
   const result = await CheckovScanCoordinator.runExclusive({
-    title: 'FixProof targeted verify',
+    title: 'Third Party Compare',
     task: async () => {
       return await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: `FixProof: Running Checkov verification (${checkIds.length} checks)`,
+          title: `Third Party Compare: Running Checkov verification (${checkIds.length} checks)`,
           cancellable: false,
         },
         async () => {
@@ -303,7 +303,7 @@ export async function fixProofCheckovVerifyCommand(
 
   if (result.allPassed) {
     const choice = await vscode.window.showInformationMessage(
-      `FixProof: Checkov verification passed for ${checkIds.length} checks.`,
+      `Third Party Compare: Checkov verification passed for ${checkIds.length} checks.`,
       { modal: true },
       'Show details',
     );
@@ -314,7 +314,7 @@ export async function fixProofCheckovVerifyCommand(
   }
 
   const choice = await vscode.window.showWarningMessage(
-    `FixProof: Checkov still failing for ${result.failingCheckIds.length} / ${checkIds.length} targeted checks.`,
+    `Third Party Compare: Checkov still failing for ${result.failingCheckIds.length} / ${checkIds.length} targeted checks.`,
     { modal: true },
     'Show failing IDs',
     'Copy failing IDs',

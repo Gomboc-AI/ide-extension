@@ -426,7 +426,7 @@ export class IssuesPanel {
               type: 'verifyResult',
               payload: {
                 ok: true,
-                summary: `FixProof: passed for ${result.checkCount} targeted checks.`,
+                summary: `Third Party Compare: passed for ${result.checkCount} targeted checks.`,
               },
             });
             return;
@@ -435,7 +435,7 @@ export class IssuesPanel {
             type: 'verifyResult',
             payload: {
               ok: false,
-              summary: `FixProof: still failing for ${result.failingCheckIds.length} / ${result.checkCount} targeted checks.`,
+              summary: `Third Party Compare: still failing for ${result.failingCheckIds.length} / ${result.checkCount} targeted checks.`,
             },
           });
         } catch (e) {

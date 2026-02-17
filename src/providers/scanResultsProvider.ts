@@ -236,7 +236,7 @@ export class ScanResultsProvider {
       ? `### Task\n\nUpdate Terraform security groups under \`${workspacePath}\` so that **SSH ingress (22/tcp)** is no longer open to the world.\n\n- Find every \`ingress { ... }\` block under \`resource "aws_security_group" ...\` where:\n  - \`from_port = 22\`\n  - \`to_port = 22\`\n  - \`cidr_blocks = ["0.0.0.0/0"]\` (or otherwise contains \`0.0.0.0/0\`)\n\nFor each of those SSH ingress blocks, replace it with a safer, configurable pattern:\n\n- Prefer **conditional SSH ingress** controlled by \`var.ssh_ingress_cidr_blocks\`:\n  - If \`var.ssh_ingress_cidr_blocks\` is empty, **do not create** an SSH ingress rule.\n  - If it’s non-empty, create SSH ingress with \`cidr_blocks = var.ssh_ingress_cidr_blocks\`.\n\nConstraints:\n- Do **not** change non-SSH ingress rules.\n- Preserve formatting as much as possible.\n- Remove any temporary marker comments like \`FIXPROOF_AI:\` once the real fix is implemented.\n\n### Notes\n- The variable is defined in \`dolphinscheduler-variables.tf\` as \`list(string)\`.\n- Implementing conditional ingress typically means converting the static SSH \`ingress { ... }\` block into:\n  - a \`dynamic "ingress" { for_each = length(var.ssh_ingress_cidr_blocks) > 0 ? [1] : [] ... }\`\n\n`
       : '### Task\\n\\nImplement a safe fix for this finding. Keep changes minimal and avoid altering unrelated behavior.\\n';
 
-    return `# AI Fix Prompt (validated)\n\n## Context\n- **Rule**: \`${ruleName}\`\n- **Fix strategy**: \`${fixStrategy || 'unknown'}\`\n- **File**: \`${filePath}\`\n- **Resource**: ${resourceHeader ? `\`${resourceHeader}\`` : '(unknown)'}\n\n## Rule description\n${ruleDescription ? ruleDescription : '(no description available)'}\n\n## Related Checkov IDs\n${checkList}\n\n${taskBody}## After you apply the fix\n1. Run **Gomboc: FixProof – Verify targeted Checkov checks (Docker)**.\n2. Run **Gomboc: Scan current file or scenario** again to confirm the finding is gone.\n`;
+    return `# AI Fix Prompt (validated)\n\n## Context\n- **Rule**: \`${ruleName}\`\n- **Fix strategy**: \`${fixStrategy || 'unknown'}\`\n- **File**: \`${filePath}\`\n- **Resource**: ${resourceHeader ? `\`${resourceHeader}\`` : '(unknown)'}\n\n## Rule description\n${ruleDescription ? ruleDescription : '(no description available)'}\n\n## Related Checkov IDs\n${checkList}\n\n${taskBody}## After you apply the fix\n1. Run **Gomboc: Third Party Compare – Verify targeted Checkov checks (Docker)**.\n2. Run **Gomboc: Scan current file or scenario** again to confirm the finding is gone.\n`;
   }
 
   /**
@@ -335,11 +335,11 @@ export class ScanResultsProvider {
     await vscode.window.showTextDocument(doc, { preview: true });
 
     const choice = await vscode.window.showInformationMessage(
-      'AI fix prompt opened and copied to clipboard. After applying edits (in Cursor), run FixProof targeted Checkov verify.',
+      'AI fix prompt opened and copied to clipboard. After applying edits (in Cursor), run Third Party Compare (targeted Checkov).',
       { modal: false },
-      'Run FixProof verify',
+      'Run Third Party Compare',
     );
-    if (choice === 'Run FixProof verify') {
+    if (choice === 'Run Third Party Compare') {
       vscode.commands
         .executeCommand('gomboc-vscode-extension.fixProofCheckovVerify')
         .then(

@@ -46,7 +46,7 @@
       },
       {
         "command": "gomboc-vscode-extension.fixProofCheckovVerify",
-        "title": "Gomboc: FixProof – Verify targeted Checkov checks (Docker)"
+        "title": "Gomboc: Third Party Compare – Verify targeted Checkov checks (Docker)"
       },
       {
         "command": "gomboc-vscode-extension.checkovScanWorkspace",
@@ -54,7 +54,7 @@
       },
       {
         "command": "gomboc-vscode-extension.showIssues",
-        "title": "Gomboc Reviewer (Webview)"
+        "title": "Gombov Reviewer (webview)"
       }
     ],
     "configuration": [
@@ -164,7 +164,7 @@
           "gomboc-vscode-extension.checkovContainerImage": {
             "type": "string",
             "default": "bridgecrew/checkov:latest",
-            "description": "Docker image to use for FixProof targeted Checkov verification."
+            "description": "Docker image to use for Third Party Compare targeted Checkov verification."
           }
         }
       }
