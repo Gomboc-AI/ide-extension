@@ -28,6 +28,10 @@ export class FixPreviewService {
     private readonly env: { extensionPath: string; storagePath: string },
   ) {}
 
+  public clearCache(): void {
+    this.cache.clear();
+  }
+
   public async previewSelected(args: {
     scanScope: { workspacePath: string; language: string; scannedAt?: string };
     selectedIssues: Array<{ ruleName: string; filePath: string }>;
