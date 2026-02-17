@@ -37,4 +37,3 @@ function hunkNewLines(lines: DiffLine[]): string[] {
   }
   return out;
 }
-

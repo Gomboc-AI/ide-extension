@@ -65,7 +65,11 @@ export class IssuesPanel {
   private readonly disposables: vscode.Disposable[] = [];
   private lastPreviewContext:
     | {
-        scanScope: { workspacePath: string; language: string; scannedAt?: string };
+        scanScope: {
+          workspacePath: string;
+          language: string;
+          scannedAt?: string;
+        };
         selectedIssues: Array<{ ruleName: string; filePath: string }>;
       }
     | undefined;
@@ -354,7 +358,9 @@ export class IssuesPanel {
               files.map(f => [
                 f.filePath,
                 new Set(
-                  Array.isArray(f.keptHunkFingerprints) ? f.keptHunkFingerprints : [],
+                  Array.isArray(f.keptHunkFingerprints)
+                    ? f.keptHunkFingerprints
+                    : [],
                 ),
               ]),
             ),
@@ -365,14 +371,19 @@ export class IssuesPanel {
           });
 
           // Rescan to refresh issues/preview.
-          vscode.commands.executeCommand('gomboc-vscode-extension.scanFile').then(
-            () => {},
-            () => {},
-          );
+          vscode.commands
+            .executeCommand('gomboc-vscode-extension.scanFile')
+            .then(
+              () => {},
+              () => {},
+            );
         } catch (e) {
           this.post({
             type: 'previewApplyResult',
-            payload: { ok: false, message: e instanceof Error ? e.message : String(e) },
+            payload: {
+              ok: false,
+              message: e instanceof Error ? e.message : String(e),
+            },
           });
         }
         return;

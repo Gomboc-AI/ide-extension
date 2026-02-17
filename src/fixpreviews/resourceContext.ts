@@ -167,7 +167,10 @@ function extractTerraformBlock(
   };
 }
 
-function findTerraformBlockStart(lines: string[], fromIdx: number): number | undefined {
+function findTerraformBlockStart(
+  lines: string[],
+  fromIdx: number,
+): number | undefined {
   const re =
     /^\s*(resource|module|data|provider|locals|variable|output)\b[\s\S]*\{\s*(#.*)?$/;
   for (let i = clampInt(fromIdx, 0, lines.length - 1); i >= 0; i--) {
@@ -377,7 +380,11 @@ function truncateLines(
 
 function hashId(obj: any): string {
   const raw = JSON.stringify(obj);
-  return crypto.createHash('sha1').update(raw, 'utf8').digest('hex').slice(0, 10);
+  return crypto
+    .createHash('sha1')
+    .update(raw, 'utf8')
+    .digest('hex')
+    .slice(0, 10);
 }
 
 function clampInt(v: number, min: number, max: number): number {
@@ -387,4 +394,3 @@ function clampInt(v: number, min: number, max: number): number {
   }
   return Math.max(min, Math.min(max, n));
 }
-

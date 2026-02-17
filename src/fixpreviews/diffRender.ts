@@ -154,7 +154,9 @@ function firstDefined(values: Array<number | undefined>): number | undefined {
   return undefined;
 }
 
-function lastDefined(values: Array<number | undefined>): { value: number } | undefined {
+function lastDefined(
+  values: Array<number | undefined>,
+): { value: number } | undefined {
   for (let i = values.length - 1; i >= 0; i--) {
     const v = values[i];
     if (Number.isFinite(v)) {
@@ -166,7 +168,11 @@ function lastDefined(values: Array<number | undefined>): { value: number } | und
 
 function hashFingerprint(obj: any): string {
   const raw = JSON.stringify(obj);
-  return crypto.createHash('sha1').update(raw, 'utf8').digest('hex').slice(0, 12);
+  return crypto
+    .createHash('sha1')
+    .update(raw, 'utf8')
+    .digest('hex')
+    .slice(0, 12);
 }
 
 function myers(a: string[], b: string[]): Op[] {
