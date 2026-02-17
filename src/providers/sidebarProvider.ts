@@ -76,7 +76,7 @@ export class GombocInfoViewProvider implements vscode.WebviewViewProvider {
           )}" width="100" />
           <h2>Welcome to Gomboc!</h2>
           <div class="meta">Quick links</div>
-          <button id="openReviewerBtn">Open Reviewer (webview)</button>
+          <button id="openReviewerBtn">Open Fix Reviewer</button>
         </div>
 
         <script nonce="${nonce}">
