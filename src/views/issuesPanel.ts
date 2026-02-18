@@ -365,6 +365,8 @@ export class IssuesPanel {
               ]),
             ),
           });
+          // Invalidate cached previews immediately; the workspace has changed.
+          this.fixPreviewService.clearCache();
           this.post({
             type: 'previewApplyResult',
             payload: { ok: true, message: 'Applied kept changes.' },
@@ -676,6 +678,7 @@ export class IssuesPanel {
       <button id="previewBtn" class="secondary"><span class="btnInner"><span class="btnIcon" aria-hidden="true">${icons.search}</span><span>Preview</span></span></button>
       <button id="rescanBtn" class="secondary"><span class="btnInner"><span class="btnIcon" aria-hidden="true">${icons.refresh}</span><span>Rescan</span></span></button>
       <button id="verifyBtn" class="secondary"><span class="btnInner"><span class="btnIcon" aria-hidden="true">${icons.tool}</span><span>Third Party Compare</span></span></button>
+      <button id="refreshUiBtn" class="secondary"><span class="btnInner"><span class="btnIcon" aria-hidden="true">${icons.refresh}</span><span>Refresh UI</span></span></button>
       <div id="status" class="status">Idle</div>
     </div>
     <div class="layout">
@@ -1009,6 +1012,18 @@ export class IssuesPanel {
         setStatus('Verifying...');
         vscode.postMessage({ type: 'verify' });
       });
+      document.getElementById('refreshUiBtn').addEventListener('click', () => {
+        // Hard-reset local UI state and re-request a snapshot.
+        state.selectedKey = null;
+        state.selectedSet = new Set();
+        state.preview.payload = null;
+        state.preview.keptByFile = new Map();
+        setStatus('Refreshing...');
+        renderDetails(null);
+        renderPreview(null);
+        elPreviewLoading.style.display = 'none';
+        vscode.postMessage({ type: 'requestSnapshot' });
+      });
       document.getElementById('applySelectedBtn').addEventListener('click', () => {
         const snapshot = state.snapshot || {};
         const issues = Array.isArray(snapshot.issues) ? snapshot.issues : [];
@@ -1051,6 +1066,13 @@ export class IssuesPanel {
           case 'previewApplyResult':
             setStatus(msg.payload.ok ? 'Applied kept changes' : 'Apply kept failed');
             toast(msg.payload.ok ? 'info' : 'error', msg.payload.ok ? (msg.payload.message || 'Applied kept changes.') : ('Apply kept failed: ' + (msg.payload.message || 'unknown error')));
+            if (msg.payload.ok) {
+              // Clear the preview immediately to avoid stale diffs after applying.
+              state.preview.payload = null;
+              state.preview.keptByFile = new Map();
+              renderPreview(null);
+              elPreviewLoading.style.display = 'none';
+            }
             vscode.postMessage({ type: 'requestSnapshot' });
             break;
           case 'applyProgress':
