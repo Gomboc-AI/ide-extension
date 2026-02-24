@@ -444,7 +444,7 @@ function prepareRequestBody(
   return {
     version: 1.0,
     requestOrigin: 'IDE',
-    effect: 'IDE-Scan',
+    effect: 'SubmitForReview',
     reports: [
       {
         ...(repoPath && { path: repoPath }),
@@ -615,7 +615,7 @@ function prepareErrorRequestBody(
   return {
     version: 1.0,
     requestOrigin: 'IDE',
-    effect: 'IDE-Scan',
+    effect: 'SubmitForReview',
     reports: [
       {
         ...(repoPath && { path: repoPath }),
