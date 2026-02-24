@@ -130,6 +130,11 @@
             "default": true,
             "description": "Experimental: run a fast first pass with ORL hooks disabled to discover which rules actually produce changes, then rerun ORL with only those rules + hooks enabled. This can significantly speed up scans on some Windows/Docker setups."
           },
+          "gomboc-vscode-extension.orlLocalDevRulesEnabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "DEV ONLY: when enabled, if the scanned workspace contains .orl-dev-rules/, inject it as an extra ORL rulespace for local testing."
+          },
           "gomboc-vscode-extension.orlFixAppliedAnalyticsEnabled": {
             "type": "boolean",
             "default": true,

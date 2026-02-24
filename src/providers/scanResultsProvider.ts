@@ -713,6 +713,8 @@ export class ScanResultsProvider {
 
   // uses the scan response to generate a diagnostic for the diagnostic collection
   createDiagnostic() {
+    this.diagnosticCollectionManager.getDiagnosticCollection().clear();
+
     const issues: OrlIssuesSnapshot['issues'] = [];
     const metaIndex = this.buildOrlRuleMetaIndex();
 
@@ -870,6 +872,7 @@ export class ScanResultsProvider {
             resourceHeader: meta.resourceHeader,
             ruleShortName: shortName,
             ruleDescription: description,
+            fixStrategy: metaHit?.fixStrategy,
             quickFixMessage: `Apply fix (${shortName})`,
             range: new vscode.Range(startPosition, endPosition),
             severity: vscode.DiagnosticSeverity.Error,
@@ -1054,6 +1057,8 @@ export class ScanResultsProvider {
           infrastructureTool,
           uri,
         );
+      } else {
+        this.diagnosticCollectionManager.updateDiagnosticCollection(uri, []);
       }
     }
     if (ScanResultsProvider.codeActionDisposable) {

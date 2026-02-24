@@ -38,11 +38,11 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
       } else if (this._isGombocIndividualFixDiagnostic(cur)) {
         return [...acc, this._createIndividualFixCommandCodeAction(cur)];
       } else if (this._isOrlRuleFixDiagnostic(cur)) {
-        return [
-          ...acc,
-          this._createOrlRuleFixCommandCodeAction(cur),
-          this._createAiFixPromptCodeAction(cur),
-        ];
+        const actions = [this._createOrlRuleFixCommandCodeAction(cur)];
+        if (cur.fixStrategy === 'ai_prompt') {
+          actions.push(this._createAiFixPromptCodeAction(cur));
+        }
+        return [...acc, ...actions];
       }
       return acc;
     }, [] as vscode.CodeAction[]);

@@ -150,6 +150,21 @@ export function detectLanguageFromFile(
     return 'cloudformation-yaml';
   }
 
+  // XML files (Maven pom.xml, etc.)
+  if (ext === '.xml') {
+    return 'xml';
+  }
+
+  // Gradle Groovy
+  if (ext === '.gradle') {
+    return 'groovy';
+  }
+
+  // Gradle Kotlin DSL
+  if (ext === '.kts') {
+    return 'kotlin';
+  }
+
   return null;
 }
 
@@ -172,7 +187,7 @@ export class ScanValidator {
 
     if (!language) {
       throw new Error(
-        'Current file is not a supported IaC file (Terraform, CloudFormation, Docker, Helm, or Kubernetes)',
+        'Current file is not a supported IaC file (Terraform, CloudFormation, Docker, Helm, Kubernetes, Maven XML, or Gradle)',
       );
     }
 
