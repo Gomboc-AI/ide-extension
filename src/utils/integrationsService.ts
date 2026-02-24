@@ -210,7 +210,7 @@ async function postFixAppliedEvent(args: {
   const { url, apiKey, endpointPath, event } = args;
   const body = {
     version: 1.0,
-    requestOrigin: 'ide-extension',
+    requestOrigin: 'IDE',
     events: [event],
   };
   await axios.post(`${url}${endpointPath}`, body, {
@@ -431,6 +431,7 @@ function prepareRequestBody(
 ): {
   version: number;
   requestOrigin: string;
+  effect: string;
   reports: Array<{
     path?: string;
     branch?: string;
@@ -442,7 +443,8 @@ function prepareRequestBody(
 
   return {
     version: 1.0,
-    requestOrigin: 'ide-extension',
+    requestOrigin: 'IDE',
+    effect: 'IDE-Scan',
     reports: [
       {
         ...(repoPath && { path: repoPath }),
@@ -599,6 +601,7 @@ function prepareErrorRequestBody(
 ): {
   version: number;
   requestOrigin: string;
+  effect: string;
   reports: Array<{
     path?: string;
     branch?: string;
@@ -611,7 +614,8 @@ function prepareErrorRequestBody(
 
   return {
     version: 1.0,
-    requestOrigin: 'ide-extension',
+    requestOrigin: 'IDE',
+    effect: 'IDE-Scan',
     reports: [
       {
         ...(repoPath && { path: repoPath }),
