@@ -131,11 +131,18 @@ export interface OrlConfig {
    * actually produce changes, then rerun ORL with only those rules + hooks enabled.
    */
   twoPassEnabled?: boolean;
+  /**
+   * DEV ONLY: when enabled, inject `.orl-dev-rules/` as an extra rulespace (if present).
+   * Default OFF to avoid accidental production usage.
+   */
+  localDevRulesEnabled?: boolean;
 }
 
 // Pinned ORL container image. Intentionally not configurable via VS Code settings
 // to ensure consistent behavior across environments and easier support/debugging.
-const ORL_CONTAINER_IMAGE = 'gombocai/orl:v1.0.9-latest';
+// For local dev with XML/Gradle support, switch to 'orl-dev:local'
+// (rebuild via: /path/to/orl/reload-dev-image.sh)
+const ORL_CONTAINER_IMAGE = 'gombocai/orl:v1.0.11-latest';
 
 export interface OrlResult {
   success: boolean;
@@ -686,16 +693,30 @@ export class OrlClient {
       await fs.promises.mkdir(tempDir, { recursive: true });
       prof.mark('mkdirTemp');
 
-      // Step 1: Ensure rules are available (use a persistent cache to avoid repeated pulls)
-      const cached = await this.ensureRulesCached();
-      prof.mark('pullRulesUsingOrl', {
-        usedCache: cached.usedCache,
-        pulled: cached.pulled,
-      });
+      // Resolve local dev rules early so we can tolerate a remote pull failure
+      const injectedDevRulesHostDir =
+        await this.tryResolveLocalDevRulesHostDir(workspacePath);
 
-      // NOTE: Local dev rulespace injection is intentionally disabled.
-      // We do not automatically mount `.orl-dev-rules/` into production ORL runs.
-      const injectedDevRulesHostDir = undefined;
+      // Step 1: Ensure rules are available (use a persistent cache to avoid repeated pulls)
+      let cached:
+        | { rulesDir: string; usedCache: boolean; pulled: boolean }
+        | undefined;
+      try {
+        cached = await this.ensureRulesCached();
+      } catch (pullError) {
+        if (injectedDevRulesHostDir) {
+          logger.warn(
+            'Remote rules pull failed but local dev rules are available; continuing with dev rules only',
+            { pullError },
+          );
+        } else {
+          throw pullError;
+        }
+      }
+      prof.mark('pullRulesUsingOrl', {
+        usedCache: cached?.usedCache,
+        pulled: cached?.pulled,
+      });
 
       // Optional two-pass mode:
       // Pass 1 runs with hooks disabled to quickly discover which rules produced changes.
@@ -721,8 +742,9 @@ export class OrlClient {
             const dockerArgsDiscovery = this.buildDockerArgs({
               workspacePath: discoveryDir,
               language,
-              mountedRulesDir: cached.rulesDir,
+              mountedRulesDir: cached?.rulesDir,
               disableHooks: true,
+              devRulesHostDir: injectedDevRulesHostDir,
             });
             logger.info(
               'Executing ORL via Docker (two-pass discovery, hooks disabled)',
@@ -804,7 +826,7 @@ export class OrlClient {
             await fs.promises.mkdir(rulesDir, { recursive: true });
 
             const copied = await this.copyRulesSubsetFromCache({
-              sourceRulesDir: cached.rulesDir,
+              sourceRulesDir: cached?.rulesDir ?? '',
               destRulesDir: rulesDir,
               ruleNames: changedRuleNames,
             });
@@ -827,6 +849,7 @@ export class OrlClient {
               workspacePath: tempDir,
               language,
               rulesDir,
+              devRulesHostDir: injectedDevRulesHostDir,
             });
             logger.info(
               'Executing ORL via Docker (two-pass, subset rules + hooks enabled)',
@@ -962,7 +985,8 @@ export class OrlClient {
         workspacePath: tempDir,
         language,
         rulesDir,
-        mountedRulesDir: cached.rulesDir,
+        mountedRulesDir: cached?.rulesDir,
+        devRulesHostDir: injectedDevRulesHostDir,
       });
       logger.info('Executing ORL via Docker', {
         command: 'docker',
@@ -1294,12 +1318,21 @@ export class OrlClient {
     rulesDir?: string;
     mountedRulesDir?: string;
     disableHooks?: boolean;
-    // NOTE: Local dev rulespace injection is intentionally disabled.
-    // devRulesHostDir?: string;
+    /**
+     * DEV ONLY: additional host directory containing ORL rules to inject into scans.
+     * If set, this directory is mounted read-only at `/dev-rules` and appended as an extra `--rulespace`.
+     */
+    devRulesHostDir?: string;
   }): string[] {
     const { containerImage } = this.config;
-    const { workspacePath, language, rulesDir, mountedRulesDir, disableHooks } =
-      opts;
+    const {
+      workspacePath,
+      language,
+      rulesDir,
+      mountedRulesDir,
+      disableHooks,
+      devRulesHostDir,
+    } = opts;
 
     // Note: We don't force --platform to allow Docker to use native architecture
     // This avoids emulation overhead on ARM Macs if the image supports ARM64
@@ -1316,6 +1349,10 @@ export class OrlClient {
       dockerArgs.push('-v', `${mountedRulesDir}:/workspace/rules`);
     }
 
+    if (devRulesHostDir && devRulesHostDir.trim()) {
+      dockerArgs.push('-v', `${devRulesHostDir}:/dev-rules:ro`);
+    }
+
     dockerArgs.push(containerImage, 'remediate', '/workspace');
 
     if (disableHooks) {
@@ -1328,6 +1365,9 @@ export class OrlClient {
       // rulesDir is within the mounted workspacePath, so we reference it at /workspace/rules in-container.
       dockerArgs.push('--rulespace', '/workspace/rules');
     }
+    if (devRulesHostDir && devRulesHostDir.trim()) {
+      dockerArgs.push('--rulespace', '/dev-rules');
+    }
     if (language) {
       dockerArgs.push('--language', language);
     }
@@ -1335,6 +1375,26 @@ export class OrlClient {
     // Always write the report to a file so we can read/persist it reliably (stdout may be empty/truncated).
     dockerArgs.push('--out', '/workspace/.orl/report.yaml');
     return dockerArgs;
+  }
+
+  private async tryResolveLocalDevRulesHostDir(
+    workspacePath: string,
+  ): Promise<string | undefined> {
+    if (!this.config.localDevRulesEnabled) {
+      return undefined;
+    }
+    let dir = workspacePath;
+    const root = path.parse(dir).root;
+    while (dir !== root) {
+      const candidate = path.join(dir, '.orl-dev-rules');
+      try {
+        await fs.promises.access(candidate, fs.constants.F_OK);
+        return candidate;
+      } catch {
+        dir = path.dirname(dir);
+      }
+    }
+    return undefined;
   }
 
   private extractChangedRuleNamesFromReport(report?: string): string[] {
@@ -1767,6 +1827,11 @@ export class OrlClient {
       );
     }
 
+    // Maven XML, Gradle Groovy, Gradle Kotlin DSL
+    if (['.xml', '.gradle', '.kts'].includes(ext)) {
+      return true;
+    }
+
     return false;
   }
 
@@ -1822,8 +1887,15 @@ export class OrlClient {
     language?: string;
     ruleName: string;
     targetFilePath?: string;
+    devRulesSearchPath?: string;
   }): Promise<OrlResult> {
-    const { workspacePath, language, ruleName, targetFilePath } = args;
+    const {
+      workspacePath,
+      language,
+      ruleName,
+      targetFilePath,
+      devRulesSearchPath,
+    } = args;
     try {
       const scanId = `orl-single:${Date.now()}:${Math.random()
         .toString(16)
@@ -1883,6 +1955,10 @@ export class OrlClient {
           ? `(or (eq $.name "${exact}") (eq $.name "${base}"))`
           : `(eq $.name "${exact}")`;
 
+      const injectedDevRulesHostDir = await this.tryResolveLocalDevRulesHostDir(
+        devRulesSearchPath || workspacePath,
+      );
+
       let pulledSingleRule = false;
       try {
         await this.pullRulesUsingOrl(rulesDir, { searchQuery: query });
@@ -1895,26 +1971,35 @@ export class OrlClient {
           await this.pullRulesUsingOrl(rulesDir);
         }
       } catch (e) {
-        logger.warn(
-          'Single-rule rules pull via --search failed; falling back to channel pull',
-          {
-            ruleName,
-            baseRuleName,
-            error: e instanceof Error ? e.message : String(e),
-          },
-        );
-        await this.pullRulesUsingOrl(rulesDir);
+        if (injectedDevRulesHostDir) {
+          logger.warn(
+            'Single-rule rules pull failed but local dev rules are available; continuing with dev rules only',
+            {
+              ruleName,
+              baseRuleName,
+              error: e instanceof Error ? e.message : String(e),
+            },
+          );
+        } else {
+          logger.warn(
+            'Single-rule rules pull via --search failed; falling back to channel pull',
+            {
+              ruleName,
+              baseRuleName,
+              error: e instanceof Error ? e.message : String(e),
+            },
+          );
+          await this.pullRulesUsingOrl(rulesDir);
+        }
       }
       prof.mark('pullRulesUsingOrl', { pulledSingleRule });
-
-      // NOTE: Local dev rulespace injection is intentionally disabled.
-      const injectedDevRulesHostDir = undefined;
 
       // Execute ORL remediation with pulled rules.
       const dockerArgs = this.buildDockerArgs({
         workspacePath: tempDir,
         language,
         rulesDir,
+        devRulesHostDir: injectedDevRulesHostDir,
       });
       logger.info('Executing ORL via Docker (single-rule)', {
         command: 'docker',
@@ -2086,6 +2171,11 @@ export async function createOrlClient(args: {
       config,
       'orlTwoPassEnabled',
       DEFAULTS.orlTwoPassEnabled,
+    ),
+    localDevRulesEnabled: getBooleanSetting(
+      config,
+      'orlLocalDevRulesEnabled',
+      DEFAULTS.orlLocalDevRulesEnabled,
     ),
   });
 }

@@ -11,6 +11,8 @@ export const DEFAULTS = {
   // actually produce changes, then run a second pass with only those rules + hooks enabled.
   // Default off to avoid behavior changes.
   orlTwoPassEnabled: true,
+  // DEV ONLY: allow injecting `<workspace>/.orl-dev-rules/` into ORL rulespaces.
+  orlLocalDevRulesEnabled: false,
 };
 
 export function getStringSetting(

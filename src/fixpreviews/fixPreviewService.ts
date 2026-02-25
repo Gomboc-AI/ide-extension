@@ -145,6 +145,7 @@ export class FixPreviewService {
             language: scanLanguage,
             ruleName: issue.ruleName,
             targetFilePath: tempFilePath,
+            devRulesSearchPath: sourceDir,
           });
           if (!result.success) {
             throw new Error(
@@ -277,7 +278,18 @@ function shouldSkip(name: string): boolean {
   if (lower.startsWith('dockerfile')) {
     return false;
   }
-  // Common IaC file types we care about in scan scope directories.
-  const exts = ['.tf', '.hcl', '.tfvars', '.yaml', '.yml', '.json', '.tpl'];
+  // Common IaC / build file types we care about in scan scope directories.
+  const exts = [
+    '.tf',
+    '.hcl',
+    '.tfvars',
+    '.yaml',
+    '.yml',
+    '.json',
+    '.tpl',
+    '.xml',
+    '.gradle',
+    '.kts',
+  ];
   return !exts.some(ext => lower.endsWith(ext));
 }
