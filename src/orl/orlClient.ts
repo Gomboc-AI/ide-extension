@@ -693,6 +693,7 @@ export class OrlClient {
       await fs.promises.mkdir(tempDir, { recursive: true });
       prof.mark('mkdirTemp');
 
+      try {
       // Resolve local dev rules early so we can tolerate a remote pull failure
       const injectedDevRulesHostDir =
         await this.tryResolveLocalDevRulesHostDir(workspacePath);
@@ -910,13 +911,6 @@ export class OrlClient {
             );
             prof.mark('persistDiagnosticsArtifacts');
 
-            if (!this.config.debugKeepTemp) {
-              await fs.promises.rm(tempDir, { recursive: true, force: true });
-            } else {
-              logger.warn('Debug: preserving .orl-temp after remediation', {
-                tempDir,
-              });
-            }
             prof.mark('cleanupTemp', {
               kept: Boolean(this.config.debugKeepTemp),
             });
@@ -1037,13 +1031,6 @@ export class OrlClient {
       );
       prof.mark('persistDiagnosticsArtifacts');
 
-      if (!this.config.debugKeepTemp) {
-        await fs.promises.rm(tempDir, { recursive: true, force: true });
-      } else {
-        logger.warn('Debug: preserving .orl-temp after remediation', {
-          tempDir,
-        });
-      }
       prof.mark('cleanupTemp', { kept: Boolean(this.config.debugKeepTemp) });
 
       const exitCode =
@@ -1122,6 +1109,17 @@ export class OrlClient {
         // @ts-ignore add diagnostics for downstream usage
         diagnostics,
       };
+      } finally {
+        if (!this.config.debugKeepTemp) {
+          await fs.promises
+            .rm(tempDir, { recursive: true, force: true })
+            .catch(() => {});
+        } else {
+          logger.warn('Debug: preserving .orl-temp after remediation', {
+            tempDir,
+          });
+        }
+      }
     } catch (error) {
       logger.error('ORL remediation failed', { error });
       return {

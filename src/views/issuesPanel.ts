@@ -758,7 +758,7 @@ export class IssuesPanel {
           <div class="title"><strong>\${escapeHtml(issue.ruleShortName || issue.ruleName)}</strong></div>
           <div class="meta">\${escapeHtml(issue.ruleName)}</div>
           <div style="height:10px"></div>
-          <div class="meta"><strong>File</strong>: <span class="link" data-open="1">\${escapeHtml(issue.filePath)}</span></div>
+          <div class="meta"><strong>File</strong>: <span class="link" data-open="1">\${escapeHtml(toDisplayPath(issue.filePath))}</span></div>
           \${issue.resourceHeader ? '<div class="meta"><strong>Resource</strong>: ' + escapeHtml(issue.resourceHeader) + '</div>' : ''}
           \${issue.fixStrategy ? '<div class="meta"><strong>Fix strategy</strong>: <code>' + escapeHtml(issue.fixStrategy) + '</code></div>' : ''}
           <div class="meta"><strong>Checkov IDs</strong>: \${checkov}</div>
@@ -820,7 +820,7 @@ export class IssuesPanel {
           fileDiv.innerHTML = \`
             <div class="previewFileTop">
               <div>
-                <div class="title"><strong>\${escapeHtml(f.filePath)}</strong></div>
+                <div class="title"><strong>\${escapeHtml(toDisplayPath(f.filePath))}</strong></div>
                 <div class="meta">Rules: \${escapeHtml(rulesText)}</div>
               </div>
               <div style="display:flex; gap:8px; align-items:center;">
@@ -904,6 +904,14 @@ export class IssuesPanel {
         return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
       }
 
+      function toDisplayPath(fullPath) {
+        const ws = state.snapshot && state.snapshot.scanScope && state.snapshot.scanScope.workspacePath;
+        if (!ws || !fullPath) return fullPath || '';
+        const normalized = fullPath.replace(/\\\\/g, '/');
+        const prefix = ws.replace(/\\\\/g, '/').replace(/\\/$/, '') + '/';
+        return normalized.startsWith(prefix) ? normalized.slice(prefix.length) : fullPath;
+      }
+
       function render(snapshot) {
         state.snapshot = snapshot;
         elIssues.innerHTML = '';
@@ -924,7 +932,7 @@ export class IssuesPanel {
         for (const [fp, items] of byFile.entries()) {
           const group = document.createElement('div');
           group.className = 'group';
-          group.innerHTML = '<h3>' + escapeHtml(fp) + '</h3>';
+          group.innerHTML = '<h3>' + escapeHtml(toDisplayPath(fp)) + '</h3>';
           for (const issue of items) {
             const k = keyOf(issue);
             const row = document.createElement('div');
