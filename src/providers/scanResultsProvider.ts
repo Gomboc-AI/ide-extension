@@ -458,8 +458,7 @@ export class ScanResultsProvider {
             ? String(annotations['gomboc-ai/fix-strategy'])
             : undefined;
         const fixTask =
-          annotations &&
-          typeof annotations['gomboc-ai/fix-task'] === 'string'
+          annotations && typeof annotations['gomboc-ai/fix-task'] === 'string'
             ? String(annotations['gomboc-ai/fix-task']).trim()
             : undefined;
         const checkovIds = annotations
