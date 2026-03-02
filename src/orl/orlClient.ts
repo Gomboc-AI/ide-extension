@@ -693,435 +693,439 @@ export class OrlClient {
       await fs.promises.mkdir(tempDir, { recursive: true });
       prof.mark('mkdirTemp');
 
-      // Resolve local dev rules early so we can tolerate a remote pull failure
-      const injectedDevRulesHostDir =
-        await this.tryResolveLocalDevRulesHostDir(workspacePath);
-
-      // Step 1: Ensure rules are available (use a persistent cache to avoid repeated pulls)
-      let cached:
-        | { rulesDir: string; usedCache: boolean; pulled: boolean }
-        | undefined;
       try {
-        cached = await this.ensureRulesCached();
-      } catch (pullError) {
-        if (injectedDevRulesHostDir) {
-          logger.warn(
-            'Remote rules pull failed but local dev rules are available; continuing with dev rules only',
-            { pullError },
-          );
-        } else {
-          throw pullError;
-        }
-      }
-      prof.mark('pullRulesUsingOrl', {
-        usedCache: cached?.usedCache,
-        pulled: cached?.pulled,
-      });
+        // Resolve local dev rules early so we can tolerate a remote pull failure
+        const injectedDevRulesHostDir =
+          await this.tryResolveLocalDevRulesHostDir(workspacePath);
 
-      // Optional two-pass mode:
-      // Pass 1 runs with hooks disabled to quickly discover which rules produced changes.
-      // Pass 2 runs with hooks enabled but only with the subset of rules that changed files.
-      //
-      // NOTE: default off; gated by config.
-      if (twoPassEnabled) {
-        const tryTwoPass = async (): Promise<OrlResult | undefined> => {
-          const discoveryDir = await fs.promises.mkdtemp(
-            path.join(os.tmpdir(), 'orl-discovery-'),
-          );
-          prof.mark('twoPass.mkdtempDiscovery');
-          try {
-            await this.copyWorkspaceFiles(workspacePath, discoveryDir);
-            prof.mark('twoPass.copyWorkspaceFilesDiscovery');
-
-            // ORL writes the report to /workspace/.orl/report.yaml; when hooks are disabled,
-            // nothing creates the `.orl` directory for us. Ensure it exists so ORL can write.
-            await fs.promises.mkdir(path.join(discoveryDir, '.orl'), {
-              recursive: true,
-            });
-
-            const dockerArgsDiscovery = this.buildDockerArgs({
-              workspacePath: discoveryDir,
-              language,
-              mountedRulesDir: cached?.rulesDir,
-              disableHooks: true,
-              devRulesHostDir: injectedDevRulesHostDir,
-            });
-            logger.info(
-              'Executing ORL via Docker (two-pass discovery, hooks disabled)',
-              {
-                command: 'docker',
-                args: dockerArgsDiscovery,
-              },
+        // Step 1: Ensure rules are available (use a persistent cache to avoid repeated pulls)
+        let cached:
+          | { rulesDir: string; usedCache: boolean; pulled: boolean }
+          | undefined;
+        try {
+          cached = await this.ensureRulesCached();
+        } catch (pullError) {
+          if (injectedDevRulesHostDir) {
+            logger.warn(
+              'Remote rules pull failed but local dev rules are available; continuing with dev rules only',
+              { pullError },
             );
+          } else {
+            throw pullError;
+          }
+        }
+        prof.mark('pullRulesUsingOrl', {
+          usedCache: cached?.usedCache,
+          pulled: cached?.pulled,
+        });
 
-            const execDiscovery = await runProcess({
-              command: 'docker',
-              commandArgs: dockerArgsDiscovery,
-              timeoutMs: 90000,
-              maxOutputBytes: 10 * 1024 * 1024,
-              cwd: workspacePath,
-            });
-            prof.mark('twoPass.dockerRemediateDiscovery', {
-              exitCode: execDiscovery.exitCode,
-              timedOut: execDiscovery.timedOut,
-            });
+        // Optional two-pass mode:
+        // Pass 1 runs with hooks disabled to quickly discover which rules produced changes.
+        // Pass 2 runs with hooks enabled but only with the subset of rules that changed files.
+        //
+        // NOTE: default off; gated by config.
+        if (twoPassEnabled) {
+          const tryTwoPass = async (): Promise<OrlResult | undefined> => {
+            const discoveryDir = await fs.promises.mkdtemp(
+              path.join(os.tmpdir(), 'orl-discovery-'),
+            );
+            prof.mark('twoPass.mkdtempDiscovery');
+            try {
+              await this.copyWorkspaceFiles(workspacePath, discoveryDir);
+              prof.mark('twoPass.copyWorkspaceFilesDiscovery');
 
-            const reportFileDiscovery = await this.readReportFile(discoveryDir);
-            const reportTextDiscovery =
-              reportFileDiscovery || execDiscovery.stdout;
-            prof.mark('twoPass.readReportFileDiscovery', {
-              usedReportFile: Boolean(reportFileDiscovery),
-            });
+              // ORL writes the report to /workspace/.orl/report.yaml; when hooks are disabled,
+              // nothing creates the `.orl` directory for us. Ensure it exists so ORL can write.
+              await fs.promises.mkdir(path.join(discoveryDir, '.orl'), {
+                recursive: true,
+              });
 
-            // If ORL failed to produce a report (common when --out path is missing), do NOT
-            // treat that as "no changes" — fall back to the standard single-pass flow.
-            const looksLikeReport =
-              typeof reportTextDiscovery === 'string' &&
-              reportTextDiscovery.includes('type: Report');
-            if (!looksLikeReport) {
-              logger.warn(
-                'Two-pass discovery did not produce a valid ORL report; falling back to single-pass remediation',
+              const dockerArgsDiscovery = this.buildDockerArgs({
+                workspacePath: discoveryDir,
+                language,
+                mountedRulesDir: cached?.rulesDir,
+                disableHooks: true,
+                devRulesHostDir: injectedDevRulesHostDir,
+              });
+              logger.info(
+                'Executing ORL via Docker (two-pass discovery, hooks disabled)',
                 {
-                  exitCode: execDiscovery.exitCode,
-                  timedOut: execDiscovery.timedOut,
-                  stdoutPreview: (execDiscovery.stdout || '').slice(0, 2000),
-                  stderrPreview: (execDiscovery.stderr || '').slice(0, 2000),
+                  command: 'docker',
+                  args: dockerArgsDiscovery,
                 },
               );
-              return undefined;
-            }
 
-            const changedRuleNames =
-              this.extractChangedRuleNamesFromReport(reportTextDiscovery);
-            prof.mark('twoPass.discoveredChangedRules', {
-              changedRuleCount: changedRuleNames.length,
-              sampleRules: changedRuleNames.slice(0, 20),
-            });
+              const execDiscovery = await runProcess({
+                command: 'docker',
+                commandArgs: dockerArgsDiscovery,
+                timeoutMs: 90000,
+                maxOutputBytes: 10 * 1024 * 1024,
+                cwd: workspacePath,
+              });
+              prof.mark('twoPass.dockerRemediateDiscovery', {
+                exitCode: execDiscovery.exitCode,
+                timedOut: execDiscovery.timedOut,
+              });
 
-            if (changedRuleNames.length === 0) {
-              // No changes: return early (no need for pass 2).
+              const reportFileDiscovery =
+                await this.readReportFile(discoveryDir);
+              const reportTextDiscovery =
+                reportFileDiscovery || execDiscovery.stdout;
+              prof.mark('twoPass.readReportFileDiscovery', {
+                usedReportFile: Boolean(reportFileDiscovery),
+              });
+
+              // If ORL failed to produce a report (common when --out path is missing), do NOT
+              // treat that as "no changes" — fall back to the standard single-pass flow.
+              const looksLikeReport =
+                typeof reportTextDiscovery === 'string' &&
+                reportTextDiscovery.includes('type: Report');
+              if (!looksLikeReport) {
+                logger.warn(
+                  'Two-pass discovery did not produce a valid ORL report; falling back to single-pass remediation',
+                  {
+                    exitCode: execDiscovery.exitCode,
+                    timedOut: execDiscovery.timedOut,
+                    stdoutPreview: (execDiscovery.stdout || '').slice(0, 2000),
+                    stderrPreview: (execDiscovery.stderr || '').slice(0, 2000),
+                  },
+                );
+                return undefined;
+              }
+
+              const changedRuleNames =
+                this.extractChangedRuleNamesFromReport(reportTextDiscovery);
+              prof.mark('twoPass.discoveredChangedRules', {
+                changedRuleCount: changedRuleNames.length,
+                sampleRules: changedRuleNames.slice(0, 20),
+              });
+
+              if (changedRuleNames.length === 0) {
+                // No changes: return early (no need for pass 2).
+                prof.end({
+                  success: true,
+                  exitCode: execDiscovery.exitCode ?? 0,
+                });
+                return {
+                  success: true,
+                  modifiedFiles: {},
+                  report: reportTextDiscovery,
+                  exitCode:
+                    typeof execDiscovery.exitCode === 'number'
+                      ? execDiscovery.exitCode
+                      : 0,
+                };
+              }
+
+              // Pass 2: run ORL with hooks enabled but only the subset of changed rules.
+              await this.copyWorkspaceFiles(workspacePath, tempDir);
+              prof.mark('copyWorkspaceFiles');
+
+              await this.writeHooksToTempWorkspace(tempDir);
+              prof.mark('writeHooksToTempWorkspace');
+
+              const rulesDir = path.join(tempDir, 'rules');
+              await fs.promises.mkdir(rulesDir, { recursive: true });
+
+              const copied = await this.copyRulesSubsetFromCache({
+                sourceRulesDir: cached?.rulesDir ?? '',
+                destRulesDir: rulesDir,
+                ruleNames: changedRuleNames,
+              });
+              prof.mark('twoPass.copyRulesSubsetFromCache', copied);
+              // Safety: If we fail to map any of the discovered rules back to concrete ruleset files,
+              // do not proceed with a partial subset run (it could miss fixes). Fall back to single-pass.
+              if (copied.missingRules.length || copied.copiedFiles === 0) {
+                logger.warn(
+                  'Two-pass: failed to build a complete subset rulespace; falling back to single-pass remediation',
+                  {
+                    copiedFiles: copied.copiedFiles,
+                    missingRuleCount: copied.missingRules.length,
+                    missingRules: copied.missingRules.slice(0, 25),
+                  },
+                );
+                return undefined;
+              }
+
+              const dockerArgs = this.buildDockerArgs({
+                workspacePath: tempDir,
+                language,
+                rulesDir,
+                devRulesHostDir: injectedDevRulesHostDir,
+              });
+              logger.info(
+                'Executing ORL via Docker (two-pass, subset rules + hooks enabled)',
+                {
+                  command: 'docker',
+                  args: dockerArgs,
+                },
+              );
+
+              const execResult = await runProcess({
+                command: 'docker',
+                commandArgs: dockerArgs,
+                timeoutMs: 90000, // hooks add overhead but shouldn't take this long
+                maxOutputBytes: 10 * 1024 * 1024,
+                cwd: workspacePath,
+              });
+              prof.mark('dockerRemediate', {
+                exitCode: execResult.exitCode,
+                timedOut: execResult.timedOut,
+              });
+
+              if (prof.enabled) {
+                const hookEvents = await this.readHookManifestEvents(tempDir);
+                const hookSummary = this.summarizeHookTimings(hookEvents);
+                prof.mark('hookTimingSummary', hookSummary);
+              }
+
+              const diagnostics = await this.readDiagnostics(tempDir);
+              prof.mark('readDiagnostics');
+              const reportFile = await this.readReportFile(tempDir);
+              prof.mark('readReportFile', {
+                usedReportFile: Boolean(reportFile),
+              });
+              const reportText = reportFile || execResult.stdout;
+
+              const changedRelPaths = reportText
+                ? this.extractChangedRelativePathsFromReport(reportText)
+                : [];
+              prof.mark('extractChangedRelativePaths', {
+                changedPathCount: changedRelPaths.length,
+              });
+              const modifiedFiles = await this.readModifiedFilesFromTemp(
+                tempDir,
+                {
+                  onlyRelativePaths: changedRelPaths.length
+                    ? changedRelPaths
+                    : undefined,
+                },
+              );
+              prof.mark('readModifiedFilesFromTemp', {
+                modifiedFileCount: Object.keys(modifiedFiles).length,
+              });
+
+              await this.persistDiagnosticsArtifacts(
+                workspacePath,
+                tempDir,
+                reportText,
+              );
+              prof.mark('persistDiagnosticsArtifacts');
+
+              prof.mark('cleanupTemp', {
+                kept: Boolean(this.config.debugKeepTemp),
+              });
+
+              const exitCode =
+                typeof execResult.exitCode === 'number'
+                  ? execResult.exitCode
+                  : undefined;
+              const nonFatal =
+                exitCode === 0 || exitCode === 1 || exitCode === 2;
+
+              if (!nonFatal || execResult.timedOut) {
+                prof.end({ success: false, exitCode: 2 });
+                return {
+                  success: false,
+                  modifiedFiles: {},
+                  exitCode: 2,
+                  error: execResult.timedOut
+                    ? 'ORL execution timed out'
+                    : `ORL execution failed (exit code ${exitCode ?? 'unknown'})`,
+                };
+              }
+
               prof.end({
                 success: true,
-                exitCode: execDiscovery.exitCode ?? 0,
+                exitCode: exitCode ?? 0,
+                modifiedFileCount: Object.keys(modifiedFiles).length,
               });
+
               return {
                 success: true,
-                modifiedFiles: {},
-                report: reportTextDiscovery,
-                exitCode:
-                  typeof execDiscovery.exitCode === 'number'
-                    ? execDiscovery.exitCode
-                    : 0,
+                modifiedFiles,
+                report: reportText,
+                exitCode: exitCode ?? 0,
+                // @ts-ignore add diagnostics for downstream usage
+                diagnostics,
               };
-            }
-
-            // Pass 2: run ORL with hooks enabled but only the subset of changed rules.
-            await this.copyWorkspaceFiles(workspacePath, tempDir);
-            prof.mark('copyWorkspaceFiles');
-
-            await this.writeHooksToTempWorkspace(tempDir);
-            prof.mark('writeHooksToTempWorkspace');
-
-            const rulesDir = path.join(tempDir, 'rules');
-            await fs.promises.mkdir(rulesDir, { recursive: true });
-
-            const copied = await this.copyRulesSubsetFromCache({
-              sourceRulesDir: cached?.rulesDir ?? '',
-              destRulesDir: rulesDir,
-              ruleNames: changedRuleNames,
-            });
-            prof.mark('twoPass.copyRulesSubsetFromCache', copied);
-            // Safety: If we fail to map any of the discovered rules back to concrete ruleset files,
-            // do not proceed with a partial subset run (it could miss fixes). Fall back to single-pass.
-            if (copied.missingRules.length || copied.copiedFiles === 0) {
-              logger.warn(
-                'Two-pass: failed to build a complete subset rulespace; falling back to single-pass remediation',
-                {
-                  copiedFiles: copied.copiedFiles,
-                  missingRuleCount: copied.missingRules.length,
-                  missingRules: copied.missingRules.slice(0, 25),
-                },
-              );
-              return undefined;
-            }
-
-            const dockerArgs = this.buildDockerArgs({
-              workspacePath: tempDir,
-              language,
-              rulesDir,
-              devRulesHostDir: injectedDevRulesHostDir,
-            });
-            logger.info(
-              'Executing ORL via Docker (two-pass, subset rules + hooks enabled)',
-              {
-                command: 'docker',
-                args: dockerArgs,
-              },
-            );
-
-            const execResult = await runProcess({
-              command: 'docker',
-              commandArgs: dockerArgs,
-              timeoutMs: 90000, // hooks add overhead but shouldn't take this long
-              maxOutputBytes: 10 * 1024 * 1024,
-              cwd: workspacePath,
-            });
-            prof.mark('dockerRemediate', {
-              exitCode: execResult.exitCode,
-              timedOut: execResult.timedOut,
-            });
-
-            if (prof.enabled) {
-              const hookEvents = await this.readHookManifestEvents(tempDir);
-              const hookSummary = this.summarizeHookTimings(hookEvents);
-              prof.mark('hookTimingSummary', hookSummary);
-            }
-
-            const diagnostics = await this.readDiagnostics(tempDir);
-            prof.mark('readDiagnostics');
-            const reportFile = await this.readReportFile(tempDir);
-            prof.mark('readReportFile', {
-              usedReportFile: Boolean(reportFile),
-            });
-            const reportText = reportFile || execResult.stdout;
-
-            const changedRelPaths = reportText
-              ? this.extractChangedRelativePathsFromReport(reportText)
-              : [];
-            prof.mark('extractChangedRelativePaths', {
-              changedPathCount: changedRelPaths.length,
-            });
-            const modifiedFiles = await this.readModifiedFilesFromTemp(
-              tempDir,
-              {
-                onlyRelativePaths: changedRelPaths.length
-                  ? changedRelPaths
-                  : undefined,
-              },
-            );
-            prof.mark('readModifiedFilesFromTemp', {
-              modifiedFileCount: Object.keys(modifiedFiles).length,
-            });
-
-            await this.persistDiagnosticsArtifacts(
-              workspacePath,
-              tempDir,
-              reportText,
-            );
-            prof.mark('persistDiagnosticsArtifacts');
-
-            if (!this.config.debugKeepTemp) {
-              await fs.promises.rm(tempDir, { recursive: true, force: true });
-            } else {
-              logger.warn('Debug: preserving .orl-temp after remediation', {
-                tempDir,
+            } finally {
+              await fs.promises.rm(discoveryDir, {
+                recursive: true,
+                force: true,
               });
+              prof.mark('twoPass.cleanupDiscovery');
             }
-            prof.mark('cleanupTemp', {
-              kept: Boolean(this.config.debugKeepTemp),
-            });
+          };
 
-            const exitCode =
-              typeof execResult.exitCode === 'number'
-                ? execResult.exitCode
-                : undefined;
-            const nonFatal = exitCode === 0 || exitCode === 1 || exitCode === 2;
-
-            if (!nonFatal || execResult.timedOut) {
-              prof.end({ success: false, exitCode: 2 });
-              return {
-                success: false,
-                modifiedFiles: {},
-                exitCode: 2,
-                error: execResult.timedOut
-                  ? 'ORL execution timed out'
-                  : `ORL execution failed (exit code ${exitCode ?? 'unknown'})`,
-              };
-            }
-
-            prof.end({
-              success: true,
-              exitCode: exitCode ?? 0,
-              modifiedFileCount: Object.keys(modifiedFiles).length,
-            });
-
-            return {
-              success: true,
-              modifiedFiles,
-              report: reportText,
-              exitCode: exitCode ?? 0,
-              // @ts-ignore add diagnostics for downstream usage
-              diagnostics,
-            };
-          } finally {
-            await fs.promises.rm(discoveryDir, {
-              recursive: true,
-              force: true,
-            });
-            prof.mark('twoPass.cleanupDiscovery');
+          const twoPassResult = await tryTwoPass();
+          if (twoPassResult) {
+            return twoPassResult;
           }
-        };
-
-        const twoPassResult = await tryTwoPass();
-        if (twoPassResult) {
-          return twoPassResult;
         }
-      }
 
-      // Default single-pass flow:
-      // Copy workspace files to temp directory
-      await this.copyWorkspaceFiles(workspacePath, tempDir);
-      prof.mark('copyWorkspaceFiles');
+        // Default single-pass flow:
+        // Copy workspace files to temp directory
+        await this.copyWorkspaceFiles(workspacePath, tempDir);
+        prof.mark('copyWorkspaceFiles');
 
-      // Write ORL hook scripts into temp workspace so they are available inside the container
-      await this.writeHooksToTempWorkspace(tempDir);
-      prof.mark('writeHooksToTempWorkspace');
+        // Write ORL hook scripts into temp workspace so they are available inside the container
+        await this.writeHooksToTempWorkspace(tempDir);
+        prof.mark('writeHooksToTempWorkspace');
 
-      const rulesDir = path.join(tempDir, 'rules');
-      await fs.promises.mkdir(rulesDir, { recursive: true });
+        const rulesDir = path.join(tempDir, 'rules');
+        await fs.promises.mkdir(rulesDir, { recursive: true });
 
-      // Step 2: Execute ORL remediation with pulled rules
-      const dockerArgs = this.buildDockerArgs({
-        workspacePath: tempDir,
-        language,
-        rulesDir,
-        mountedRulesDir: cached?.rulesDir,
-        devRulesHostDir: injectedDevRulesHostDir,
-      });
-      logger.info('Executing ORL via Docker', {
-        command: 'docker',
-        args: dockerArgs,
-      });
+        // Step 2: Execute ORL remediation with pulled rules
+        const dockerArgs = this.buildDockerArgs({
+          workspacePath: tempDir,
+          language,
+          rulesDir,
+          mountedRulesDir: cached?.rulesDir,
+          devRulesHostDir: injectedDevRulesHostDir,
+        });
+        logger.info('Executing ORL via Docker', {
+          command: 'docker',
+          args: dockerArgs,
+        });
 
-      const execResult = await runProcess({
-        command: 'docker',
-        commandArgs: dockerArgs,
-        timeoutMs: 90000, // 90 second timeout - hooks add overhead but shouldn't take this long
-        maxOutputBytes: 10 * 1024 * 1024,
-        cwd: workspacePath,
-      });
-      prof.mark('dockerRemediate', {
-        exitCode: execResult.exitCode,
-        timedOut: execResult.timedOut,
-      });
+        const execResult = await runProcess({
+          command: 'docker',
+          commandArgs: dockerArgs,
+          timeoutMs: 90000, // 90 second timeout - hooks add overhead but shouldn't take this long
+          maxOutputBytes: 10 * 1024 * 1024,
+          cwd: workspacePath,
+        });
+        prof.mark('dockerRemediate', {
+          exitCode: execResult.exitCode,
+          timedOut: execResult.timedOut,
+        });
 
-      if (prof.enabled) {
-        const hookEvents = await this.readHookManifestEvents(tempDir);
-        const hookSummary = this.summarizeHookTimings(hookEvents);
-        prof.mark('hookTimingSummary', hookSummary);
-      }
+        if (prof.enabled) {
+          const hookEvents = await this.readHookManifestEvents(tempDir);
+          const hookSummary = this.summarizeHookTimings(hookEvents);
+          prof.mark('hookTimingSummary', hookSummary);
+        }
 
-      const diagnostics = await this.readDiagnostics(tempDir);
-      prof.mark('readDiagnostics');
-      const reportFile = await this.readReportFile(tempDir);
-      prof.mark('readReportFile', { usedReportFile: Boolean(reportFile) });
-      const reportText = reportFile || execResult.stdout;
+        const diagnostics = await this.readDiagnostics(tempDir);
+        prof.mark('readDiagnostics');
+        const reportFile = await this.readReportFile(tempDir);
+        prof.mark('readReportFile', { usedReportFile: Boolean(reportFile) });
+        const reportText = reportFile || execResult.stdout;
 
-      const changedRelPaths = reportText
-        ? this.extractChangedRelativePathsFromReport(reportText)
-        : [];
-      prof.mark('extractChangedRelativePaths', {
-        changedPathCount: changedRelPaths.length,
-      });
-      const modifiedFiles = await this.readModifiedFilesFromTemp(tempDir, {
-        onlyRelativePaths: changedRelPaths.length ? changedRelPaths : undefined,
-      });
-      prof.mark('readModifiedFilesFromTemp', {
-        modifiedFileCount: Object.keys(modifiedFiles).length,
-      });
+        const changedRelPaths = reportText
+          ? this.extractChangedRelativePathsFromReport(reportText)
+          : [];
+        prof.mark('extractChangedRelativePaths', {
+          changedPathCount: changedRelPaths.length,
+        });
+        const modifiedFiles = await this.readModifiedFilesFromTemp(tempDir, {
+          onlyRelativePaths: changedRelPaths.length
+            ? changedRelPaths
+            : undefined,
+        });
+        prof.mark('readModifiedFilesFromTemp', {
+          modifiedFileCount: Object.keys(modifiedFiles).length,
+        });
 
-      await this.persistDiagnosticsArtifacts(
-        workspacePath,
-        tempDir,
-        reportText,
-      );
-      prof.mark('persistDiagnosticsArtifacts');
-
-      if (!this.config.debugKeepTemp) {
-        await fs.promises.rm(tempDir, { recursive: true, force: true });
-      } else {
-        logger.warn('Debug: preserving .orl-temp after remediation', {
+        await this.persistDiagnosticsArtifacts(
+          workspacePath,
           tempDir,
-        });
-      }
-      prof.mark('cleanupTemp', { kept: Boolean(this.config.debugKeepTemp) });
-
-      const exitCode =
-        typeof execResult.exitCode === 'number'
-          ? execResult.exitCode
-          : undefined;
-
-      // Treat ORL exit codes 0/1/2 as non-fatal for scan execution; anything else is fatal.
-      const nonFatal = exitCode === 0 || exitCode === 1 || exitCode === 2;
-
-      const looksLikeRuleLoadFailure = (text: string): boolean => {
-        const s = (text || '').toLowerCase();
-        if (!s) {
-          return false;
-        }
-        return (
-          s.includes('failed to load rule') ||
-          s.includes('error loading rule') ||
-          s.includes('failed to parse rule') ||
-          s.includes('failed to parse ruleset') ||
-          s.includes('failed to load ruleset') ||
-          (s.includes('ruleset') &&
-            s.includes('schema') &&
-            s.includes('error')) ||
-          (s.includes('yaml') && s.includes('error') && s.includes('rules')) ||
-          (s.includes('invalid') && s.includes('ruleset')) ||
-          (s.includes('could not load') && s.includes('rule'))
+          reportText,
         );
-      };
+        prof.mark('persistDiagnosticsArtifacts');
 
-      const ruleLoadFailure =
-        exitCode === 1 && looksLikeRuleLoadFailure(execResult.stderr);
+        prof.mark('cleanupTemp', { kept: Boolean(this.config.debugKeepTemp) });
 
-      if (execResult.timedOut) {
-        logger.error('ORL docker process timed out', {
-          timeoutMs: 90000,
-          signal: execResult.signal,
-        });
-      } else if (ruleLoadFailure) {
-        logger.warn(
-          'ORL exited with code 1 due to rule load error(s); continuing scan with available results',
-          { exitCode, stderrPreview: execResult.stderr.slice(0, 2000) },
-        );
-      } else if (exitCode && exitCode !== 0) {
-        logger.info('ORL completed with non-zero exit (continuing)', {
-          exitCode,
-        });
-      }
+        const exitCode =
+          typeof execResult.exitCode === 'number'
+            ? execResult.exitCode
+            : undefined;
 
-      if (!nonFatal || execResult.timedOut) {
-        prof.end({ success: false, exitCode: 2 });
-        return {
-          success: false,
-          modifiedFiles: {},
-          exitCode: 2,
-          error: execResult.timedOut
-            ? 'ORL execution timed out'
-            : `ORL execution failed (exit code ${exitCode ?? 'unknown'})`,
+        // Treat ORL exit codes 0/1/2 as non-fatal for scan execution; anything else is fatal.
+        const nonFatal = exitCode === 0 || exitCode === 1 || exitCode === 2;
+
+        const looksLikeRuleLoadFailure = (text: string): boolean => {
+          const s = (text || '').toLowerCase();
+          if (!s) {
+            return false;
+          }
+          return (
+            s.includes('failed to load rule') ||
+            s.includes('error loading rule') ||
+            s.includes('failed to parse rule') ||
+            s.includes('failed to parse ruleset') ||
+            s.includes('failed to load ruleset') ||
+            (s.includes('ruleset') &&
+              s.includes('schema') &&
+              s.includes('error')) ||
+            (s.includes('yaml') &&
+              s.includes('error') &&
+              s.includes('rules')) ||
+            (s.includes('invalid') && s.includes('ruleset')) ||
+            (s.includes('could not load') && s.includes('rule'))
+          );
         };
-      }
 
-      prof.end({
-        success: true,
-        exitCode: exitCode ?? 0,
-        modifiedFileCount: Object.keys(modifiedFiles).length,
-      });
-      return {
-        success: true,
-        modifiedFiles,
-        report: reportText,
-        exitCode: exitCode ?? 0,
-        // Surface recoverable rule-load failures for downstream reporting without blocking the scan.
-        error: ruleLoadFailure
-          ? `ORL recoverable failure: one or more rules failed to load (exit code ${exitCode}). See logs for details.`
-          : undefined,
-        // @ts-ignore add diagnostics for downstream usage
-        diagnostics,
-      };
+        const ruleLoadFailure =
+          exitCode === 1 && looksLikeRuleLoadFailure(execResult.stderr);
+
+        if (execResult.timedOut) {
+          logger.error('ORL docker process timed out', {
+            timeoutMs: 90000,
+            signal: execResult.signal,
+          });
+        } else if (ruleLoadFailure) {
+          logger.warn(
+            'ORL exited with code 1 due to rule load error(s); continuing scan with available results',
+            { exitCode, stderrPreview: execResult.stderr.slice(0, 2000) },
+          );
+        } else if (exitCode && exitCode !== 0) {
+          logger.info('ORL completed with non-zero exit (continuing)', {
+            exitCode,
+          });
+        }
+
+        if (!nonFatal || execResult.timedOut) {
+          prof.end({ success: false, exitCode: 2 });
+          return {
+            success: false,
+            modifiedFiles: {},
+            exitCode: 2,
+            error: execResult.timedOut
+              ? 'ORL execution timed out'
+              : `ORL execution failed (exit code ${exitCode ?? 'unknown'})`,
+          };
+        }
+
+        prof.end({
+          success: true,
+          exitCode: exitCode ?? 0,
+          modifiedFileCount: Object.keys(modifiedFiles).length,
+        });
+        return {
+          success: true,
+          modifiedFiles,
+          report: reportText,
+          exitCode: exitCode ?? 0,
+          // Surface recoverable rule-load failures for downstream reporting without blocking the scan.
+          error: ruleLoadFailure
+            ? `ORL recoverable failure: one or more rules failed to load (exit code ${exitCode}). See logs for details.`
+            : undefined,
+          // @ts-ignore add diagnostics for downstream usage
+          diagnostics,
+        };
+      } finally {
+        if (!this.config.debugKeepTemp) {
+          await fs.promises
+            .rm(tempDir, { recursive: true, force: true })
+            .catch(() => {});
+        } else {
+          logger.warn('Debug: preserving .orl-temp after remediation', {
+            tempDir,
+          });
+        }
+      }
     } catch (error) {
       logger.error('ORL remediation failed', { error });
       return {
