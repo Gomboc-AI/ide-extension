@@ -47,6 +47,7 @@ export class OrlRuleFixGombocDiagnostic extends vscode.Diagnostic {
   ruleDescription?: string;
   quickFixMessage: string;
   fixStrategy?: string;
+  fixTask?: string;
 
   constructor(
     range: vscode.Range,

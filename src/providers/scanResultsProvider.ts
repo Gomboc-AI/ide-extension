@@ -209,6 +209,7 @@ export class ScanResultsProvider {
     ruleShortName?: string;
     ruleDescription?: string;
     fixStrategy?: string;
+    fixTask?: string;
     checkovIds?: string[];
   }): string {
     const {
@@ -219,6 +220,7 @@ export class ScanResultsProvider {
       ruleShortName,
       ruleDescription,
       fixStrategy,
+      fixTask,
       checkovIds,
     } = args;
 
@@ -227,14 +229,9 @@ export class ScanResultsProvider {
       ? (checkovIds || []).map(id => `- ${id}`).join('\n')
       : '- (none found)';
 
-    // Special-case starter: dolphinscheduler SSH ingress 0.0.0.0/0 (CKV_AWS_24)
-    const isSshOpenIngress =
-      (checkovIds || []).includes('CKV_AWS_24') ||
-      ruleName.toLowerCase().includes('ai-restrict-ssh-ingress');
-
-    const taskBody = isSshOpenIngress
-      ? `### Task\n\nUpdate Terraform security groups under \`${workspacePath}\` so that **SSH ingress (22/tcp)** is no longer open to the world.\n\n- Find every \`ingress { ... }\` block under \`resource "aws_security_group" ...\` where:\n  - \`from_port = 22\`\n  - \`to_port = 22\`\n  - \`cidr_blocks = ["0.0.0.0/0"]\` (or otherwise contains \`0.0.0.0/0\`)\n\nFor each of those SSH ingress blocks, replace it with a safer, configurable pattern:\n\n- Prefer **conditional SSH ingress** controlled by \`var.ssh_ingress_cidr_blocks\`:\n  - If \`var.ssh_ingress_cidr_blocks\` is empty, **do not create** an SSH ingress rule.\n  - If it’s non-empty, create SSH ingress with \`cidr_blocks = var.ssh_ingress_cidr_blocks\`.\n\nConstraints:\n- Do **not** change non-SSH ingress rules.\n- Preserve formatting as much as possible.\n- Remove any temporary marker comments like \`FIXPROOF_AI:\` once the real fix is implemented.\n\n### Notes\n- The variable is defined in \`dolphinscheduler-variables.tf\` as \`list(string)\`.\n- Implementing conditional ingress typically means converting the static SSH \`ingress { ... }\` block into:\n  - a \`dynamic "ingress" { for_each = length(var.ssh_ingress_cidr_blocks) > 0 ? [1] : [] ... }\`\n\n`
-      : '### Task\\n\\nImplement a safe fix for this finding. Keep changes minimal and avoid altering unrelated behavior.\\n';
+    const taskBody = fixTask
+      ? `### Task\n\n${fixTask}\n\n`
+      : '### Task\n\nImplement a safe fix for this finding. Keep changes minimal and avoid altering unrelated behavior.\n\n';
 
     return `# AI Fix Prompt (validated)\n\n## Context\n- **Rule**: \`${ruleName}\`\n- **Fix strategy**: \`${fixStrategy || 'unknown'}\`\n- **File**: \`${filePath}\`\n- **Resource**: ${resourceHeader ? `\`${resourceHeader}\`` : '(unknown)'}\n\n## Rule description\n${ruleDescription ? ruleDescription : '(no description available)'}\n\n## Related Checkov IDs\n${checkList}\n\n${taskBody}## After you apply the fix\n1. Run **Gomboc: Third Party Compare – Verify targeted Checkov checks (Docker)**.\n2. Run **Gomboc: Scan current file or scenario** again to confirm the finding is gone.\n`;
   }
@@ -249,6 +246,7 @@ export class ScanResultsProvider {
     resourceHeader?: string;
     ruleShortName?: string;
     ruleDescription?: string;
+    fixTask?: string;
   }): Promise<void> {
     const ruleNameRaw = (args.ruleName || '').trim();
     const filePath = (args.filePath || '').trim();
@@ -267,6 +265,7 @@ export class ScanResultsProvider {
     const reportText = last?.report;
 
     let fixStrategy: string | undefined = undefined;
+    let fixTask: string | undefined = args.fixTask;
     let checkovIds: string[] | undefined = undefined;
 
     try {
@@ -296,6 +295,12 @@ export class ScanResultsProvider {
             typeof annotations['gomboc-ai/fix-strategy'] === 'string'
               ? String(annotations['gomboc-ai/fix-strategy'])
               : undefined;
+          if (!fixTask) {
+            fixTask =
+              typeof annotations['gomboc-ai/fix-task'] === 'string'
+                ? String(annotations['gomboc-ai/fix-task']).trim()
+                : undefined;
+          }
           checkovIds = this.extractCheckovIdsFromAnnotations(annotations);
         }
       }
@@ -317,6 +322,7 @@ export class ScanResultsProvider {
       ruleShortName: args.ruleShortName,
       ruleDescription: args.ruleDescription,
       fixStrategy,
+      fixTask,
       checkovIds,
     });
 
@@ -417,11 +423,11 @@ export class ScanResultsProvider {
 
   private buildOrlRuleMetaIndex(): Map<
     string,
-    { fixStrategy?: string; checkovIds: string[] }
+    { fixStrategy?: string; fixTask?: string; checkovIds: string[] }
   > {
     const out = new Map<
       string,
-      { fixStrategy?: string; checkovIds: string[] }
+      { fixStrategy?: string; fixTask?: string; checkovIds: string[] }
     >();
     const reportText = this.getLastOrlScanContext()?.report;
     if (!reportText) {
@@ -451,10 +457,15 @@ export class ScanResultsProvider {
           typeof annotations['gomboc-ai/fix-strategy'] === 'string'
             ? String(annotations['gomboc-ai/fix-strategy'])
             : undefined;
+        const fixTask =
+          annotations &&
+          typeof annotations['gomboc-ai/fix-task'] === 'string'
+            ? String(annotations['gomboc-ai/fix-task']).trim()
+            : undefined;
         const checkovIds = annotations
           ? this.extractCheckovIdsFromAnnotations(annotations)
           : [];
-        const payload = { fixStrategy, checkovIds };
+        const payload = { fixStrategy, fixTask, checkovIds };
         if (!out.has(n)) {
           out.set(n, payload);
         }
@@ -873,6 +884,7 @@ export class ScanResultsProvider {
             ruleShortName: shortName,
             ruleDescription: description,
             fixStrategy: metaHit?.fixStrategy,
+            fixTask: metaHit?.fixTask,
             quickFixMessage: `Apply fix (${shortName})`,
             range: new vscode.Range(startPosition, endPosition),
             severity: vscode.DiagnosticSeverity.Error,
