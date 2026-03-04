@@ -740,6 +740,13 @@ export class OrlClient {
                 recursive: true,
               });
 
+              // Pre-create the rules mount point so it is owned by the current user.
+              // Docker's nested volume mount (-v cachedRules:/workspace/rules) can leave
+              // behind a root-owned directory stub that fs.promises.rm cannot remove.
+              await fs.promises.mkdir(path.join(discoveryDir, 'rules'), {
+                recursive: true,
+              });
+
               const dockerArgsDiscovery = this.buildDockerArgs({
                 workspacePath: discoveryDir,
                 language,
