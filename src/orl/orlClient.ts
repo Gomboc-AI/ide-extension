@@ -1814,8 +1814,8 @@ export class OrlClient {
     const ext = path.extname(fileName).toLowerCase();
     const baseName = path.basename(fileName, ext).toLowerCase();
 
-    // Docker: Dockerfile* (no extension or any extension)
-    if (baseName.startsWith('dockerfile')) {
+    // Docker: Dockerfile* (no extension or any extension) or *.dockerfile
+    if (baseName.startsWith('dockerfile') || ext === '.dockerfile') {
       return true;
     }
 

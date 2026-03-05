@@ -47,7 +47,7 @@ export function detectLanguageFromFile(
   // Handle empty files
   if (!fileContent || fileContent.trim().length === 0) {
     // For empty files, rely only on extension/filename
-    if (fileName.startsWith('dockerfile')) {
+    if (fileName.startsWith('dockerfile') || ext === '.dockerfile') {
       return 'docker';
     }
     if (filetype === 'tf' || filetype === 'hcl' || filetype === 'tfvars') {
@@ -65,8 +65,8 @@ export function detectLanguageFromFile(
     return null;
   }
 
-  // 1. Docker: Dockerfile* (check filename first - most specific)
-  if (fileName.startsWith('dockerfile')) {
+  // 1. Docker: Dockerfile* or *.dockerfile (check filename first - most specific)
+  if (fileName.startsWith('dockerfile') || ext === '.dockerfile') {
     return 'docker';
   }
 

@@ -448,7 +448,11 @@ async function pickRepresentativeFileInDirectory(args: {
 
   // Docker
   if (language === 'docker') {
-    return pickBy(n => n.toLowerCase().startsWith('dockerfile'));
+    return (
+      pickBy(n => n.toLowerCase().startsWith('dockerfile')) ||
+      pickBy(n => n.toLowerCase().endsWith('.dockerfile')) ||
+      undefined
+    );
   }
 
   // Helm
