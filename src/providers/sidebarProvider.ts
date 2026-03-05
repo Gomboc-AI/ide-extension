@@ -28,6 +28,14 @@ export class GombocInfoViewProvider implements vscode.WebviewViewProvider {
               () => {},
             );
         }
+        if (m?.type === 'clearRulesCache') {
+          vscode.commands
+            .executeCommand('gomboc-vscode-extension.clearRulesCache')
+            .then(
+              () => {},
+              () => {},
+            );
+        }
       },
       undefined,
       this.context.subscriptions,
@@ -77,12 +85,16 @@ export class GombocInfoViewProvider implements vscode.WebviewViewProvider {
           <h2>Welcome to Gomboc!</h2>
           <div class="meta">Quick links</div>
           <button id="openReviewerBtn">Open Fix Reviewer</button>
+          <button id="clearRulesCacheBtn">Clear Rules Cache</button>
         </div>
 
         <script nonce="${nonce}">
           const vscode = acquireVsCodeApi();
           document.getElementById('openReviewerBtn').addEventListener('click', () => {
             vscode.postMessage({ type: 'openReviewer' });
+          });
+          document.getElementById('clearRulesCacheBtn').addEventListener('click', () => {
+            vscode.postMessage({ type: 'clearRulesCache' });
           });
         </script>
       </body>

@@ -11,6 +11,7 @@ import logger, { setLoggerLevel } from './utils/logger';
 import { ScanResultsProvider } from './providers/scanResultsProvider';
 import { CodeActionProvider } from './providers/codeActionProvider';
 import { GombocInfoViewProvider } from './providers/sidebarProvider';
+import { clearOrlRulesCache } from './orl/orlClient';
 import { OrlHoverProvider } from './providers/orlHoverProvider';
 import { getInfrastructureToolFromFileUri } from './infrastructureTool';
 import { DiagnosticCollectionManager } from './diagnosticCollectionManager';
@@ -72,6 +73,19 @@ export async function activate(context: vscode.ExtensionContext) {
     {
       name: 'gomboc-vscode-extension.showIssues',
       handler: () => showIssuesCommand(context, scanResults),
+    },
+    {
+      name: 'gomboc-vscode-extension.clearRulesCache',
+      handler: async () => {
+        try {
+          await clearOrlRulesCache(context.globalStorageUri.fsPath);
+          vscode.window.showInformationMessage(
+            'ORL rules cache cleared. Next scan will pull fresh rules.',
+          );
+        } catch {
+          vscode.window.showErrorMessage('Failed to clear ORL rules cache.');
+        }
+      },
     },
   ];
 

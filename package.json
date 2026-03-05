@@ -55,6 +55,10 @@
       {
         "command": "gomboc-vscode-extension.showIssues",
         "title": "Gomboc: Open Fix Reviewer"
+      },
+      {
+        "command": "gomboc-vscode-extension.clearRulesCache",
+        "title": "Gomboc: Clear ORL Rules Cache"
       }
     ],
     "configuration": [

@@ -256,12 +256,21 @@ async function scanWithOrl(
       );
     }
 
-    // If ORL signaled a recoverable failure (exit code 1), keep going but log loudly.
-    // This commonly happens when some rules fail to load/parse but other rules still run.
-    if (result.success && result.exitCode === 1) {
-      logger.warn('ORL scan completed with recoverable failure (exit code 1)', {
-        error: result.error,
-      });
+    if (result.success && result.exitCode === 2) {
+      logger.warn(
+        'ORL scan completed with errors in the report; delivering available fixes',
+        {
+          exitCode: result.exitCode,
+          error: result.error,
+        },
+      );
+    } else if (result.success && result.exitCode === 3) {
+      logger.warn(
+        'ORL fix count is less than finding count; delivering available fixes',
+        {
+          exitCode: result.exitCode,
+        },
+      );
     }
 
     if (!result.success) {
