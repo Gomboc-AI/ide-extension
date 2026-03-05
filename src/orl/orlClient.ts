@@ -962,10 +962,17 @@ export class OrlClient {
                 diagnostics,
               };
             } finally {
-              await fs.promises.rm(discoveryDir, {
-                recursive: true,
-                force: true,
-              });
+              await fs.promises
+                .rm(discoveryDir, { recursive: true, force: true })
+                .catch(err => {
+                  logger.warn(
+                    'Failed to clean up discovery directory; stale temp dir may remain',
+                    {
+                      discoveryDir,
+                      error: err instanceof Error ? err.message : String(err),
+                    },
+                  );
+                });
               prof.mark('twoPass.cleanupDiscovery');
             }
           };
@@ -1219,9 +1226,13 @@ export class OrlClient {
 
     // reuse ORL's rules pull command
     // Note: We don't force --platform to allow Docker to use native architecture
-    const dockerArgs: string[] = [
-      'run',
-      '--rm',
+    const dockerArgs: string[] = ['run', '--rm'];
+
+    if (process.getuid && process.getgid) {
+      dockerArgs.push('--user', `${process.getuid()}:${process.getgid()}`);
+    }
+
+    dockerArgs.push(
       '-v',
       `${rulesDir}:/output`,
       '-e',
@@ -1234,7 +1245,7 @@ export class OrlClient {
       opts?.searchQuery
         ? `--search=${opts.searchQuery}`
         : `--channel=${channel}`,
-    ];
+    );
 
     logger.info('Pulling rules using ORL', {
       command: 'docker',
@@ -1338,12 +1349,17 @@ export class OrlClient {
     // Note: We don't force --platform to allow Docker to use native architecture
     // This avoids emulation overhead on ARM Macs if the image supports ARM64
     // Docker Desktop on Windows automatically handles path conversion (C:\Users\... -> /c/Users/...)
-    const dockerArgs: string[] = [
-      'run',
-      '--rm',
-      '-v',
-      `${workspacePath}:/workspace`,
-    ];
+    const dockerArgs: string[] = ['run', '--rm'];
+
+    // On POSIX (macOS/Linux), run the container as the current user so files
+    // created on mounted volumes are owned by the host user, not root.
+    // Without this, Docker leaves root-owned artifacts that fs.promises.rm
+    // cannot remove, causing "access denied" errors during cleanup.
+    if (process.getuid && process.getgid) {
+      dockerArgs.push('--user', `${process.getuid()}:${process.getgid()}`);
+    }
+
+    dockerArgs.push('-v', `${workspacePath}:/workspace`);
 
     if (mountedRulesDir) {
       // Mount cached rules directly into the container so we don't have to pull/copy into the temp workspace.
@@ -2049,7 +2065,17 @@ export class OrlClient {
       );
       prof.mark('persistDiagnosticsArtifacts');
 
-      await fs.promises.rm(tempDir, { recursive: true, force: true });
+      await fs.promises
+        .rm(tempDir, { recursive: true, force: true })
+        .catch(err => {
+          logger.warn(
+            'Failed to clean up single-rule temp directory; stale temp dir may remain',
+            {
+              tempDir,
+              error: err instanceof Error ? err.message : String(err),
+            },
+          );
+        });
       prof.mark('cleanupTemp');
 
       const exitCode =
