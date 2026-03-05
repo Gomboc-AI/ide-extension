@@ -142,7 +142,7 @@ export interface OrlConfig {
 // to ensure consistent behavior across environments and easier support/debugging.
 // For local dev with XML/Gradle support, switch to 'orl-dev:local'
 // (rebuild via: /path/to/orl/reload-dev-image.sh)
-const ORL_CONTAINER_IMAGE = 'gombocai/orl:v1.0.11-latest';
+const ORL_CONTAINER_IMAGE = 'gombocai/orl:v1.0.12';
 
 export interface OrlResult {
   success: boolean;
@@ -150,12 +150,11 @@ export interface OrlResult {
   report?: string;
   /**
    * The ORL process exit code, when available.
-   * Proposed semantics (client-facing):
+   * ORL exit code semantics:
    * - 0: success
-   * - 1: recoverable failure (e.g., some rules failed to load but scan continued)
-   * - 2: unrecoverable failure
-   *
-   * Note: ORL may not yet implement these semantics consistently; we still surface the raw code.
+   * - 1: failure to execute (unrecoverable)
+   * - 2: executed successfully but with errors in the report (fixes still valid)
+   * - 3: executed successfully but fix count < finding count (fixes still valid)
    */
   exitCode?: number;
   error?: string;
@@ -927,15 +926,15 @@ export class OrlClient {
                 typeof execResult.exitCode === 'number'
                   ? execResult.exitCode
                   : undefined;
-              const nonFatal =
-                exitCode === 0 || exitCode === 1 || exitCode === 2;
+              const executedSuccessfully =
+                exitCode === 0 || exitCode === 2 || exitCode === 3;
 
-              if (!nonFatal || execResult.timedOut) {
-                prof.end({ success: false, exitCode: 2 });
+              if (!executedSuccessfully || execResult.timedOut) {
+                prof.end({ success: false, exitCode: exitCode ?? 1 });
                 return {
                   success: false,
                   modifiedFiles: {},
-                  exitCode: 2,
+                  exitCode: exitCode ?? 1,
                   error: execResult.timedOut
                     ? 'ORL execution timed out'
                     : `ORL execution failed (exit code ${exitCode ?? 'unknown'})`,
@@ -953,6 +952,12 @@ export class OrlClient {
                 modifiedFiles,
                 report: reportText,
                 exitCode: exitCode ?? 0,
+                error:
+                  exitCode === 2
+                    ? 'ORL executed with errors in the report. See logs for details.'
+                    : exitCode === 3
+                      ? 'ORL fix count is less than finding count.'
+                      : undefined,
                 // @ts-ignore add diagnostics for downstream usage
                 diagnostics,
               };
@@ -1049,56 +1054,39 @@ export class OrlClient {
             ? execResult.exitCode
             : undefined;
 
-        // Treat ORL exit codes 0/1/2 as non-fatal for scan execution; anything else is fatal.
-        const nonFatal = exitCode === 0 || exitCode === 1 || exitCode === 2;
-
-        const looksLikeRuleLoadFailure = (text: string): boolean => {
-          const s = (text || '').toLowerCase();
-          if (!s) {
-            return false;
-          }
-          return (
-            s.includes('failed to load rule') ||
-            s.includes('error loading rule') ||
-            s.includes('failed to parse rule') ||
-            s.includes('failed to parse ruleset') ||
-            s.includes('failed to load ruleset') ||
-            (s.includes('ruleset') &&
-              s.includes('schema') &&
-              s.includes('error')) ||
-            (s.includes('yaml') &&
-              s.includes('error') &&
-              s.includes('rules')) ||
-            (s.includes('invalid') && s.includes('ruleset')) ||
-            (s.includes('could not load') && s.includes('rule'))
-          );
-        };
-
-        const ruleLoadFailure =
-          exitCode === 1 && looksLikeRuleLoadFailure(execResult.stderr);
+        // ORL exit codes: 0=success, 1=failure to execute, 2=ok with errors, 3=ok but fixes<findings.
+        // Codes 0/2/3 executed successfully and may contain fixes to deliver.
+        const executedSuccessfully =
+          exitCode === 0 || exitCode === 2 || exitCode === 3;
 
         if (execResult.timedOut) {
           logger.error('ORL docker process timed out', {
             timeoutMs: 90000,
             signal: execResult.signal,
           });
-        } else if (ruleLoadFailure) {
+        } else if (exitCode === 2) {
           logger.warn(
-            'ORL exited with code 1 due to rule load error(s); continuing scan with available results',
+            'ORL executed with errors in the report; delivering available fixes',
             { exitCode, stderrPreview: execResult.stderr.slice(0, 2000) },
           );
+        } else if (exitCode === 3) {
+          logger.warn(
+            'ORL fix count is less than finding count; delivering available fixes',
+            { exitCode },
+          );
         } else if (exitCode && exitCode !== 0) {
-          logger.info('ORL completed with non-zero exit (continuing)', {
+          logger.error('ORL failed to execute', {
             exitCode,
+            stderrPreview: execResult.stderr.slice(0, 2000),
           });
         }
 
-        if (!nonFatal || execResult.timedOut) {
-          prof.end({ success: false, exitCode: 2 });
+        if (!executedSuccessfully || execResult.timedOut) {
+          prof.end({ success: false, exitCode: exitCode ?? 1 });
           return {
             success: false,
             modifiedFiles: {},
-            exitCode: 2,
+            exitCode: exitCode ?? 1,
             error: execResult.timedOut
               ? 'ORL execution timed out'
               : `ORL execution failed (exit code ${exitCode ?? 'unknown'})`,
@@ -1115,10 +1103,12 @@ export class OrlClient {
           modifiedFiles,
           report: reportText,
           exitCode: exitCode ?? 0,
-          // Surface recoverable rule-load failures for downstream reporting without blocking the scan.
-          error: ruleLoadFailure
-            ? `ORL recoverable failure: one or more rules failed to load (exit code ${exitCode}). See logs for details.`
-            : undefined,
+          error:
+            exitCode === 2
+              ? 'ORL executed with errors in the report. See logs for details.'
+              : exitCode === 3
+                ? 'ORL fix count is less than finding count.'
+                : undefined,
           // @ts-ignore add diagnostics for downstream usage
           diagnostics,
         };
@@ -1139,7 +1129,7 @@ export class OrlClient {
         success: false,
         modifiedFiles: {},
         exitCode:
-          typeof (error as any)?.code === 'number' ? (error as any).code : 2,
+          typeof (error as any)?.code === 'number' ? (error as any).code : 1,
         error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
@@ -2066,7 +2056,8 @@ export class OrlClient {
         typeof execResult.exitCode === 'number'
           ? execResult.exitCode
           : undefined;
-      const nonFatal = exitCode === 0 || exitCode === 1 || exitCode === 2;
+      const executedSuccessfully =
+        exitCode === 0 || exitCode === 2 || exitCode === 3;
 
       logger.info('ORL single-rule remediation completed', {
         ruleName,
@@ -2074,12 +2065,12 @@ export class OrlClient {
         exitCode,
       });
 
-      if (!nonFatal || execResult.timedOut) {
-        prof.end({ success: false, exitCode: 2 });
+      if (!executedSuccessfully || execResult.timedOut) {
+        prof.end({ success: false, exitCode: exitCode ?? 1 });
         return {
           success: false,
           modifiedFiles: {},
-          exitCode: 2,
+          exitCode: exitCode ?? 1,
           error: execResult.timedOut
             ? 'ORL execution timed out'
             : `ORL execution failed (exit code ${exitCode ?? 'unknown'})`,
@@ -2096,6 +2087,12 @@ export class OrlClient {
         modifiedFiles,
         report: reportText,
         exitCode: exitCode ?? 0,
+        error:
+          exitCode === 2
+            ? 'ORL executed with errors in the report. See logs for details.'
+            : exitCode === 3
+              ? 'ORL fix count is less than finding count.'
+              : undefined,
         // @ts-ignore add diagnostics for downstream usage
         diagnostics,
       };
@@ -2108,7 +2105,7 @@ export class OrlClient {
         success: false,
         modifiedFiles: {},
         exitCode:
-          typeof (error as any)?.code === 'number' ? (error as any).code : 2,
+          typeof (error as any)?.code === 'number' ? (error as any).code : 1,
         error:
           error instanceof Error
             ? error.message
@@ -2189,4 +2186,27 @@ export async function createOrlClient(args: {
       DEFAULTS.orlLocalDevRulesEnabled,
     ),
   });
+}
+
+/**
+ * Remove all cached ORL rules so the next scan triggers a fresh pull.
+ * Wipes the entire `orl-rules-cache` directory under the given storagePath
+ * (or the OS temp fallback), covering all channel/image variants.
+ */
+export async function clearOrlRulesCache(storagePath?: string): Promise<void> {
+  const base =
+    (storagePath && storagePath.trim()) ||
+    path.join(os.tmpdir(), 'gomboc-vscode-extension');
+  const cacheRoot = path.join(base, 'orl-rules-cache');
+
+  try {
+    await fs.promises.rm(cacheRoot, { recursive: true, force: true });
+    logger.info('ORL rules cache cleared', { cacheRoot });
+  } catch (e) {
+    logger.warn('Failed to clear ORL rules cache', {
+      cacheRoot,
+      error: e instanceof Error ? e.message : String(e),
+    });
+    throw e;
+  }
 }
