@@ -465,6 +465,16 @@ async function pickRepresentativeFileInDirectory(args: {
     );
   }
 
+  // npm (JSON language from package.json / package-lock.json)
+  if (language === 'json') {
+    return (
+      pickBy(n => n.toLowerCase() === 'package.json') ||
+      pickBy(n => n.toLowerCase() === 'package-lock.json') ||
+      pickBy(n => n.toLowerCase().endsWith('.json')) ||
+      undefined
+    );
+  }
+
   // CloudFormation / Kubernetes / YAML-ish
   if (
     language.startsWith('cloudformation') ||

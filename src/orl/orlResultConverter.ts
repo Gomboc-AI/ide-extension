@@ -500,12 +500,28 @@ export class OrlResultConverter {
         // Check if this is a Gradle build file (Groovy or Kotlin DSL)
         const isGradleBuild = ext === '.gradle' || ext === '.kts';
 
+        // Check if this is an npm package file (package.json or package-lock.json)
+        const baseName = path.basename(actualFilePath).toLowerCase();
+        const isNpmPackage =
+          baseName === 'package.json' || baseName === 'package-lock.json';
+
         // Search backwards from the diff line to find the resource definition
         // Also track where this resource block ends to identify the specific instance
         let resourceStartLine = -1;
         let resourceEndLine = -1;
 
-        if (isXmlBuild) {
+        if (isNpmPackage) {
+          resourceName = 'npm_package';
+          resourceStartLine = 0;
+          resourceEndLine = fileLines.length - 1;
+          try {
+            const parsed = JSON.parse(originalText);
+            resourceInstanceName =
+              typeof parsed.name === 'string' ? parsed.name : baseName;
+          } catch {
+            resourceInstanceName = baseName;
+          }
+        } else if (isXmlBuild) {
           // For Maven XML files, treat the whole document as one "resource".
           // Extract groupId + artifactId as the resource identity when possible.
           resourceName = 'maven_project';
@@ -924,6 +940,11 @@ export class OrlResultConverter {
           if (isGradleBuild) {
             return `Gradle ${path.basename(actualFilePath)}`;
           }
+          if (isNpmPackage) {
+            return resourceInstanceName
+              ? `npm "${resourceInstanceName}"`
+              : path.basename(actualFilePath);
+          }
           // Terraform-ish
           if (
             resourceName &&
@@ -1022,7 +1043,11 @@ export class OrlResultConverter {
         // For Kubernetes, Docker, XML, and Gradle files, we can match rules even without resourceInstanceName
         // For Terraform, we need resourceInstanceName to match properly
         const canMatchWithoutInstance =
-          isDockerfile || isKubernetes || isXmlBuild || isGradleBuild;
+          isDockerfile ||
+          isKubernetes ||
+          isXmlBuild ||
+          isGradleBuild ||
+          isNpmPackage;
 
         logger.debug('Starting rule matching', {
           file: actualFilePath,
@@ -1064,7 +1089,13 @@ export class OrlResultConverter {
           if (resourceContainsDiff && allFileRules.length > 0) {
             // For Dockerfiles, Kubernetes, XML, and Gradle, skip resource type matching and use file-level matching
             // For Terraform, match by resource type to filter rules
-            if (isDockerfile || isKubernetes || isXmlBuild || isGradleBuild) {
+            if (
+              isDockerfile ||
+              isKubernetes ||
+              isXmlBuild ||
+              isGradleBuild ||
+              isNpmPackage
+            ) {
               // For these file types, all rules that touched this file are potential matches
               // We'll rely on diff content analysis to filter further
               for (const ruleName of allFileRules) {
@@ -1358,13 +1389,14 @@ export class OrlResultConverter {
                 const diffProperties = analysis.properties || [];
                 const diffContent = diff.newLines.join('\n').toLowerCase();
 
-                // For Dockerfiles, Kubernetes, XML, and Gradle, skip resource type matching and use all file rules
+                // For Dockerfiles, Kubernetes, XML, Gradle, and npm, skip resource type matching and use all file rules
                 // For Terraform, match by resource type first
                 if (
                   isDockerfile ||
                   isKubernetes ||
                   isXmlBuild ||
-                  isGradleBuild
+                  isGradleBuild ||
+                  isNpmPackage
                 ) {
                   // Use all rules that touched this file
                   // and match based on diff content
@@ -1541,8 +1573,14 @@ export class OrlResultConverter {
           allFileRules.length > 0
         ) {
           usedHeuristicWithinFile = true;
-          // For Kubernetes, Docker, XML, and Gradle files, use all file-level rules as fallback
-          if (isDockerfile || isKubernetes || isXmlBuild || isGradleBuild) {
+          // For Kubernetes, Docker, XML, Gradle, and npm files, use all file-level rules as fallback
+          if (
+            isDockerfile ||
+            isKubernetes ||
+            isXmlBuild ||
+            isGradleBuild ||
+            isNpmPackage
+          ) {
             // Accept all rules that touched this file as potential matches
             for (const ruleName of allFileRules) {
               if (!matchingRules.includes(ruleName)) {
@@ -1614,10 +1652,10 @@ export class OrlResultConverter {
           }
         }
 
-        // Final fallback for Kubernetes/Docker: if we still have no matches but have file rules, use them
+        // Final fallback for Kubernetes/Docker/npm: if we still have no matches but have file rules, use them
         if (
           matchingRules.length === 0 &&
-          (isKubernetes || isDockerfile) &&
+          (isKubernetes || isDockerfile || isNpmPackage) &&
           allFileRules.length > 0
         ) {
           usedHeuristicWithinFile = true;
@@ -1628,7 +1666,7 @@ export class OrlResultConverter {
             }
           }
           logger.debug(
-            'Using file-level rules as final fallback for Kubernetes/Docker',
+            'Using file-level rules as final fallback for Kubernetes/Docker/npm',
             {
               file: actualFilePath,
               resourceType: resourceName,
@@ -1649,8 +1687,14 @@ export class OrlResultConverter {
           usedUltimateFallback = true;
           const diagnosticsRules = result.diagnostics.rules;
 
-          if (isKubernetes || isDockerfile || isXmlBuild || isGradleBuild) {
-            // For Kubernetes/Docker/XML/Gradle files, use all rules from diagnostics
+          if (
+            isKubernetes ||
+            isDockerfile ||
+            isXmlBuild ||
+            isGradleBuild ||
+            isNpmPackage
+          ) {
+            // For Kubernetes/Docker/XML/Gradle/npm files, use all rules from diagnostics
             // (file-level matching is sufficient)
             for (const rule of diagnosticsRules) {
               if (!matchingRules.includes(rule.ruleName)) {
@@ -1658,7 +1702,7 @@ export class OrlResultConverter {
               }
             }
             logger.debug(
-              'Using all diagnostics rules as ultimate fallback for Kubernetes/Docker/XML/Gradle',
+              'Using all diagnostics rules as ultimate fallback for Kubernetes/Docker/XML/Gradle/npm',
               {
                 file: actualFilePath,
                 resourceType: resourceName,
@@ -1898,6 +1942,10 @@ export class OrlResultConverter {
         } else if (isKubernetes && resourceInstanceName) {
           // For Kubernetes, show kind/name format (e.g., "Deployment/my-app")
           displayResourceName = `${resourceName}/${resourceInstanceName}`;
+        } else if (isNpmPackage) {
+          displayResourceName = resourceInstanceName
+            ? `npm: ${resourceInstanceName}`
+            : path.basename(actualFilePath);
         } else if (resourceInstanceName) {
           // For Terraform, show resource type and instance name
           displayResourceName = `${resourceName}.${resourceInstanceName}`;
@@ -1963,7 +2011,9 @@ export class OrlResultConverter {
                         ? 'xml'
                         : isGradleBuild
                           ? 'gradle'
-                          : 'cloudformation',
+                          : isNpmPackage
+                            ? 'npm'
+                            : 'cloudformation',
               filepath: actualFilePath,
               line: diagnosticAnchorLine,
             },

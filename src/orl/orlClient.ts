@@ -1834,6 +1834,14 @@ export class OrlClient {
       return true;
     }
 
+    // npm package files
+    if (
+      fileNameLower === 'package.json' ||
+      fileNameLower === 'package-lock.json'
+    ) {
+      return true;
+    }
+
     // CloudFormation: .json (with specific naming patterns)
     if (ext === '.json') {
       return (

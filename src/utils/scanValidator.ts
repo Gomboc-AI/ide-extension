@@ -57,6 +57,9 @@ export function detectLanguageFromFile(
       return 'helm';
     }
     if (ext === '.json') {
+      if (fileName === 'package.json' || fileName === 'package-lock.json') {
+        return 'json';
+      }
       return 'cloudformation-json';
     }
     if (ext === '.yaml' || ext === '.yml') {
@@ -80,8 +83,11 @@ export function detectLanguageFromFile(
     return 'helm';
   }
 
-  // 4. CloudFormation: .json (with specific naming patterns, like original)
+  // 4. JSON files: differentiate npm package files from CloudFormation
   if (ext === '.json') {
+    if (fileName === 'package.json' || fileName === 'package-lock.json') {
+      return 'json';
+    }
     return 'cloudformation-json';
   }
 
@@ -187,7 +193,7 @@ export class ScanValidator {
 
     if (!language) {
       throw new Error(
-        'Current file is not a supported IaC file (Terraform, CloudFormation, Docker, Helm, Kubernetes, Maven XML, or Gradle)',
+        'Current file is not a supported file (Terraform, CloudFormation, Docker, Helm, Kubernetes, Maven XML, Gradle, or npm package.json)',
       );
     }
 
