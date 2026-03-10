@@ -80,11 +80,17 @@ variable "bucket_name" {
       expect((orlClient as any).isIacFile('stack.json')).toBe(true);
     });
 
+    it('should identify npm package files as IaC', () => {
+      expect((orlClient as any).isIacFile('package.json')).toBe(true);
+      expect((orlClient as any).isIacFile('package-lock.json')).toBe(true);
+    });
+
     it('should reject non-IaC files', () => {
       expect((orlClient as any).isIacFile('README.md')).toBe(false);
       expect((orlClient as any).isIacFile('script.sh')).toBe(false);
-      expect((orlClient as any).isIacFile('package.json')).toBe(false);
       expect((orlClient as any).isIacFile('data.json')).toBe(false);
+      expect((orlClient as any).isIacFile('config.json')).toBe(false);
+      expect((orlClient as any).isIacFile('tsconfig.json')).toBe(false);
     });
   });
 });
