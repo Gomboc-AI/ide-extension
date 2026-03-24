@@ -5,6 +5,10 @@ import { PathConverter } from '../utils/pathConverter';
 import { FileDiffAnalyzer, Difference } from '../utils/fileDiffAnalyzer';
 import { DiffContentAnalyzer } from '../utils/diffContentAnalyzer';
 import { parseOrlReport } from '../utils/orlReportParser';
+import {
+  buildCloudFormationTemplateContext,
+  detectOrlDocumentKinds,
+} from './orlDocumentClassifier';
 
 export interface OrlResult {
   success: boolean;
@@ -481,29 +485,20 @@ export class OrlResultConverter {
         const fileLines = originalText.split('\n');
         const diffLineIndex = diff.targetLine - 1; // Convert to 0-based index
 
-        // Check if this is a Dockerfile
-        const isDockerfile =
-          actualFilePath.toLowerCase().includes('dockerfile') ||
-          path.basename(actualFilePath).toLowerCase().startsWith('dockerfile');
-
-        // Check if this is a Kubernetes YAML file
-        // Kubernetes manifests have both kind: and apiVersion: at the top level
-        const isKubernetes =
-          (filetype === 'yaml' || filetype === 'yml') &&
-          originalText.includes('kind:') &&
-          originalText.includes('apiVersion:');
-
-        // Check if this is an XML build file (Maven pom.xml, etc.)
         const ext = path.extname(actualFilePath).toLowerCase();
-        const isXmlBuild = ext === '.xml';
-
-        // Check if this is a Gradle build file (Groovy or Kotlin DSL)
-        const isGradleBuild = ext === '.gradle' || ext === '.kts';
-
-        // Check if this is an npm package file (package.json or package-lock.json)
         const baseName = path.basename(actualFilePath).toLowerCase();
-        const isNpmPackage =
-          baseName === 'package.json' || baseName === 'package-lock.json';
+        const documentKinds = detectOrlDocumentKinds({
+          filePath: actualFilePath,
+          content: originalText,
+        });
+        const {
+          isDockerfile,
+          isKubernetes,
+          isCloudFormation,
+          isXmlBuild,
+          isGradleBuild,
+          isNpmPackage,
+        } = documentKinds;
 
         // Search backwards from the diff line to find the resource definition
         // Also track where this resource block ends to identify the specific instance
@@ -829,6 +824,15 @@ export class OrlResultConverter {
               }
             }
           }
+        } else if (isCloudFormation) {
+          const cloudFormationContext = buildCloudFormationTemplateContext({
+            filePath: actualFilePath,
+            totalLines: fileLines.length,
+          });
+          resourceName = cloudFormationContext.resourceName;
+          resourceInstanceName = cloudFormationContext.resourceInstanceName;
+          resourceStartLine = cloudFormationContext.resourceStartLine;
+          resourceEndLine = cloudFormationContext.resourceEndLine;
         } else {
           // For Terraform files, look for resource definitions
           const terraformResourceLookback = 500;
@@ -931,6 +935,9 @@ export class OrlResultConverter {
                 : resourceName;
             }
             return path.basename(actualFilePath);
+          }
+          if (isCloudFormation) {
+            return `CloudFormation ${path.basename(actualFilePath)}`;
           }
           if (isXmlBuild) {
             return resourceInstanceName
@@ -1045,6 +1052,7 @@ export class OrlResultConverter {
         const canMatchWithoutInstance =
           isDockerfile ||
           isKubernetes ||
+          isCloudFormation ||
           isXmlBuild ||
           isGradleBuild ||
           isNpmPackage;
@@ -1092,6 +1100,7 @@ export class OrlResultConverter {
             if (
               isDockerfile ||
               isKubernetes ||
+              isCloudFormation ||
               isXmlBuild ||
               isGradleBuild ||
               isNpmPackage
@@ -1394,6 +1403,7 @@ export class OrlResultConverter {
                 if (
                   isDockerfile ||
                   isKubernetes ||
+                  isCloudFormation ||
                   isXmlBuild ||
                   isGradleBuild ||
                   isNpmPackage
@@ -1577,6 +1587,7 @@ export class OrlResultConverter {
           if (
             isDockerfile ||
             isKubernetes ||
+            isCloudFormation ||
             isXmlBuild ||
             isGradleBuild ||
             isNpmPackage
@@ -1655,7 +1666,7 @@ export class OrlResultConverter {
         // Final fallback for Kubernetes/Docker/npm: if we still have no matches but have file rules, use them
         if (
           matchingRules.length === 0 &&
-          (isKubernetes || isDockerfile || isNpmPackage) &&
+          (isKubernetes || isDockerfile || isCloudFormation || isNpmPackage) &&
           allFileRules.length > 0
         ) {
           usedHeuristicWithinFile = true;
@@ -1690,6 +1701,7 @@ export class OrlResultConverter {
           if (
             isKubernetes ||
             isDockerfile ||
+            isCloudFormation ||
             isXmlBuild ||
             isGradleBuild ||
             isNpmPackage
@@ -1942,6 +1954,8 @@ export class OrlResultConverter {
         } else if (isKubernetes && resourceInstanceName) {
           // For Kubernetes, show kind/name format (e.g., "Deployment/my-app")
           displayResourceName = `${resourceName}/${resourceInstanceName}`;
+        } else if (isCloudFormation) {
+          displayResourceName = `CloudFormation: ${path.basename(actualFilePath)}`;
         } else if (isNpmPackage) {
           displayResourceName = resourceInstanceName
             ? `npm: ${resourceInstanceName}`

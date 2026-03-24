@@ -16,6 +16,7 @@ import { DiagnosticCollectionManager } from '../diagnosticCollectionManager';
 import { getInfrastructureToolFromFileUri } from '../infrastructureTool';
 import { queueOrlFixAppliedEvent } from '../utils/integrationsService';
 import { createOrlClient } from '../orl/orlClient';
+import { extractRenderableOrlRuleNames } from '../orl/orlRuleNameResolver';
 import { detectLanguageFromFile } from '../utils/scanValidator';
 import logger from '../utils/logger';
 import { parseOrlReport } from '../utils/orlReportParser';
@@ -173,6 +174,20 @@ export class ScanResultsProvider {
       return ruleName;
     }
     return base;
+  }
+
+  private getRenderableOrlRuleNames(benchmarkRecommendation: any): string[] {
+    return extractRenderableOrlRuleNames(benchmarkRecommendation);
+  }
+
+  private getFixSummaryCount(diagnosticTotal: number): number {
+    if (diagnosticTotal > 0) {
+      return diagnosticTotal;
+    }
+    if (this.individualRemediations.length > 0) {
+      return this.individualRemediations.length;
+    }
+    return this.groupedRemediations.length;
   }
 
   private extractCheckovIdsFromAnnotations(annotations: any): string[] {
@@ -813,12 +828,7 @@ export class ScanResultsProvider {
         >();
         for (const remediation of currentRemediation as any[]) {
           const br = remediation?.benchmarkRecommendation as any;
-          const embedded = br?.orlRuleNames;
-          const ruleNames: string[] = Array.isArray(embedded)
-            ? embedded.filter((x: any) => typeof x === 'string' && x.trim())
-            : typeof br?.id === 'string' && br.id.startsWith('orl-rule:')
-              ? [br.id.replace(/^orl-rule:/, '')]
-              : [];
+          const ruleNames = this.getRenderableOrlRuleNames(br);
 
           // Pick a reasonable anchor line for diagnostics.
           let line: number = pickBestAnchorLine(remediation);
@@ -950,7 +960,7 @@ export class ScanResultsProvider {
     }
 
     vscode.window.showInformationMessage(
-      `Gomboc found ${diagnosticTotal} fixes`,
+      `Gomboc found ${this.getFixSummaryCount(diagnosticTotal)} fixes`,
     );
 
     const last = this.getLastOrlScanContext();
@@ -1021,21 +1031,8 @@ export class ScanResultsProvider {
       const ruleNamesSet = new Set<string>();
       for (const r of remediations) {
         const br: any = r?.benchmarkRecommendation as any;
-        const embedded = br?.orlRuleNames;
-        if (Array.isArray(embedded)) {
-          for (const rn of embedded) {
-            if (typeof rn === 'string' && rn.trim()) {
-              ruleNamesSet.add(rn);
-            }
-          }
-          continue;
-        }
-        const id = br?.id;
-        if (typeof id === 'string' && id.startsWith('orl-rule:')) {
-          const rn = id.slice('orl-rule:'.length);
-          if (rn && rn !== 'multiple') {
-            ruleNamesSet.add(rn);
-          }
+        for (const ruleName of this.getRenderableOrlRuleNames(br)) {
+          ruleNamesSet.add(ruleName);
         }
       }
       const files = Array.from(updatedFiles);
@@ -1120,21 +1117,8 @@ export class ScanResultsProvider {
         const ruleNamesSet = new Set<string>();
         for (const c of remediation.comments || []) {
           const br: any = (c as any)?.benchmarkRecommendation;
-          const embedded = br?.orlRuleNames;
-          if (Array.isArray(embedded)) {
-            for (const rn of embedded) {
-              if (typeof rn === 'string' && rn.trim()) {
-                ruleNamesSet.add(rn);
-              }
-            }
-            continue;
-          }
-          const id = br?.id;
-          if (typeof id === 'string' && id.startsWith('orl-rule:')) {
-            const rn = id.slice('orl-rule:'.length);
-            if (rn && rn !== 'multiple') {
-              ruleNamesSet.add(rn);
-            }
+          for (const ruleName of this.getRenderableOrlRuleNames(br)) {
+            ruleNamesSet.add(ruleName);
           }
         }
         const workspacePath = path.dirname(remediation.path);
