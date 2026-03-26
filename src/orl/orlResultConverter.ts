@@ -308,6 +308,9 @@ export class OrlResultConverter {
     const individualFixes: any[] = [];
     const groupedFixes: any[] = [];
 
+    const isTerraformLike =
+      filetype === 'tf' || filetype === 'hcl' || filetype === 'tfvars';
+
     // Build file-to-rules mapping from diagnostics
     // Since we simplified hooks to only provide file paths (not hunks), we do file-level attribution
     const fileToRules: Record<string, string[]> = {};
@@ -1071,7 +1074,26 @@ export class OrlResultConverter {
           canMatchWithoutInstance,
         });
 
+        // If we couldn't detect a meaningful "resource" (common for HCL variants like `terragrunt.hcl`)
+        // but the ORL report indicates specific rules actually changed this file, attribute to those.
+        // This is a strong signal and avoids emitting the non-renderable ORL_REMEDIATION placeholder.
+        if (resourceName === 'Resource' && reportFileRules.length > 0) {
+          usedHeuristicWithinFile = true;
+          usedUltimateFallback = false;
+          matchingRules = reportFileRules.slice(0, 20);
+          logger.debug(
+            'Attributing rules by ORL report changed-file mapping (no resource detected)',
+            {
+              file: actualFilePath,
+              orlPath: orlFilePath,
+              matchingRulesCount: matchingRules.length,
+              matchingRules: matchingRules.slice(0, 5),
+            },
+          );
+        }
+
         if (
+          matchingRules.length === 0 &&
           resourceName !== 'Resource' &&
           (resourceInstanceName !== null || canMatchWithoutInstance) &&
           resourceStartLine >= 0 &&
@@ -2014,20 +2036,19 @@ export class OrlResultConverter {
           codeObservation: {
             codeResourceInstance: {
               name: resourceHeader,
-              type:
-                filetype === 'tf'
-                  ? 'terraform'
-                  : isDockerfile
-                    ? 'docker'
-                    : isKubernetes
-                      ? 'kubernetes'
-                      : isXmlBuild
-                        ? 'xml'
-                        : isGradleBuild
-                          ? 'gradle'
-                          : isNpmPackage
-                            ? 'npm'
-                            : 'cloudformation',
+              type: isTerraformLike
+                ? 'terraform'
+                : isDockerfile
+                  ? 'docker'
+                  : isKubernetes
+                    ? 'kubernetes'
+                    : isXmlBuild
+                      ? 'xml'
+                      : isGradleBuild
+                        ? 'gradle'
+                        : isNpmPackage
+                          ? 'npm'
+                          : 'cloudformation',
               filepath: actualFilePath,
               line: diagnosticAnchorLine,
             },

@@ -50,7 +50,10 @@ export function detectLanguageFromFile(
     if (fileName.startsWith('dockerfile') || ext === '.dockerfile') {
       return 'docker';
     }
-    if (filetype === 'tf' || filetype === 'hcl' || filetype === 'tfvars') {
+    if (filetype === 'hcl') {
+      return 'hcl';
+    }
+    if (filetype === 'tf' || filetype === 'tfvars') {
       return 'terraform';
     }
     if (ext === '.tpl') {
@@ -74,7 +77,10 @@ export function detectLanguageFromFile(
   }
 
   // 2. Terraform: .tf, .hcl, .tfvars (extension-based, like original)
-  if (filetype === 'tf' || filetype === 'hcl' || filetype === 'tfvars') {
+  if (filetype === 'hcl') {
+    return 'hcl';
+  }
+  if (filetype === 'tf' || filetype === 'tfvars') {
     return 'terraform';
   }
 

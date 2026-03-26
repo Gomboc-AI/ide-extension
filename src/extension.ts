@@ -138,6 +138,7 @@ export async function activate(context: vscode.ExtensionContext) {
       [
         { language: 'terraform', scheme: 'file' },
         { language: 'tf', scheme: 'file' },
+        { language: 'hcl', scheme: 'file' },
         { language: 'json', scheme: 'file' },
         { language: 'yaml', scheme: 'file' },
         { language: 'plaintext', scheme: 'file' },
@@ -152,6 +153,7 @@ export async function activate(context: vscode.ExtensionContext) {
       [
         { language: 'terraform', scheme: 'file' },
         { language: 'tf', scheme: 'file' },
+        { language: 'hcl', scheme: 'file' },
         { language: 'json', scheme: 'file' },
         { language: 'yaml', scheme: 'file' },
         { language: 'plaintext', scheme: 'file' },
