@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import path from 'path';
 
-const TERRAFORM_EXTENSIONS = ['.tf', '.tfvars'];
+const TERRAFORM_EXTENSIONS = ['.tf', '.tfvars', '.hcl'];
 const CLOUDFORMATION_EXTENSIONS = ['.yaml', '.yml', '.json'];
 const DOCKERFILE_PREFIX = 'dockerfile';
 
