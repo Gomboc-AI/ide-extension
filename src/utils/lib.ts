@@ -1,17 +1,30 @@
 // api key retrieval helper and other utils
 
-import { CustomerApiClient } from '../api/client';
 import { SecurityPolicy } from '../types';
 import * as vscode from 'vscode';
 import { GitExtension } from '../types/git';
 import * as os from 'os';
 import logger from './logger';
 import { initClient } from './RestClient';
-import {
-  GitMetaDataInput,
-  MetaDataInput,
-  OsMetaDataInput,
-} from '../api/__generated__/graphql';
+
+type GitMetaDataInput = {
+  defaultName?: string;
+  headName?: string;
+  lastMergeCommit?: string;
+  remote?: string;
+};
+
+type OsMetaDataInput = {
+  userName?: string;
+  machineName?: string;
+  privateIp?: string;
+  publicIp?: string;
+};
+
+type MetaDataInput = {
+  git?: GitMetaDataInput;
+  os?: OsMetaDataInput;
+};
 
 // stolen from stackoverflow
 // https://stackoverflow.com/questions/190852/how-can-i-get-file-extensions-with-javascript

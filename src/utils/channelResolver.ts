@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import logger from './logger';
-import { CustomerApiClient } from '../api/client';
 import { RulesServiceClient } from './rulesServiceClient';
 import { DEFAULTS, getStringSetting } from './configDefaults';
+import { getTenantIdFromApiKey } from './apiKeyClaims';
 
 /**
  * Resolves the channel name to use for ORL based on account ID and settings.
@@ -84,9 +84,11 @@ export class ChannelResolver {
     }
 
     try {
-      // Get account ID
-      const apiClient = new CustomerApiClient();
-      const accountId = await apiClient.getAccountId();
+      // Get account ID from API key JWT tenant claim
+      const accountId = getTenantIdFromApiKey(apiKey);
+      if (!accountId) {
+        throw new Error('Missing tenantId claim in apiKey JWT payload');
+      }
       const accountBasedChannel = `${accountId}/accounts/default`;
 
       logger.info('Resolved account-based channel', {

@@ -1,12 +1,7 @@
-import { ScanLocalScenarioInput } from './../api/__generated__/graphql';
 // scans current working file or scenarioimport * as vscode from 'vscode';
 import * as vscode from 'vscode';
-import { CustomerApiClient } from '../api/client';
 import { getFileType } from '../utils/lib';
-import {
-  InfrastructureTool,
-  IacScanContent,
-} from '../api/__generated__/graphql';
+import { IacScanContent } from '../types';
 import { ScanResultsProvider } from '../providers/scanResultsProvider';
 import * as path from 'path';
 import { createOrlClient } from '../orl/orlClient';
@@ -41,53 +36,8 @@ export async function scanFileCommand(
   context: vscode.ExtensionContext,
   scanResultsProvider: ScanResultsProvider,
 ) {
-  // Resolve whether we should run ORL vs the legacy CustomerAPI scan path.
-  // Precedence:
-  // 1) Local extension setting can force ORL on (override).
-  // 2) Otherwise, attempt server-side feature flag (CustomerAPI/OpenFeature).
-  // 3) If that fails, fall back to the local extension setting.
-  const config = vscode.workspace.getConfiguration('gomboc-vscode-extension');
-  const orlEnabledSetting =
-    (config.get('remediateOrlEnabled') as boolean) ?? false;
-
-  let useOrl = orlEnabledSetting;
-  if (!useOrl) {
-    try {
-      const apiClient = new CustomerApiClient();
-      const flagEnabled = await apiClient.isProcessorOrlEnabled();
-      useOrl = Boolean(flagEnabled) || orlEnabledSetting;
-      logger.info('ORL enablement resolved via CustomerAPI flag', {
-        flag: 'processor-orl-enabled',
-        flagEnabled,
-        settingOverride: orlEnabledSetting,
-        useOrl,
-      });
-    } catch (error) {
-      // Fall back to the local setting if the flag check fails.
-      useOrl = orlEnabledSetting;
-      logger.warn(
-        'Failed to resolve ORL feature flag via CustomerAPI; falling back to extension setting',
-        {
-          flag: 'processor-orl-enabled',
-          useOrl,
-          error: error instanceof Error ? error.message : String(error),
-        },
-      );
-    }
-  } else {
-    logger.info('ORL remediation forced on via extension setting', {
-      settingOverride: orlEnabledSetting,
-      useOrl,
-    });
-  }
-
-  if (useOrl) {
-    logger.info('Using ORL client');
-    await runOrlScanSerialized(context, scanResultsProvider);
-  } else {
-    logger.info('Using traditional API client');
-    await scanWithApiClient(scanResultsProvider);
-  }
+  logger.info('Using ORL client');
+  await runOrlScanSerialized(context, scanResultsProvider);
 }
 
 async function runOrlScanSerialized(
@@ -492,108 +442,6 @@ async function pickRepresentativeFileInDirectory(args: {
 
   // Fallback: any file in the directory.
   return files.length ? path.join(workspacePath, files[0]) : undefined;
-}
-
-async function scanWithApiClient(scanResultsProvider: ScanResultsProvider) {
-  setScanStatus({ running: true, queued: false });
-  try {
-    const apiClient = new CustomerApiClient();
-    // ----- Gather input ------- //
-    let editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      const last = scanResultsProvider.getLastOrlScanContext();
-      if (!last?.workspacePath) {
-        vscode.window.showErrorMessage(
-          'Scan requires an active IaC file. Open a Terraform/CloudFormation file then try again.',
-        );
-        return;
-      }
-      // API mode needs a concrete file scope; pick one in the last scanned directory.
-      const filePath = await pickRepresentativeFileInDirectory({
-        workspacePath: last.workspacePath,
-        language: last.language || 'terraform',
-      });
-      if (!filePath) {
-        vscode.window.showErrorMessage(
-          `Scan could not find a representative IaC file under: ${last.workspacePath}`,
-        );
-        return;
-      }
-      const doc = await vscode.workspace.openTextDocument(
-        vscode.Uri.file(filePath),
-      );
-      await vscode.window.showTextDocument(doc, { preview: false });
-      editor = vscode.window.activeTextEditor;
-      if (!editor) {
-        return;
-      }
-    }
-    const document = editor.document;
-    const filePath = document.uri.fsPath;
-    const filetype = getFileType(filePath);
-
-    let fileContents: IacScanContent[];
-    let tool: InfrastructureTool;
-
-    if (filetype === 'tf') {
-      tool = InfrastructureTool.Terraform;
-      fileContents = await getTFScenarioFiles(document);
-    } else if (filetype === 'yml' || filetype === 'yaml') {
-      tool = InfrastructureTool.Cloudformation;
-      fileContents = getCFNFile(document);
-    } else {
-      vscode.window.showErrorMessage(
-        'Current file is not a cloudformation or terraform file',
-      );
-      throw new Error('Current file is not a cloudformation or terraform file');
-    }
-
-    // const metaData = await generateRequestMetadata();
-
-    // ----- Send data to customerapi ------ //
-    const inputObject: ScanLocalScenarioInput = {
-      fileContents,
-      iacTool: tool,
-    };
-
-    const scanResponse = await apiClient.getFixes({ inputObject });
-
-    scanResultsProvider.generateComments(scanResponse);
-    scanResultsProvider.createDiagnostic();
-  } finally {
-    setScanStatus({ running: false });
-  }
-}
-
-async function getTFScenarioFiles(
-  document: vscode.TextDocument,
-): Promise<IacScanContent[]> {
-  // updating this to use native os path so we can support windows
-  // fsPath is the native reading path, and .path is the unix style vscode path
-  // Note, we most likely just want to use fsPath for most purposes
-  const currentFilePath = document.uri.fsPath;
-
-  const directoryPath = path.dirname(currentFilePath);
-  const entries = await vscode.workspace.fs.readDirectory(
-    vscode.Uri.file(directoryPath),
-  );
-
-  const contents: IacScanContent[] = [];
-  for (const [name, fileType] of entries) {
-    if (fileType === vscode.FileType.File && name.endsWith('.tf')) {
-      const filePath = path.join(directoryPath, name);
-      const fileUri = vscode.Uri.file(filePath);
-
-      const data = await vscode.workspace.fs.readFile(fileUri);
-      const contentString = new TextDecoder().decode(data);
-
-      contents.push({
-        filePath: filePath, // Use the native OS path directly
-        fileContent: Buffer.from(contentString, 'utf8').toString('base64'),
-      });
-    }
-  }
-  return contents;
 }
 
 /**

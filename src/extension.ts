@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { testApiKeyCommand } from './commands/testApiKey';
 import { scanFileCommand } from './commands/scanFile';
-import { showBenchmarksCommand } from './commands/showFrameworks';
 import { showIssuesCommand } from './commands/showIssues';
 import { testOrlConnectionCommand } from './commands/testOrlConnection';
 import { fixProofCheckovVerifyCommand } from './commands/fixProofCheckovVerify';
@@ -53,10 +52,6 @@ export async function activate(context: vscode.ExtensionContext) {
     {
       name: 'gomboc-vscode-extension.scanFile',
       handler: () => scanFileCommand(context, scanResults),
-    },
-    {
-      name: 'gomboc-vscode-extension.showBenchmarks',
-      handler: () => showBenchmarksCommand(context),
     },
     {
       name: 'gomboc-vscode-extension.testOrlConnection',

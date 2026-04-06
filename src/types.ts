@@ -1,7 +1,50 @@
 // types file
 
-import { InfrastructureTool } from './api/__generated__/graphql';
-import { Branch, Repository } from './types/git';
+export enum Language {
+  BASH = 'BASH',
+  BICEP = 'BICEP',
+  C = 'C',
+  CLOUDFORMATION_JSON = 'CLOUDFORMATION_JSON',
+  CLOUDFORMATION_YAML = 'CLOUDFORMATION_YAML',
+  CPP = 'CPP',
+  CSHARP = 'CSHARP',
+  CSS = 'CSS',
+  DOCKER = 'DOCKER',
+  ELIXIR = 'ELIXIR',
+  GO = 'GO',
+  GOTEMPLATE = 'GOTEMPLATE',
+  GROOVY = 'GROOVY',
+  HCL = 'HCL',
+  HELM = 'HELM',
+  HTML = 'HTML',
+  JAVA = 'JAVA',
+  JAVASCRIPT = 'JAVASCRIPT',
+  JSON = 'JSON',
+  KOTLIN = 'KOTLIN',
+  KUBERNETES = 'KUBERNETES',
+  LUA = 'LUA',
+  MARKDOWN = 'MARKDOWN',
+  OCAML = 'OCAML',
+  ORL = 'ORL',
+  PHP = 'PHP',
+  PROTOBUF = 'PROTOBUF',
+  PYTHON = 'PYTHON',
+  RUBY = 'RUBY',
+  RUST = 'RUST',
+  SCALA = 'SCALA',
+  SQL = 'SQL',
+  SWIFT = 'SWIFT',
+  TERRAFORM = 'TERRAFORM',
+  TOML = 'TOML',
+  TYPESCRIPT = 'TYPESCRIPT',
+  XML = 'XML',
+  YAML = 'YAML',
+}
+
+export type IacScanContent = {
+  filePath: string;
+  fileContent: string;
+};
 
 export type IACScanContent = {
   filePath: string;
@@ -41,7 +84,7 @@ export type MetaData = {
 
 export type SingleScanInput = {
   fileContents: IACScanContent | IACScanContent[];
-  tool: InfrastructureTool;
+  language: Language;
   // policyStatements: SecurityPolicy[]; // shouldn't need this
   metaData: MetaData;
 };

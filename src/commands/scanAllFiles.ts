@@ -1,10 +1,6 @@
 // scans all files in the repository
 import * as vscode from 'vscode';
-import { CustomerApiClient } from '../api/client';
 
-export function scanAllFilesCommand(
-  context: vscode.ExtensionContext,
-  apiClient: CustomerApiClient,
-) {
+export function scanAllFilesCommand(context: vscode.ExtensionContext) {
   vscode.window.showInformationMessage('Scan all files command activated');
 }

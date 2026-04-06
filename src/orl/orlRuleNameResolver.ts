@@ -1,11 +1,9 @@
 const ORL_RULE_PREFIX = 'orl-rule:';
 const NON_RENDERABLE_RULE_NAMES = new Set(['multiple', 'ORL_REMEDIATION']);
 
-export function extractRenderableOrlRuleNames(
-  benchmarkRecommendation: any,
-): string[] {
+export function extractRenderableOrlRuleNames(rule: any): string[] {
   const ruleNames = new Set<string>();
-  const embedded = benchmarkRecommendation?.orlRuleNames;
+  const embedded = rule?.orlRuleNames;
 
   if (Array.isArray(embedded)) {
     for (const value of embedded) {
@@ -23,10 +21,7 @@ export function extractRenderableOrlRuleNames(
     return Array.from(ruleNames);
   }
 
-  const id =
-    typeof benchmarkRecommendation?.id === 'string'
-      ? benchmarkRecommendation.id.trim()
-      : '';
+  const id = typeof rule?.id === 'string' ? rule.id.trim() : '';
   if (!id.startsWith(ORL_RULE_PREFIX)) {
     return [];
   }

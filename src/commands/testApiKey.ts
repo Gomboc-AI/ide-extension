@@ -1,19 +1,22 @@
 // Tests api key
 import * as vscode from 'vscode';
-import { CustomerApiClient } from '../api/client';
+import { RulesServiceClient } from '../utils/rulesServiceClient';
 
 /**
- * This command will make a request to the customerapi server using the token within client
- * And if it fails, something is configured incorrectly
+ * Verifies API key validity by calling rules service with bearer auth.
  */
 export async function testApiKeyCommand(_: vscode.ExtensionContext) {
   try {
-    const apiClient = new CustomerApiClient();
-    await apiClient.healthCheck();
+    const rulesServiceClient = new RulesServiceClient();
+    await rulesServiceClient.verifyAccess();
     vscode.window.showInformationMessage('API Key test success!');
   } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'Unknown token verification error';
     vscode.window.showErrorMessage(
-      'API Test Failed - Check API Key in extension settings',
+      `API Test Failed - ${message}. Check API key / rules service settings.`,
     );
   }
 }
