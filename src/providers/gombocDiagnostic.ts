@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import {
   IndividualFixesRemediation,
   GroupedFixesRemediation,
-} from '../api/client';
+} from '../schemas/scanRemediation';
 export class IndividualFixGombocDiagnostic extends vscode.Diagnostic {
   individualFixGombocResult: IndividualFixesRemediation;
   quickFixMessage: string;

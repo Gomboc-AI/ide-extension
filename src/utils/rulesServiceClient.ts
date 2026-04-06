@@ -6,6 +6,7 @@ import { DEFAULTS, getStringSetting } from './configDefaults';
 
 /**
  * Client for interacting with the rules service API.
+ * TODO: Replace with the gomboc-node-sdk
  */
 export class RulesServiceClient {
   private rulesServiceUrl: string;
@@ -26,6 +27,38 @@ export class RulesServiceClient {
       (config.get('orlRulesServiceToken') as string | undefined) ||
       (config.get('apiKey') as string | undefined) ||
       '';
+  }
+
+  /**
+   * Verify that the configured token can authenticate against rules service.
+   *
+   * Uses a lightweight authenticated channel read and treats 401/403 as
+   * invalid token. Other failures are surfaced as connectivity/server issues.
+   */
+  public async verifyAccess(): Promise<void> {
+    try {
+      const client = initClient(this.rulesServiceUrl, 'rules-service', {
+        Authorization: `Bearer ${this.rulesServiceToken}`,
+        Accept: 'application/json',
+      });
+
+      await client.get<{ name: string }>('/api/v1/channels/get', undefined, {
+        name: 'default',
+      });
+    } catch (error) {
+      let statusCode: number | undefined;
+      if (axios.isAxiosError(error)) {
+        statusCode = error.response?.status;
+      } else if (error && typeof error === 'object' && 'response' in error) {
+        statusCode = (error as any).response?.status;
+      }
+
+      if (statusCode === 401 || statusCode === 403) {
+        throw new Error('Invalid rules service token');
+      }
+
+      throw error;
+    }
   }
 
   /**

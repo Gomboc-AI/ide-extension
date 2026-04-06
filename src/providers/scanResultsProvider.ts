@@ -6,12 +6,11 @@ import {
   OrlRuleFixGombocDiagnostic,
 } from './gombocDiagnostic';
 import {
-  Fixes,
   GroupedFixesRemediation,
-  IndividualFixesQuerySuccess,
   IndividualFixesRemediation,
-} from '../api/client';
-import { FixType } from '../api/__generated__/graphql';
+  ScanRemediationPayload,
+  parseScanRemediationPayload,
+} from '../schemas/scanRemediation';
 import { DiagnosticCollectionManager } from '../diagnosticCollectionManager';
 import { getInfrastructureToolFromFileUri } from '../infrastructureTool';
 import { queueOrlFixAppliedEvent } from '../utils/integrationsService';
@@ -22,10 +21,7 @@ import logger from '../utils/logger';
 import { parseOrlReport } from '../utils/orlReportParser';
 
 type IndividualFix = IndividualFixesRemediation['fixes'][number] &
-  Pick<
-    Pick<IndividualFixesQuerySuccess, 'remediations'>['remediations'][number],
-    'benchmarkRecommendation'
-  >;
+  Pick<IndividualFixesRemediation, 'rule'>;
 
 type FixProofCheckovTargetsCacheEntry = {
   workspacePath: string;
@@ -176,8 +172,8 @@ export class ScanResultsProvider {
     return base;
   }
 
-  private getRenderableOrlRuleNames(benchmarkRecommendation: any): string[] {
-    return extractRenderableOrlRuleNames(benchmarkRecommendation);
+  private getRenderableOrlRuleNames(rule: any): string[] {
+    return extractRenderableOrlRuleNames(rule);
   }
 
   private getFixSummaryCount(diagnosticTotal: number): number {
@@ -370,23 +366,35 @@ export class ScanResultsProvider {
     }
   }
 
-  public generateComments(
-    remediations: Fixes & {
-      orlRuleDescriptions?: any;
-      orlRuleShortNames?: any;
-    },
-  ) {
-    this.individualRemediations = remediations.individualFixes;
-    this.groupedRemediations = remediations.groupedFixes;
+  public generateComments(remediations: unknown) {
+    let parsedRemediations: ScanRemediationPayload;
+    try {
+      parsedRemediations = parseScanRemediationPayload(remediations);
+    } catch (error) {
+      logger.error('Invalid ORL remediation payload', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      vscode.window.showWarningMessage(
+        'Received invalid ORL remediation payload. No fixes were loaded.',
+      );
+      this.individualRemediations = [];
+      this.groupedRemediations = [];
+      this.orlRuleDescriptions = {};
+      this.orlRuleShortNames = {};
+      return;
+    }
+
+    this.individualRemediations = parsedRemediations.individualFixes;
+    this.groupedRemediations = parsedRemediations.groupedFixes;
     this.orlRuleDescriptions =
-      (remediations as any)?.orlRuleDescriptions &&
-      typeof (remediations as any).orlRuleDescriptions === 'object'
-        ? ((remediations as any).orlRuleDescriptions as Record<string, string>)
+      parsedRemediations?.orlRuleDescriptions &&
+      typeof parsedRemediations.orlRuleDescriptions === 'object'
+        ? (parsedRemediations.orlRuleDescriptions as Record<string, string>)
         : {};
     this.orlRuleShortNames =
-      (remediations as any)?.orlRuleShortNames &&
-      typeof (remediations as any).orlRuleShortNames === 'object'
-        ? ((remediations as any).orlRuleShortNames as Record<string, string>)
+      parsedRemediations?.orlRuleShortNames &&
+      typeof parsedRemediations.orlRuleShortNames === 'object'
+        ? (parsedRemediations.orlRuleShortNames as Record<string, string>)
         : {};
   }
 
@@ -744,10 +752,8 @@ export class ScanResultsProvider {
     const metaIndex = this.buildOrlRuleMetaIndex();
 
     // the key represents the file path to the file that needs remediation
-    const existingResourceBenchmarkFixes: Record<
-      string,
-      IndividualFixesRemediation[]
-    > = {};
+    const existingResourceRuleFixes: Record<string, IndividualFixesRemediation[]> =
+      {};
     const existingGroupedFixes: Record<string, GroupedFixesRemediation> = {};
     let diagnosticTotal = 0;
 
@@ -772,11 +778,11 @@ export class ScanResultsProvider {
       if (remediation.fixes.length === 0) {
         continue;
       }
-      const existingData = existingResourceBenchmarkFixes[filepath];
+      const existingData = existingResourceRuleFixes[filepath];
       if (!existingData) {
-        existingResourceBenchmarkFixes[filepath] = [remediation];
+        existingResourceRuleFixes[filepath] = [remediation];
       } else {
-        existingResourceBenchmarkFixes[filepath] = [
+        existingResourceRuleFixes[filepath] = [
           remediation,
           ...existingData,
         ];
@@ -788,12 +794,12 @@ export class ScanResultsProvider {
       existingGroupedFixes[filepath] = remediation;
     }
 
-    for (const filepath in existingResourceBenchmarkFixes) {
+    for (const filepath in existingResourceRuleFixes) {
       // note: file at this piont has \ -> will cause issues when we give it to diagnosticCollection
       // later as vscode expects a uri to have it's unix style / pathing
       // use Uri.file to get unix style, Uri.parse gets the windows style
       const uri = vscode.Uri.file(filepath);
-      const currentRemediation = existingResourceBenchmarkFixes[filepath];
+      const currentRemediation = existingResourceRuleFixes[filepath];
       const curDiag: Array<
         | IndividualFixGombocDiagnostic
         | GroupedFixGombocDiagnostic
@@ -802,8 +808,7 @@ export class ScanResultsProvider {
       const uniqueLines = new Set<number>();
 
       const isOrl = (r: any): boolean =>
-        typeof r?.benchmarkRecommendation?.id === 'string' &&
-        r.benchmarkRecommendation.id.startsWith('orl-rule:');
+        typeof r?.rule?.id === 'string' && r.rule.id.startsWith('orl-rule:');
 
       if (
         currentRemediation.length > 0 &&
@@ -827,8 +832,8 @@ export class ScanResultsProvider {
           { line: number; resourceHeader?: string }
         >();
         for (const remediation of currentRemediation as any[]) {
-          const br = remediation?.benchmarkRecommendation as any;
-          const ruleNames = this.getRenderableOrlRuleNames(br);
+          const rule = remediation?.rule as any;
+          const ruleNames = this.getRenderableOrlRuleNames(rule);
 
           // Pick a reasonable anchor line for diagnostics.
           let line: number = pickBestAnchorLine(remediation);
@@ -921,7 +926,7 @@ export class ScanResultsProvider {
           let startLine = remediation.codeObservation.codeResourceInstance.line;
           let containsAddFixType = false;
           for (const fix of remediation.fixes) {
-            if (fix.fixType === FixType.Add) {
+            if (fix.fixType === 'ADD') {
               containsAddFixType = true;
               break;
             }
@@ -935,9 +940,9 @@ export class ScanResultsProvider {
 
           diagnosticTotal++;
           curDiag.push({
-            message: `${remediation.benchmarkRecommendation.name}`,
+            message: `${remediation.rule.name}`,
             individualFixGombocResult: remediation,
-            quickFixMessage: `Fix with Gomboc ${remediation.benchmarkRecommendation.name} for ${remediation.codeObservation.codeResourceInstance.type}`,
+            quickFixMessage: `Fix with Gomboc ${remediation.rule.name} for ${remediation.codeObservation.codeResourceInstance.type}`,
             range: new vscode.Range(startPosition, endPosition),
             severity: vscode.DiagnosticSeverity.Error,
             source: 'Gomboc ',
@@ -984,7 +989,7 @@ export class ScanResultsProvider {
     const allFixes: IndividualFix[] = remediations.reduce((acc, curr) => {
       const currentFixes: IndividualFix[] = curr.fixes.map(fix => ({
         ...fix,
-        benchmarkRecommendation: curr.benchmarkRecommendation,
+        rule: curr.rule,
       }));
 
       return [...acc, ...currentFixes];
@@ -1012,7 +1017,7 @@ export class ScanResultsProvider {
         edit.replace(
           file,
           range,
-          `Removed this line to fix ${fix.benchmarkRecommendation.name} with Gomboc`,
+          `Removed this line to fix ${fix.rule.name} with Gomboc`,
         );
       }
     }
@@ -1023,15 +1028,15 @@ export class ScanResultsProvider {
       const ruleIdentifiers = Array.from(
         new Set(
           remediations
-            .map(r => r?.benchmarkRecommendation?.id)
+            .map(r => r?.rule?.id)
             .filter((id): id is string => typeof id === 'string')
             .filter(id => id.startsWith('orl-rule:')),
         ),
       );
       const ruleNamesSet = new Set<string>();
       for (const r of remediations) {
-        const br: any = r?.benchmarkRecommendation as any;
-        for (const ruleName of this.getRenderableOrlRuleNames(br)) {
+        const rule: any = r?.rule as any;
+        for (const ruleName of this.getRenderableOrlRuleNames(rule)) {
           ruleNamesSet.add(ruleName);
         }
       }
@@ -1109,15 +1114,15 @@ export class ScanResultsProvider {
         const ruleIdentifiers = Array.from(
           new Set(
             (remediation.comments || [])
-              .map((c: any) => c?.benchmarkRecommendation?.id)
+              .map((c: any) => c?.rule?.id)
               .filter((id: any): id is string => typeof id === 'string')
               .filter(id => id.startsWith('orl-rule:')),
           ),
         );
         const ruleNamesSet = new Set<string>();
         for (const c of remediation.comments || []) {
-          const br: any = (c as any)?.benchmarkRecommendation;
-          for (const ruleName of this.getRenderableOrlRuleNames(br)) {
+          const rule: any = (c as any)?.rule;
+          for (const ruleName of this.getRenderableOrlRuleNames(rule)) {
             ruleNamesSet.add(ruleName);
           }
         }

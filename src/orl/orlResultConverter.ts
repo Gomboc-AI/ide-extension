@@ -9,6 +9,7 @@ import {
   buildCloudFormationTemplateContext,
   detectOrlDocumentKinds,
 } from './orlDocumentClassifier';
+import type { ScanRemediationPayload } from '../schemas/scanRemediation';
 
 export interface OrlResult {
   success: boolean;
@@ -45,15 +46,7 @@ export interface OrlResult {
   };
 }
 
-export interface ScanResponse {
-  individualFixes: any[];
-  groupedFixes: any[];
-  // Optional debug/UX data for ORL-only flows (not part of API GraphQL types).
-  // Used to show stable per-rule diagnostics even when our per-hunk attribution is fuzzy.
-  orlRuleDescriptions?: Record<string, string>;
-  // Optional short names for display in Problems tab.
-  orlRuleShortNames?: Record<string, string>;
-}
+export type ScanResponse = ScanRemediationPayload;
 
 /**
  * Utility class for converting ORL results to VS Code scan response format
@@ -2021,9 +2014,9 @@ export class OrlResultConverter {
           fixType: diff.type,
         };
 
-        // Create individual fix for this specific difference and force it into a benchmarkRecommendation/fix form
+        // Create individual fix for this specific difference using rule-centric remediation shape
         const individualFix = {
-          benchmarkRecommendation: {
+          rule: {
             id: ruleIdentifier,
             identifier: ruleIdentifier,
             // Prefer rule metadata.annotations["gomboc-ai/description-plain"] (fallback: metadata.description)
@@ -2140,7 +2133,7 @@ export class OrlResultConverter {
               line: diff.targetLine,
               column: 0,
             },
-            benchmarkRecommendation: {
+            rule: {
               id: groupedId || localId,
               name: groupedDescriptionText || localName || analysis.description,
               // Not part of the GraphQL schema; used internally for analytics attribution.

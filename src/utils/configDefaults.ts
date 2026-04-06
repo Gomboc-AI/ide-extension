@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 
 export const DEFAULTS = {
-  customerApiUrl: 'https://api.app.gomboc.ai/graphql',
   orlRulesServiceUrl: 'https://rules.app.gomboc.ai',
   integrationsServiceUrl: 'https://integrations.app.gomboc.ai',
   integrationsFixAppliedEndpointPath: '/reporting/orl-fix-applied',
