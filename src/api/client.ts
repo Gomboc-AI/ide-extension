@@ -5,10 +5,7 @@ import settings from '../settings';
 // has to be ignored because we are compiling to commonjs and typescript complains
 // @ts-expect-error
 import { ApolloClient, createHttpLink, InMemoryCache } from '@apollo/client';
-import {
-  GET_ACCOUNT_ID,
-  HEALTH_CHECK,
-} from './queries';
+import { GET_ACCOUNT_ID, HEALTH_CHECK } from './queries';
 import {
   IndividualFixesQuery,
   SecurityBenchmarksQuery,
@@ -99,7 +96,6 @@ export class CustomerApiClient {
     logger.info('Created a new apollo client .... ');
   }
 
-
   public async healthCheck() {
     try {
       const { data } = await this.client.query<
@@ -115,7 +111,6 @@ export class CustomerApiClient {
       throw error;
     }
   }
-
 
   /**
    * Get the account ID for the authenticated user.
