@@ -98,11 +98,6 @@
             "default": "https://api.app.gomboc.ai/graphql",
             "description": "When enabled will send requests to custom specified endpoint (default is 'https://api.app.gomboc.ai/graphql')"
           },
-          "gomboc-vscode-extension.remediateOrlEnabled": {
-            "type": "boolean",
-            "default": false,
-            "description": "Enable ORL-based remediation using DevContainer execution (experimental)"
-          },
           "gomboc-vscode-extension.orlRulesServiceUrl": {
             "type": "string",
             "default": "",

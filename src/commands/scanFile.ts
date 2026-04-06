@@ -41,53 +41,8 @@ export async function scanFileCommand(
   context: vscode.ExtensionContext,
   scanResultsProvider: ScanResultsProvider,
 ) {
-  // Resolve whether we should run ORL vs the legacy CustomerAPI scan path.
-  // Precedence:
-  // 1) Local extension setting can force ORL on (override).
-  // 2) Otherwise, attempt server-side feature flag (CustomerAPI/OpenFeature).
-  // 3) If that fails, fall back to the local extension setting.
-  const config = vscode.workspace.getConfiguration('gomboc-vscode-extension');
-  const orlEnabledSetting =
-    (config.get('remediateOrlEnabled') as boolean) ?? false;
-
-  let useOrl = orlEnabledSetting;
-  if (!useOrl) {
-    try {
-      const apiClient = new CustomerApiClient();
-      const flagEnabled = await apiClient.isProcessorOrlEnabled();
-      useOrl = Boolean(flagEnabled) || orlEnabledSetting;
-      logger.info('ORL enablement resolved via CustomerAPI flag', {
-        flag: 'processor-orl-enabled',
-        flagEnabled,
-        settingOverride: orlEnabledSetting,
-        useOrl,
-      });
-    } catch (error) {
-      // Fall back to the local setting if the flag check fails.
-      useOrl = orlEnabledSetting;
-      logger.warn(
-        'Failed to resolve ORL feature flag via CustomerAPI; falling back to extension setting',
-        {
-          flag: 'processor-orl-enabled',
-          useOrl,
-          error: error instanceof Error ? error.message : String(error),
-        },
-      );
-    }
-  } else {
-    logger.info('ORL remediation forced on via extension setting', {
-      settingOverride: orlEnabledSetting,
-      useOrl,
-    });
-  }
-
-  if (useOrl) {
-    logger.info('Using ORL client');
-    await runOrlScanSerialized(context, scanResultsProvider);
-  } else {
-    logger.info('Using traditional API client');
-    await scanWithApiClient(scanResultsProvider);
-  }
+  logger.info('Using ORL client');
+  await runOrlScanSerialized(context, scanResultsProvider);
 }
 
 async function runOrlScanSerialized(
