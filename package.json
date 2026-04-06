@@ -37,10 +37,6 @@
         "title": "Gomboc: Scan current file or scenario"
       },
       {
-        "command": "gomboc-vscode-extension.showBenchmarks",
-        "title": "Gomboc: Show organization benchmarks"
-      },
-      {
         "command": "gomboc-vscode-extension.testOrlConnection",
         "title": "Gomboc: Test ORL Connection"
       },

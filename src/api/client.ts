@@ -6,16 +6,11 @@ import settings from '../settings';
 // @ts-expect-error
 import { ApolloClient, createHttpLink, InMemoryCache } from '@apollo/client';
 import {
-  ACCOUNT_HAS_FEATURE_BOOLEAN,
   GET_ACCOUNT_ID,
   HEALTH_CHECK,
-  INDIVIDUAL_FIXES,
-  SECURITY_BENCHMARKS,
 } from './queries';
 import {
   IndividualFixesQuery,
-  IndividualFixesQueryVariables,
-  ScanLocalScenarioInput,
   SecurityBenchmarksQuery,
   TestOrganizationQuery,
   TestOrganizationQueryVariables,
@@ -104,42 +99,6 @@ export class CustomerApiClient {
     logger.info('Created a new apollo client .... ');
   }
 
-  public async securityAdoptedBenchmarkRecommendations() {
-    try {
-      const { data } = await this.client.query<SecurityBenchmarksQuery>({
-        query: SECURITY_BENCHMARKS,
-      });
-      logger.info('Fetched security benchmarks');
-      const retval: SecurityBenchmarkQueryBenchmarkArray = [];
-      for (const benchmark of data.securityBenchmarks) {
-        const filteredBenchmark = {
-          ...benchmark,
-        };
-        const adoptedVersions: SecurityBenchmarkQueryVersion[] = [];
-        for (const version of benchmark.versions) {
-          const filteredVersion = {
-            ...version,
-          };
-          const adoptedSecurityBenchmarks: SecurityBenchmarkQueryRecommendation[] =
-            [];
-          for (const recommendation of version.recommendations) {
-            if (!recommendation.isAdopted) {
-              continue;
-            }
-            adoptedSecurityBenchmarks.push(recommendation);
-          }
-          filteredVersion['recommendations'] = adoptedSecurityBenchmarks;
-          adoptedVersions.push(version);
-        }
-        filteredBenchmark['versions'] = adoptedVersions;
-        retval.push(filteredBenchmark);
-      }
-      return retval;
-    } catch (error) {
-      logger.error('Grabbing security frameworks failed', { error });
-      throw error;
-    }
-  }
 
   public async healthCheck() {
     try {
@@ -157,101 +116,6 @@ export class CustomerApiClient {
     }
   }
 
-  public async getFixes(args: {
-    inputObject: ScanLocalScenarioInput;
-  }): Promise<Fixes> {
-    logger.info('Sending a single file or scenario scan request');
-    try {
-      const { data } = await this.client.query<
-        IndividualFixesQuery,
-        IndividualFixesQueryVariables
-      >({
-        query: INDIVIDUAL_FIXES,
-        variables: {
-          individualFixesInput: args.inputObject,
-          groupedFixesInput: args.inputObject,
-        },
-      });
-      if (
-        data.individualFixes.__typename === 'IndividualFixesSuccess' &&
-        data.groupedFixes.__typename === 'GroupedFixesSuccess'
-      ) {
-        return {
-          individualFixes: data.individualFixes.remediations,
-          groupedFixes: data.groupedFixes.remediatedFiles,
-        };
-      } else if (data.individualFixes.__typename === 'GombocError') {
-        throw new Error(data.individualFixes.message);
-      } else if (data.groupedFixes.__typename === 'GombocError') {
-        throw new Error(data.groupedFixes.message);
-      } else {
-        throw new Error(
-          'Please ensure that you have provided a valid IaC template',
-        );
-      }
-    } catch (error) {
-      logger.error('Scanning the scenario failed', { error });
-      throw error;
-    }
-  }
-
-  /**
-   * Check whether ORL processing is enabled for this user/account (server-side flag).
-   *
-   * Flag key is owned by CustomerAPI/OpenFeature. We intentionally keep this
-   * as a string constant (kebab-case) to match CustomerAPI usage.
-   *
-   * Cached in-memory for a short TTL to avoid calling CustomerAPI on every scan.
-   */
-  public async isProcessorOrlEnabled(opts?: {
-    /**
-     * Cache TTL in milliseconds (default: 5 minutes).
-     * Set to 0 to bypass cache.
-     */
-    ttlMs?: number;
-  }): Promise<boolean> {
-    const ttlMs = opts?.ttlMs ?? 5 * 60 * 1000;
-    const flagName = 'processor-orl-enabled';
-    const defaultValue = false;
-
-    const cacheKey = `${this.customerApiUrl}|${this.apiKey}|${flagName}`;
-    const now = Date.now();
-    if (ttlMs > 0) {
-      const cached = CustomerApiClient.featureBoolCache.get(cacheKey);
-      if (cached && cached.expiresAtMs > now) {
-        return cached.value;
-      }
-    }
-
-    type AccountHasFeatureBooleanData = {
-      account: { hasFeatureBoolean: boolean };
-    };
-    type AccountHasFeatureBooleanVars = {
-      name: string;
-      default: boolean;
-    };
-
-    const { data } = await this.client.query<
-      AccountHasFeatureBooleanData,
-      AccountHasFeatureBooleanVars
-    >({
-      query: ACCOUNT_HAS_FEATURE_BOOLEAN,
-      variables: {
-        name: flagName,
-        default: defaultValue,
-      },
-      fetchPolicy: 'no-cache',
-    });
-
-    const value = Boolean(data?.account?.hasFeatureBoolean);
-    if (ttlMs > 0) {
-      CustomerApiClient.featureBoolCache.set(cacheKey, {
-        value,
-        expiresAtMs: now + ttlMs,
-      });
-    }
-    return value;
-  }
 
   /**
    * Get the account ID for the authenticated user.
