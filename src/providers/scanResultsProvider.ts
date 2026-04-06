@@ -752,8 +752,10 @@ export class ScanResultsProvider {
     const metaIndex = this.buildOrlRuleMetaIndex();
 
     // the key represents the file path to the file that needs remediation
-    const existingResourceRuleFixes: Record<string, IndividualFixesRemediation[]> =
-      {};
+    const existingResourceRuleFixes: Record<
+      string,
+      IndividualFixesRemediation[]
+    > = {};
     const existingGroupedFixes: Record<string, GroupedFixesRemediation> = {};
     let diagnosticTotal = 0;
 
@@ -782,10 +784,7 @@ export class ScanResultsProvider {
       if (!existingData) {
         existingResourceRuleFixes[filepath] = [remediation];
       } else {
-        existingResourceRuleFixes[filepath] = [
-          remediation,
-          ...existingData,
-        ];
+        existingResourceRuleFixes[filepath] = [remediation, ...existingData];
       }
     }
     // Ensures that each file only has one grouped remediation

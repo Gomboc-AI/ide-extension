@@ -1,9 +1,7 @@
 const ORL_RULE_PREFIX = 'orl-rule:';
 const NON_RENDERABLE_RULE_NAMES = new Set(['multiple', 'ORL_REMEDIATION']);
 
-export function extractRenderableOrlRuleNames(
-  rule: any,
-): string[] {
+export function extractRenderableOrlRuleNames(rule: any): string[] {
   const ruleNames = new Set<string>();
   const embedded = rule?.orlRuleNames;
 
@@ -23,10 +21,7 @@ export function extractRenderableOrlRuleNames(
     return Array.from(ruleNames);
   }
 
-  const id =
-    typeof rule?.id === 'string'
-      ? rule.id.trim()
-      : '';
+  const id = typeof rule?.id === 'string' ? rule.id.trim() : '';
   if (!id.startsWith(ORL_RULE_PREFIX)) {
     return [];
   }

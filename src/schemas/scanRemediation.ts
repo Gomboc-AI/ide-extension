@@ -72,7 +72,9 @@ export const ScanRemediationPayloadSchema = FixesSchema.extend({
   orlRuleDescriptions: z.record(z.string()).optional(),
   orlRuleShortNames: z.record(z.string()).optional(),
 });
-export type ScanRemediationPayload = z.infer<typeof ScanRemediationPayloadSchema>;
+export type ScanRemediationPayload = z.infer<
+  typeof ScanRemediationPayloadSchema
+>;
 
 export function parseScanRemediationPayload(
   payload: unknown,

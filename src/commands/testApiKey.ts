@@ -12,7 +12,9 @@ export async function testApiKeyCommand(_: vscode.ExtensionContext) {
     vscode.window.showInformationMessage('API Key test success!');
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : 'Unknown token verification error';
+      error instanceof Error
+        ? error.message
+        : 'Unknown token verification error';
     vscode.window.showErrorMessage(
       `API Test Failed - ${message}. Check API key / rules service settings.`,
     );
