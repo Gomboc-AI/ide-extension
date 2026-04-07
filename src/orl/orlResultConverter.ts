@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { z } from 'zod';
 import logger from '../utils/logger';
 import { PathConverter } from '../utils/pathConverter';
 import { FileDiffAnalyzer, Difference } from '../utils/fileDiffAnalyzer';
@@ -10,6 +11,34 @@ import {
   detectOrlDocumentKinds,
 } from './orlDocumentClassifier';
 import type { ScanRemediationPayload } from '../schemas/scanRemediation';
+import { zOrlReport } from '../schemas/orlReport';
+
+const zOrlDiagnosticFileResource = z
+  .object({
+    type: z.string().optional(),
+    name: z.string().optional(),
+    startLine: z.number().optional(),
+    endLine: z.number().optional(),
+  })
+  .passthrough();
+
+const zOrlDiagnosticRuleFile = z
+  .object({
+    path: z.string(),
+    hunks: z
+      .array(
+        z.object({
+          startLine: z.number(),
+          lineCount: z.number(),
+          type: z.string().optional(),
+        }),
+      )
+      .optional(),
+    resources: z.array(zOrlDiagnosticFileResource).optional(),
+  })
+  .passthrough();
+type OrlDiagnosticRuleFile = z.infer<typeof zOrlDiagnosticRuleFile>;
+type OrlDiagnosticFileResource = z.infer<typeof zOrlDiagnosticFileResource>;
 
 export interface OrlResult {
   success: boolean;
@@ -41,6 +70,12 @@ export interface OrlResult {
           lineCount: number;
           type?: string;
         }>;
+        resources?: Array<{
+          type?: string;
+          name?: string;
+          startLine?: number;
+          endLine?: number;
+        }>;
       }>;
     }>;
   };
@@ -52,6 +87,15 @@ export type ScanResponse = ScanRemediationPayload;
  * Utility class for converting ORL results to VS Code scan response format
  */
 export class OrlResultConverter {
+  private static getRuleFileResources(
+    ruleFile: OrlDiagnosticRuleFile | undefined,
+  ): OrlDiagnosticFileResource[] {
+    const parsed = zOrlDiagnosticRuleFile.safeParse(ruleFile);
+    if (!parsed.success) {
+      return [];
+    }
+    return parsed.data.resources || [];
+  }
   /**
    * Best-effort extraction of per-rule changed file paths from the ORL YAML report.
    *
@@ -64,11 +108,16 @@ export class OrlResultConverter {
   ): Record<string, string[]> {
     const out: Record<string, string[]> = {};
     const parsed = parseOrlReport(report);
-    if (!parsed || typeof parsed !== 'object') {
+    if (!parsed) {
       return out;
     }
-    const spec = (parsed as any).spec;
-    const rules = spec?.rules;
+    let reportPayload: z.infer<typeof zOrlReport>;
+    try {
+      reportPayload = zOrlReport.parse(parsed);
+    } catch {
+      return out;
+    }
+    const rules = reportPayload.spec?.rules;
     if (!Array.isArray(rules)) {
       return out;
     }
@@ -141,12 +190,16 @@ export class OrlResultConverter {
   ): Record<string, string> {
     const out: Record<string, string> = {};
     const parsed = parseOrlReport(report);
-    if (!parsed || typeof parsed !== 'object') {
+    if (!parsed) {
       return out;
     }
-
-    const spec = (parsed as any).spec;
-    const rules = spec?.rules;
+    let reportPayload: z.infer<typeof zOrlReport>;
+    try {
+      reportPayload = zOrlReport.parse(parsed);
+    } catch {
+      return out;
+    }
+    const rules = reportPayload.spec?.rules;
     if (!Array.isArray(rules)) {
       return out;
     }
@@ -159,10 +212,13 @@ export class OrlResultConverter {
       return s ? s : undefined;
     };
 
-    const pickRuleDescription = (metadata: any): string | undefined => {
-      if (!metadata || typeof metadata !== 'object') {
+    const pickRuleDescription = (
+      metadata: (typeof rules)[number]['metadata'] | undefined,
+    ): string | undefined => {
+      if (!metadata) {
         return undefined;
       }
+      const metadataRecord = metadata;
 
       // New source of truth: plain-text description annotation (support both key spellings).
       const annotationKeys = [
@@ -171,12 +227,7 @@ export class OrlResultConverter {
       ];
 
       const annotations =
-        (metadata.annotations && typeof metadata.annotations === 'object'
-          ? metadata.annotations
-          : undefined) ||
-        (metadata.annotation && typeof metadata.annotation === 'object'
-          ? metadata.annotation
-          : undefined);
+        metadataRecord.annotations || metadataRecord.annotation;
 
       if (annotations) {
         for (const k of annotationKeys) {
@@ -189,14 +240,14 @@ export class OrlResultConverter {
 
       // Sometimes the report may flatten annotation keys onto metadata directly.
       for (const k of annotationKeys) {
-        const v = coerceString(metadata[k]);
+        const v = coerceString(metadataRecord[k]);
         if (v) {
           return v;
         }
       }
 
       // Backwards-compatible fallback (old location).
-      return coerceString(metadata.description);
+      return coerceString(metadataRecord.description);
     };
 
     for (const r of rules) {
@@ -237,11 +288,16 @@ export class OrlResultConverter {
   ): Record<string, string> {
     const out: Record<string, string> = {};
     const parsed = parseOrlReport(report);
-    if (!parsed || typeof parsed !== 'object') {
+    if (!parsed) {
       return out;
     }
-    const spec = (parsed as any).spec;
-    const rules = spec?.rules;
+    let reportPayload: z.infer<typeof zOrlReport>;
+    try {
+      reportPayload = zOrlReport.parse(parsed);
+    } catch {
+      return out;
+    }
+    const rules = reportPayload.spec?.rules;
     if (!Array.isArray(rules)) {
       return out;
     }
@@ -1141,13 +1197,16 @@ export class OrlResultConverter {
                   const keys = addFileKeys(ruleFile.path);
                   if (keys.some(k => matchKeys.includes(k))) {
                     fileMatches = true;
-                    const resources = (ruleFile as any).resources || [];
+                    const resources =
+                      OrlResultConverter.getRuleFileResources(ruleFile);
                     if (resources.length === 0) {
                       break;
                     }
                     const matchingResource = resources.find(
-                      (r: any) =>
+                      r =>
                         r.type === resourceName &&
+                        typeof r.startLine === 'number' &&
+                        typeof r.endLine === 'number' &&
                         diffLine >= r.startLine &&
                         diffLine <= r.endLine,
                     );
@@ -1308,13 +1367,16 @@ export class OrlResultConverter {
                       continue;
                     }
 
-                    const resources = (ruleFile as any).resources || [];
+                    const resources =
+                      OrlResultConverter.getRuleFileResources(ruleFile);
                     // Check if this specific resource instance is in the rule's resources
                     // AND the diff line falls within that resource's line range
                     const matchingResource = resources.find(
-                      (r: any) =>
+                      r =>
                         r.type === resourceName &&
                         r.name === resourceInstanceName &&
+                        typeof r.startLine === 'number' &&
+                        typeof r.endLine === 'number' &&
                         diffLine >= r.startLine &&
                         diffLine <= r.endLine,
                     );

@@ -7,6 +7,7 @@ import { randomUUID } from 'crypto';
 import logger from './logger';
 import { parseOrlReport } from './orlReportParser';
 import { OrlResult } from '../orl/orlResultConverter';
+import { OrlReport } from '../schemas/orlReport';
 import {
   DEFAULTS,
   getBooleanSetting,
@@ -276,8 +277,8 @@ export async function flushOrlFixAppliedEvents(
       });
       sent[item.event.idempotencyKey] = Date.now();
       sentCount++;
-    } catch (err: any) {
-      const status = err?.response?.status as number | undefined;
+    } catch (err) {
+      const status = axios.isAxiosError(err) ? err.response?.status : undefined;
 
       // If endpoint doesn't exist or request is invalid, drop to avoid infinite growth.
       if (status && status >= 400 && status < 500 && status !== 429) {
@@ -420,11 +421,32 @@ export async function queueOrlFixAppliedEvent(
   flushOrlFixAppliedEvents(context).catch(() => {});
 }
 
+type NormalizedOrlReport = {
+  type: 'Report';
+  version: 'v1';
+  metadata: {
+    name: string;
+    description?: string;
+    priority?: number;
+    skip?: boolean;
+    required_contexts: string[];
+    annotations: Record<string, string>;
+  };
+  workspace: string;
+  language: string;
+  rules_applied: number;
+  findings: number;
+  fixes: number;
+  changes: number;
+  errors: string[];
+  rules: [];
+};
+
 /**
  * Prepare request body for ORL report submission
  */
 function prepareRequestBody(
-  orlReport: unknown,
+  orlReport: NormalizedOrlReport,
   repoPath: string | null,
   branch: string | null,
   result: OrlResult,
@@ -435,7 +457,7 @@ function prepareRequestBody(
   reports: Array<{
     path?: string;
     branch?: string;
-    orlReport: unknown;
+    orlReport: NormalizedOrlReport;
   }>;
   errors: Array<{ status: number; message: string }>;
 } {
@@ -461,12 +483,12 @@ function prepareRequestBody(
  * ensure required fields/arrays exist, and fill workspace/language).
  */
 function normalizeOrlReport(
-  raw: unknown,
+  raw: OrlReport,
   workspacePath: string,
   language: string,
-): any {
+): NormalizedOrlReport {
   const filterAnnotations = (
-    annotations: Record<string, any> | undefined,
+    annotations: Record<string, string | undefined> | undefined,
   ): Record<string, string> => {
     const filtered: Record<string, string> = {};
     if (!annotations || typeof annotations !== 'object') {
@@ -491,15 +513,27 @@ function normalizeOrlReport(
     return filtered;
   };
 
-  const toNumber = (val: any, fallback = 0): number => {
+  const toNumber = (val: string | number | undefined, fallback = 0): number => {
     if (typeof val === 'number' && Number.isFinite(val)) {
       return val;
     }
     const n = Number(val);
     return Number.isFinite(n) ? n : fallback;
   };
+  const toOptionalNumber = (
+    val: string | number | boolean | null | undefined,
+  ): number | undefined => {
+    if (typeof val === 'number' && Number.isFinite(val)) {
+      return val;
+    }
+    const n = Number(val);
+    return Number.isFinite(n) ? n : undefined;
+  };
 
-  const toBoolean = (val: any, fallback = false): boolean => {
+  const toBoolean = (
+    val: string | boolean | undefined,
+    fallback = false,
+  ): boolean => {
     if (typeof val === 'boolean') {
       return val;
     }
@@ -515,21 +549,20 @@ function normalizeOrlReport(
     return fallback;
   };
 
-  const ensureArray = <T>(val: any, fallback: T[] = []): T[] =>
+  const ensureArray = <T>(val: T[] | undefined, fallback: T[] = []): T[] =>
     Array.isArray(val) ? val : fallback;
 
-  const report = (raw && typeof raw === 'object' ? raw : {}) as any;
   // Support spec.* (preferred) and fall back to top-level
-  const spec =
-    report.spec && typeof report.spec === 'object' ? report.spec : report;
-  const metadata =
-    spec.metadata && typeof spec.metadata === 'object' ? spec.metadata : {};
+  const spec = raw.spec || raw;
+  const metadata = spec.metadata || raw.metadata || {};
 
-  const filteredTopAnnotations = filterAnnotations(metadata.annotations);
+  const filteredTopAnnotations = filterAnnotations(
+    metadata.annotations as Record<string, string | undefined> | undefined,
+  );
 
-  const rulesSource = ensureArray(spec.rules || report.rules);
+  const rulesSource = ensureArray(spec.rules || raw.rules);
   const sumField = (field: 'findings' | 'fixes' | 'changes') =>
-    rulesSource.reduce((acc: number, r: any) => acc + toNumber(r?.[field]), 0);
+    rulesSource.reduce((acc: number, r) => acc + toNumber(r?.[field]), 0);
 
   return {
     type: 'Report',
@@ -543,50 +576,35 @@ function normalizeOrlReport(
           : undefined,
       priority:
         metadata.priority !== undefined
-          ? toNumber(metadata.priority, undefined as any)
+          ? toOptionalNumber(metadata.priority)
           : undefined,
       skip: metadata.skip !== undefined ? toBoolean(metadata.skip) : undefined,
-      required_contexts: ensureArray(metadata.required_contexts),
+      required_contexts: ensureArray(metadata.required_contexts as string[]),
       annotations: filteredTopAnnotations,
     },
-    workspace: spec.workspace || report.workspace || workspacePath || '',
-    language: spec.language || report.language || language || '',
+    workspace: spec.workspace || raw.workspace || workspacePath || '',
+    language: spec.language || raw.language || language || '',
     rules_applied: toNumber(
-      spec.rules_applied ?? report.rules_applied ?? rulesSource.length,
+      spec.rules_applied ?? raw.rules_applied ?? rulesSource.length,
     ),
-    findings: toNumber(
-      spec.findings ?? report.findings ?? sumField('findings'),
-    ),
-    fixes: toNumber(spec.fixes ?? report.fixes ?? sumField('fixes')),
-    changes: toNumber(spec.changes ?? report.changes ?? sumField('changes')),
-    errors: ensureArray(spec.errors ?? report.errors)
-      .map((e: any) =>
+    findings: toNumber(spec.findings ?? raw.findings ?? sumField('findings')),
+    fixes: toNumber(spec.fixes ?? raw.fixes ?? sumField('fixes')),
+    changes: toNumber(spec.changes ?? raw.changes ?? sumField('changes')),
+    errors: ensureArray(spec.errors ?? raw.errors)
+      .map(e =>
         typeof e === 'string'
           ? e
-          : e && typeof e === 'object' && typeof e.message === 'string'
+          : e &&
+              typeof e === 'object' &&
+              'message' in e &&
+              typeof e.message === 'string'
             ? e.message
             : undefined,
       )
-      .filter((e: any) => typeof e === 'string'),
+      .filter((e): e is string => typeof e === 'string'),
     // Drop the per-rule payload to avoid large request sizes; counts above remain accurate
     rules: [],
   };
-}
-
-/**
- * Extract error details from axios error response
- */
-function extractErrorDetails(error: unknown): unknown {
-  if (
-    error instanceof Error &&
-    'response' in error &&
-    typeof error.response === 'object' &&
-    error.response !== null &&
-    'data' in error.response
-  ) {
-    return (error.response as { data: unknown }).data;
-  }
-  return undefined;
 }
 
 /**
@@ -702,7 +720,9 @@ export async function sendErrorToIntegrations(
     // Log error but don't throw - this should not break the remediation workflow
     const errorMessage =
       error instanceof Error ? error.message : 'Unknown error';
-    const errorDetails = extractErrorDetails(error);
+    const errorDetails = axios.isAxiosError(error)
+      ? error.response?.data
+      : undefined;
 
     logger.error('Failed to send error to integrations service', {
       error: errorMessage,
@@ -792,7 +812,9 @@ export async function sendOrlReportToIntegrations(
     // Log error but don't throw - this should not break the remediation workflow
     const errorMessage =
       error instanceof Error ? error.message : 'Unknown error';
-    const errorDetails = extractErrorDetails(error);
+    const errorDetails = axios.isAxiosError(error)
+      ? error.response?.data
+      : undefined;
 
     logger.error('Failed to send ORL report to integrations service', {
       error: errorMessage,

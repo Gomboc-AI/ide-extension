@@ -92,3 +92,11 @@ export type SingleScanInput = {
 export type IIpCurl = {
   ip: string;
 };
+
+export type {
+  OrlReport,
+  OrlReportSpec,
+  OrlRule,
+  OrlRuleAnnotations,
+  CheckovEvidence,
+} from './schemas/orlReport';

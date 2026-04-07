@@ -63,7 +63,7 @@ export async function fixProofCheckovVerifyForPanel(
         workspacePath,
         checkIds: extracted.checkIds,
         checkIdsByRule: extracted.checkIdsByRule,
-        evidenceByCheckId: extracted.evidenceByCheckId as any,
+        evidenceByCheckId: extracted.evidenceByCheckId,
       });
     }
   }
@@ -185,7 +185,7 @@ export async function fixProofCheckovVerifyCommand(
         workspacePath,
         checkIds: extracted.checkIds,
         checkIdsByRule: extracted.checkIdsByRule,
-        evidenceByCheckId: extracted.evidenceByCheckId as any,
+        evidenceByCheckId: extracted.evidenceByCheckId,
       });
     }
   }

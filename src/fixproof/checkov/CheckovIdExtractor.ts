@@ -1,8 +1,10 @@
-export type CheckovEvidence = {
-  ruleName: string;
-  source: 'annotation' | 'usecase';
-  key: string;
-};
+import {
+  CheckovEvidence,
+  OrlReport,
+  OrlRule,
+  OrlRuleAnnotations,
+  parseOrlReportPayload,
+} from '../../schemas/orlReport';
 
 export type ExtractedCheckovIds = {
   checkIds: string[];
@@ -40,8 +42,8 @@ export class CheckovIdExtractor {
       return out;
     }
 
-    const spec = (parsedReport as any).spec;
-    const rules = spec?.rules;
+    const report: OrlReport | null = parseOrlReportPayload(parsedReport);
+    const rules = report?.spec?.rules;
     if (!Array.isArray(rules)) {
       return out;
     }
@@ -175,18 +177,14 @@ export class CheckovIdExtractor {
         continue;
       }
 
-      const metadata =
-        r?.metadata && typeof r.metadata === 'object' ? r.metadata : undefined;
+      const metadata = r.metadata;
 
       // Source 1: explicit annotations.
-      const annotations =
-        metadata?.annotations && typeof metadata.annotations === 'object'
-          ? metadata.annotations
-          : undefined;
+      const annotations = metadata?.annotations;
 
       const multiKey = 'gomboc-ai/checkov-ids';
       if (annotations && multiKey in annotations) {
-        const v = (annotations as any)[multiKey];
+        const v = annotations[multiKey];
         if (Array.isArray(v)) {
           for (const item of v) {
             if (typeof item === 'string') {
@@ -208,7 +206,7 @@ export class CheckovIdExtractor {
       const singleKeys = ['gomboc-ai/checkov/id', 'gomboc-ai/chekov/id'];
       for (const k of singleKeys) {
         if (annotations && k in annotations) {
-          const v = (annotations as any)[k];
+          const v = annotations[k];
           if (typeof v === 'string') {
             for (const id of splitIds(v)) {
               addRuleId(ruleName, id, { source: 'annotation', key: k });

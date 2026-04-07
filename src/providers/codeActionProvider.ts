@@ -157,10 +157,10 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
         {
           ruleName: diagnostic.ruleName,
           filePath: diagnostic.filePath,
-          resourceHeader: (diagnostic as any).resourceHeader,
-          ruleShortName: (diagnostic as any).ruleShortName,
-          ruleDescription: (diagnostic as any).ruleDescription,
-          fixTask: (diagnostic as any).fixTask,
+          resourceHeader: diagnostic.resourceHeader,
+          ruleShortName: diagnostic.ruleShortName,
+          ruleDescription: diagnostic.ruleDescription,
+          fixTask: diagnostic.fixTask,
         },
       ],
     };

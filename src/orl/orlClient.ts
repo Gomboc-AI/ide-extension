@@ -5,8 +5,10 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as crypto from 'crypto';
 import yaml from 'js-yaml';
+import { z } from 'zod';
 import logger from '../utils/logger';
 import { parseOrlReport } from '../utils/orlReportParser';
+import { parseOrlReportPayload } from '../schemas/orlReport';
 import {
   DEFAULTS,
   getBooleanSetting,
@@ -30,6 +32,40 @@ type HookManifestEvent = {
   priority?: number;
   rulesExecuted?: number;
 };
+
+const zRulesCacheMeta = z
+  .object({
+    pulledAtMs: z.number().optional(),
+    rulesServiceUrl: z.string().optional(),
+    channel: z.string().optional(),
+    containerImage: z.string().optional(),
+  })
+  .passthrough();
+type RulesCacheMeta = z.infer<typeof zRulesCacheMeta>;
+
+const zRulesetDocument = z
+  .object({
+    name: z.string().optional(),
+    metadata: z
+      .object({
+        name: z.string().optional(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+
+function getErrorCode(error: unknown): number {
+  if (
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    typeof error.code === 'number'
+  ) {
+    return error.code;
+  }
+  return 1;
+}
 
 /**
  * Run a command without going through a shell.
@@ -190,7 +226,11 @@ export class OrlClient {
     const metaPath = path.join(cacheDir, 'meta.json');
     try {
       const raw = await fs.promises.readFile(metaPath, 'utf8');
-      const meta = JSON.parse(raw) as any;
+      const parsedMeta = zRulesCacheMeta.safeParse(JSON.parse(raw));
+      if (!parsedMeta.success) {
+        return false;
+      }
+      const meta: RulesCacheMeta = parsedMeta.data;
       const pulledAtMs =
         typeof meta?.pulledAtMs === 'number' ? meta.pulledAtMs : undefined;
       const rulesServiceUrl =
@@ -1135,8 +1175,7 @@ export class OrlClient {
       return {
         success: false,
         modifiedFiles: {},
-        exitCode:
-          typeof (error as any)?.code === 'number' ? (error as any).code : 1,
+        exitCode: getErrorCode(error),
         error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
@@ -1419,8 +1458,8 @@ export class OrlClient {
     if (!parsed || typeof parsed !== 'object') {
       return [];
     }
-    const spec = (parsed as any).spec;
-    const rules = spec?.rules;
+    const parsedReport = parseOrlReportPayload(parsed);
+    const rules = parsedReport?.spec?.rules;
     if (!Array.isArray(rules)) {
       return [];
     }
@@ -1498,18 +1537,21 @@ export class OrlClient {
 
         try {
           const raw = await fs.promises.readFile(full, 'utf8');
-          const doc = (yaml.load(raw, {
-            schema: yaml.FAILSAFE_SCHEMA,
-          }) ?? null) as any;
-          if (!doc || typeof doc !== 'object') {
+          const parsedDoc = zRulesetDocument.safeParse(
+            yaml.load(raw, {
+              schema: yaml.FAILSAFE_SCHEMA,
+            }),
+          );
+          if (!parsedDoc.success) {
             continue;
           }
+          const doc = parsedDoc.data;
 
           // Ruleset files have a top-level `name` in our rules repo; keep a few fallbacks
           // to be resilient to format changes.
           const name =
-            (typeof doc?.name === 'string' && doc.name.trim()) ||
-            (typeof doc?.metadata?.name === 'string' &&
+            (typeof doc.name === 'string' && doc.name.trim()) ||
+            (typeof doc.metadata?.name === 'string' &&
               doc.metadata.name.trim()) ||
             undefined;
           if (!name) {
@@ -1627,7 +1669,8 @@ export class OrlClient {
     if (!parsed || typeof parsed !== 'object') {
       return [];
     }
-    const rules = (parsed as any)?.spec?.rules;
+    const parsedReport = parseOrlReportPayload(parsed);
+    const rules = parsedReport?.spec?.rules;
     if (!Array.isArray(rules)) {
       return [];
     }
@@ -1806,6 +1849,12 @@ export class OrlClient {
     return modifiedFiles;
   }
 
+  public parseOrlOutputForTests(output: string): {
+    [filePath: string]: string;
+  } {
+    return this.parseOrlOutput(output);
+  }
+
   /**
    * Check if file is an IaC file that ORL can process
    */
@@ -1858,6 +1907,10 @@ export class OrlClient {
     }
 
     return false;
+  }
+
+  public isIacFileForTests(fileName: string): boolean {
+    return this.isIacFile(fileName);
   }
 
   /**
@@ -2130,7 +2183,7 @@ export class OrlClient {
         // @ts-ignore add diagnostics for downstream usage
         diagnostics,
       };
-    } catch (error: any) {
+    } catch (error) {
       logger.error('ORL single-rule remediation failed', {
         ruleName,
         error: error instanceof Error ? error.message : String(error),
@@ -2138,8 +2191,7 @@ export class OrlClient {
       return {
         success: false,
         modifiedFiles: {},
-        exitCode:
-          typeof (error as any)?.code === 'number' ? (error as any).code : 1,
+        exitCode: getErrorCode(error),
         error:
           error instanceof Error
             ? error.message

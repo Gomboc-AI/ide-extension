@@ -1,6 +1,19 @@
 import * as vscode from 'vscode';
 import { OrlRuleFixGombocDiagnostic } from './gombocDiagnostic';
 
+function isOrlRuleFixDiagnostic(
+  diagnostic: vscode.Diagnostic,
+): diagnostic is OrlRuleFixGombocDiagnostic {
+  return (
+    typeof (diagnostic as OrlRuleFixGombocDiagnostic).ruleName === 'string' &&
+    typeof (diagnostic as OrlRuleFixGombocDiagnostic).filePath === 'string' &&
+    (typeof (diagnostic as OrlRuleFixGombocDiagnostic).ruleShortName ===
+      'string' ||
+      typeof (diagnostic as OrlRuleFixGombocDiagnostic).ruleDescription ===
+        'string')
+  );
+}
+
 export class OrlHoverProvider implements vscode.HoverProvider {
   provideHover(
     document: vscode.TextDocument,
@@ -9,13 +22,7 @@ export class OrlHoverProvider implements vscode.HoverProvider {
     const diagnostics = vscode.languages.getDiagnostics(document.uri);
     const relevant = diagnostics.filter(d => d.range.contains(position));
 
-    const orlDiagnostics = relevant.filter(
-      d =>
-        typeof (d as any)?.ruleName === 'string' &&
-        typeof (d as any)?.filePath === 'string' &&
-        (typeof (d as any)?.ruleShortName === 'string' ||
-          typeof (d as any)?.ruleDescription === 'string'),
-    ) as OrlRuleFixGombocDiagnostic[];
+    const orlDiagnostics = relevant.filter(isOrlRuleFixDiagnostic);
 
     if (orlDiagnostics.length === 0) {
       return undefined;
@@ -24,7 +31,7 @@ export class OrlHoverProvider implements vscode.HoverProvider {
     // Dedupe by ruleName so we don't spam repeated diagnostics.
     const byRule = new Map<string, OrlRuleFixGombocDiagnostic>();
     for (const d of orlDiagnostics) {
-      const rn = (d as any).ruleName as string;
+      const rn = d.ruleName;
       if (!byRule.has(rn)) {
         byRule.set(rn, d);
       }
@@ -32,11 +39,7 @@ export class OrlHoverProvider implements vscode.HoverProvider {
     const unique = Array.from(byRule.values());
 
     const resourceHeaders = Array.from(
-      new Set(
-        unique
-          .map(d => ((d as any).resourceHeader as string | undefined) || '')
-          .filter(Boolean),
-      ),
+      new Set(unique.map(d => d.resourceHeader || '').filter(Boolean)),
     );
     const commonResource =
       resourceHeaders.length === 1 ? resourceHeaders[0] : undefined;
@@ -50,22 +53,16 @@ export class OrlHoverProvider implements vscode.HoverProvider {
 
     // Sort for stable display.
     unique.sort((a, b) => {
-      const sa =
-        ((a as any).ruleShortName as string | undefined) ||
-        ((a as any).ruleName as string | undefined) ||
-        '';
-      const sb =
-        ((b as any).ruleShortName as string | undefined) ||
-        ((b as any).ruleName as string | undefined) ||
-        '';
+      const sa = a.ruleShortName || a.ruleName || '';
+      const sb = b.ruleShortName || b.ruleName || '';
       return sa.localeCompare(sb);
     });
 
     for (const d of unique) {
-      const resource = (d as any).resourceHeader as string | undefined;
-      const shortName = (d as any).ruleShortName as string | undefined;
-      const description = (d as any).ruleDescription as string | undefined;
-      const ruleName = (d as any).ruleName as string | undefined;
+      const resource = d.resourceHeader;
+      const shortName = d.ruleShortName;
+      const description = d.ruleDescription;
+      const ruleName = d.ruleName;
 
       const headingParts = [
         !commonResource && resource ? `**${resource}**` : undefined,
