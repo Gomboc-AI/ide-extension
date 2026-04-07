@@ -2,6 +2,7 @@ name: Versioning
 permissions:
   contents: read
   issues: write
+  pull-requests: write
   packages: read
 on:
   pull_request:
@@ -21,8 +22,6 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: '.nvmrc'
-          registry-url: https://npm.pkg.github.com/
-          scope: '@Gomboc-AI'
 
       - name: Save NPMRC File
         env:
