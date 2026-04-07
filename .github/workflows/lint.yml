@@ -1,5 +1,9 @@
 name: Lint
 
+permissions:
+  contents: read
+  packages: read
+
 on:
   pull_request:
     branches:
