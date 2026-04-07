@@ -1,6 +1,9 @@
 name: Publish
 permissions:
-  contents: read
+  pull-requests: write
+  id-token: write
+  contents: write
+  packages: write
 
 on:
   push:
@@ -12,11 +15,7 @@ jobs:
   publish:
     name: Publish
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
-      id-token: write
-      contents: write
-      issues: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -26,6 +25,8 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: '.nvmrc'
+          registry-url: https://npm.pkg.github.com/
+          scope: '@Gomboc-AI'
 
       - name: Save NPMRC File
         env:
