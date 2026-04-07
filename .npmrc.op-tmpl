@@ -1,0 +1,3 @@
+engine-strict=true
+//npm.pkg.github.com/:_authToken=op://Employee/npmrc/credential
+@gomboc-ai:registry=https://npm.pkg.github.com
