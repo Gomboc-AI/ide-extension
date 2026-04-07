@@ -1,5 +1,6 @@
 name: Versioning
 permissions:
+  # semantic-release requires all of these permissions
   contents: write
   issues: write
   packages: read
