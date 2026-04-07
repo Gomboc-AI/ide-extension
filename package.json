@@ -120,6 +120,16 @@
             "default": false,
             "description": "DEV ONLY: when enabled, if the scanned workspace contains .orl-dev-rules/, inject it as an extra ORL rulespace for local testing."
           },
+          "gomboc-vscode-extension.orlCustomRulesOnly": {
+            "type": "boolean",
+            "default": false,
+            "description": "DEV ONLY: When enabled, ORL remediation uses only the custom rules folder path below. In this mode, channel pulls and .orl-dev-rules injection are disabled."
+          },
+          "gomboc-vscode-extension.orlCustomRulesPath": {
+            "type": "string",
+            "default": "",
+            "description": "DEV ONLY: Custom ORL rules folder path used when orlCustomRulesOnly is enabled. Supports absolute paths and ${workspaceFolder}."
+          },
           "gomboc-vscode-extension.orlFixAppliedAnalyticsEnabled": {
             "type": "boolean",
             "default": true,
