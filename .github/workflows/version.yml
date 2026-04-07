@@ -4,7 +4,6 @@ permissions:
   id-token: write
   pull-requests: write
   packages: write
-  issues: write
 on:
   pull_request:
     branches:
