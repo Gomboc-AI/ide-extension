@@ -1,6 +1,10 @@
 name: Publish
 permissions:
-  contents: read
+  pull-requests: write
+  id-token: write
+  contents: write
+  issues: write
+  packages: write
 
 on:
   push:
@@ -12,11 +16,7 @@ jobs:
   publish:
     name: Publish
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
-      id-token: write
-      contents: write
-      issues: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v6
