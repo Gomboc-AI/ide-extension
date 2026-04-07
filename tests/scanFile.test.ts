@@ -1,11 +1,11 @@
 import { getCFNFile } from '../src/commands/scanFile';
-import type * as vscode from 'vscode';
+import * as vscode from 'vscode';
 
 describe('getCFNFile()', () => {
   it('returns the document path and base64 of its text', () => {
     // 1) stub out the minimal parts of a TextDocument
     const fakeDoc: Pick<vscode.TextDocument, 'uri' | 'getText'> = {
-      uri: { fsPath: '/workspace/template.json' },
+      uri: vscode.Uri.file('/workspace/template.json'),
       getText: () => '{"hello":"world"}',
     };
 
