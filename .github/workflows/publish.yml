@@ -3,7 +3,6 @@ permissions:
   pull-requests: write
   id-token: write
   contents: write
-  issues: write
   packages: write
 
 on:
