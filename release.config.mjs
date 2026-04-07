@@ -19,6 +19,7 @@ export default {
             { type: 'fix', release: 'patch' },
             { type: 'perf', release: 'patch' },
             { type: 'revert', release: 'patch' },
+            { type: 'chore', release: 'patch' },
             { type: 'docs', scope: 'README', release: 'patch' },
             { scope: 'release', release: 'patch' },
             { scope: 'no-release', release: false },
