@@ -1,9 +1,8 @@
 name: Versioning
 permissions:
-  contents: write
-  id-token: write
-  pull-requests: write
-  packages: write
+  contents: read
+  issues: write
+  packages: read
 on:
   pull_request:
     branches:
