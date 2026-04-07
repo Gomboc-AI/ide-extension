@@ -235,6 +235,10 @@ export class FileDiffAnalyzer {
     return groups;
   }
 
+  public static groupRelatedLinesForTests(lines: string[]): string[][] {
+    return this.groupRelatedLines(lines);
+  }
+
   /**
    * Identify individual changes within a larger diff block
    * @deprecated - Use createGroupedChanges instead to avoid syntax issues

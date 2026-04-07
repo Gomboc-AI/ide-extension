@@ -7,3 +7,5 @@ node_modules
 # test directory
 test_development/
 coverage/
+
+.npmrc

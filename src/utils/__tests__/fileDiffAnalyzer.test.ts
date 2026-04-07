@@ -122,7 +122,7 @@ describe('FileDiffAnalyzer - Improved Grouping', () => {
         '  }',
       ];
 
-      const groups = (FileDiffAnalyzer as any).groupRelatedLines(lines);
+      const groups = FileDiffAnalyzer.groupRelatedLinesForTests(lines);
 
       expect(groups.length).toBe(2); // Two separate blocks
       expect(groups[0]).toEqual([
@@ -143,7 +143,7 @@ describe('FileDiffAnalyzer - Improved Grouping', () => {
         '  auto_minor_version_upgrade = false',
       ];
 
-      const groups = (FileDiffAnalyzer as any).groupRelatedLines(lines);
+      const groups = FileDiffAnalyzer.groupRelatedLinesForTests(lines);
 
       expect(groups.length).toBe(2); // Two separate single-line additions
       expect(groups[0]).toEqual(['  backup_window = "03:00-04:00"']);

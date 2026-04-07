@@ -1,5 +1,9 @@
 name: Lint
 
+permissions:
+  contents: read
+  packages: read
+
 on:
   pull_request:
     branches:
@@ -12,10 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
           registry-url: https://npm.pkg.github.com/
@@ -33,7 +37,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm ci
+          npm ci --no-audit --no-fund
 
       - name: Lint
         run: npm run lint

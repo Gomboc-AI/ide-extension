@@ -4,6 +4,24 @@ import logger from './logger';
 import { initClient } from './RestClient';
 import { DEFAULTS, getStringSetting } from './configDefaults';
 
+function getErrorStatusCode(error: unknown): number | undefined {
+  if (axios.isAxiosError(error)) {
+    return error.response?.status;
+  }
+  if (
+    error &&
+    typeof error === 'object' &&
+    'response' in error &&
+    error.response &&
+    typeof error.response === 'object' &&
+    'status' in error.response &&
+    typeof error.response.status === 'number'
+  ) {
+    return error.response.status;
+  }
+  return undefined;
+}
+
 /**
  * Client for interacting with the rules service API.
  * TODO: Replace with the gomboc-node-sdk
@@ -46,12 +64,7 @@ export class RulesServiceClient {
         name: 'default',
       });
     } catch (error) {
-      let statusCode: number | undefined;
-      if (axios.isAxiosError(error)) {
-        statusCode = error.response?.status;
-      } else if (error && typeof error === 'object' && 'response' in error) {
-        statusCode = (error as any).response?.status;
-      }
+      const statusCode = getErrorStatusCode(error);
 
       if (statusCode === 401 || statusCode === 403) {
         throw new Error('Invalid rules service token');
@@ -110,12 +123,7 @@ export class RulesServiceClient {
       // 404 means channel doesn't exist.
       // Other errors (401/403/5xx/network) should be treated as transient and MUST NOT
       // be interpreted as "channel doesn't exist" (otherwise we'd cache a false negative).
-      let statusCode: number | undefined;
-      if (axios.isAxiosError(error)) {
-        statusCode = error.response?.status;
-      } else if (error && typeof error === 'object' && 'response' in error) {
-        statusCode = (error as any).response?.status;
-      }
+      const statusCode = getErrorStatusCode(error);
 
       if (statusCode === 404) {
         const exists = false;

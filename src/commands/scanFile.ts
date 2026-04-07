@@ -266,7 +266,7 @@ async function scanWithOrl(
             workspacePath,
             checkIds: extracted.checkIds,
             checkIdsByRule: extracted.checkIdsByRule,
-            evidenceByCheckId: extracted.evidenceByCheckId as any,
+            evidenceByCheckId: extracted.evidenceByCheckId,
           })
           .catch(() => {});
       } else {
@@ -447,7 +447,9 @@ async function pickRepresentativeFileInDirectory(args: {
 /**
  * Only care about the current file, just return base64 of it
  */
-export function getCFNFile(document: vscode.TextDocument): IacScanContent[] {
+export function getCFNFile(
+  document: Pick<vscode.TextDocument, 'uri' | 'getText'>,
+): IacScanContent[] {
   return [
     {
       filePath: document.uri.fsPath,

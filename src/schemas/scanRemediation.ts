@@ -1,9 +1,9 @@
 import { z } from 'zod';
 
-export const FixTypeSchema = z.enum(['ADD', 'DELETE', 'UPDATE']);
-export type FixType = z.infer<typeof FixTypeSchema>;
+export const zFixType = z.enum(['ADD', 'DELETE', 'UPDATE']);
+export type FixType = z.infer<typeof zFixType>;
 
-export const OrlRuleSchema = z
+export const zOrlRule = z
   .object({
     id: z.string(),
     name: z.string(),
@@ -13,26 +13,26 @@ export const OrlRuleSchema = z
     orlRuleNames: z.array(z.string()).optional(),
   })
   .passthrough();
-export type OrlRule = z.infer<typeof OrlRuleSchema>;
+export type OrlRule = z.infer<typeof zOrlRule>;
 
-export const CodePositionSchema = z.object({
+export const zCodePosition = z.object({
   line: z.number().int().nonnegative(),
   column: z.number().int().nonnegative(),
 });
 
-export const RemediationFixSchema = z.object({
+export const zRemediationFix = z.object({
   filepath: z.string(),
   oldLine: z.union([z.number(), z.string(), z.array(z.string())]).optional(),
   newLine: z.array(z.string()),
-  codePosition: CodePositionSchema,
+  codePosition: zCodePosition,
   lineOffset: z.number().int(),
-  fixType: FixTypeSchema,
+  fixType: zFixType,
 });
-export type RemediationFix = z.infer<typeof RemediationFixSchema>;
+export type RemediationFix = z.infer<typeof zRemediationFix>;
 
-export const IndividualFixesRemediationSchema = z.object({
-  rule: OrlRuleSchema,
-  fixes: z.array(RemediationFixSchema),
+export const zIndividualFixesRemediation = z.object({
+  rule: zOrlRule,
+  fixes: z.array(zRemediationFix),
   codeObservation: z.object({
     codeResourceInstance: z.object({
       name: z.string().optional(),
@@ -44,40 +44,36 @@ export const IndividualFixesRemediationSchema = z.object({
   }),
 });
 export type IndividualFixesRemediation = z.infer<
-  typeof IndividualFixesRemediationSchema
+  typeof zIndividualFixesRemediation
 >;
 
-export const GroupedFixCommentSchema = z.object({
-  position: CodePositionSchema,
-  rule: OrlRuleSchema,
+export const zGroupedFixComment = z.object({
+  position: zCodePosition,
+  rule: zOrlRule,
 });
-export type GroupedFixComment = z.infer<typeof GroupedFixCommentSchema>;
+export type GroupedFixComment = z.infer<typeof zGroupedFixComment>;
 
-export const GroupedFixesRemediationSchema = z.object({
+export const zGroupedFixesRemediation = z.object({
   path: z.string(),
   content: z.string(),
-  comments: z.array(GroupedFixCommentSchema),
+  comments: z.array(zGroupedFixComment),
 });
-export type GroupedFixesRemediation = z.infer<
-  typeof GroupedFixesRemediationSchema
->;
+export type GroupedFixesRemediation = z.infer<typeof zGroupedFixesRemediation>;
 
-export const FixesSchema = z.object({
-  individualFixes: z.array(IndividualFixesRemediationSchema),
-  groupedFixes: z.array(GroupedFixesRemediationSchema),
+export const zFixes = z.object({
+  individualFixes: z.array(zIndividualFixesRemediation),
+  groupedFixes: z.array(zGroupedFixesRemediation),
 });
-export type Fixes = z.infer<typeof FixesSchema>;
+export type Fixes = z.infer<typeof zFixes>;
 
-export const ScanRemediationPayloadSchema = FixesSchema.extend({
+export const zScanRemediationPayload = zFixes.extend({
   orlRuleDescriptions: z.record(z.string()).optional(),
   orlRuleShortNames: z.record(z.string()).optional(),
 });
-export type ScanRemediationPayload = z.infer<
-  typeof ScanRemediationPayloadSchema
->;
+export type ScanRemediationPayload = z.infer<typeof zScanRemediationPayload>;
 
 export function parseScanRemediationPayload(
   payload: unknown,
 ): ScanRemediationPayload {
-  return ScanRemediationPayloadSchema.parse(payload);
+  return zScanRemediationPayload.parse(payload);
 }

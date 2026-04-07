@@ -36,6 +36,19 @@ export default [
       curly: 'warn',
       eqeqeq: 'warn',
       'no-throw-literal': 'warn',
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'TSAsExpression TSAnyKeyword',
+          message:
+            'Use concrete types or schema validation instead of `as any`.',
+        },
+        {
+          selector: 'TSTypeAssertion TSAnyKeyword',
+          message:
+            'Use concrete types or schema validation instead of `as any`.',
+        },
+      ],
       semi: 'warn',
     },
   },

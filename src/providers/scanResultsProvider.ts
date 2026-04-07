@@ -8,6 +8,7 @@ import {
 import {
   GroupedFixesRemediation,
   IndividualFixesRemediation,
+  OrlRule as ScanRemediationOrlRule,
   ScanRemediationPayload,
   parseScanRemediationPayload,
 } from '../schemas/scanRemediation';
@@ -19,6 +20,11 @@ import { extractRenderableOrlRuleNames } from '../orl/orlRuleNameResolver';
 import { detectLanguageFromFile } from '../utils/scanValidator';
 import logger from '../utils/logger';
 import { parseOrlReport } from '../utils/orlReportParser';
+import {
+  CheckovEvidence,
+  OrlRule as OrlReportRule,
+  parseOrlReportPayload,
+} from '../schemas/orlReport';
 
 type IndividualFix = IndividualFixesRemediation['fixes'][number] &
   Pick<IndividualFixesRemediation, 'rule'>;
@@ -172,7 +178,7 @@ export class ScanResultsProvider {
     return base;
   }
 
-  private getRenderableOrlRuleNames(rule: any): string[] {
+  private getRenderableOrlRuleNames(rule: ScanRemediationOrlRule): string[] {
     return extractRenderableOrlRuleNames(rule);
   }
 
@@ -186,7 +192,9 @@ export class ScanResultsProvider {
     return this.groupedRemediations.length;
   }
 
-  private extractCheckovIdsFromAnnotations(annotations: any): string[] {
+  private extractCheckovIdsFromAnnotations(
+    annotations: Record<string, unknown>,
+  ): string[] {
     const out = new Set<string>();
     if (!annotations || typeof annotations !== 'object') {
       return [];
@@ -281,11 +289,11 @@ export class ScanResultsProvider {
 
     try {
       const parsed = parseOrlReport(reportText);
-      const rules = (parsed as any)?.spec?.rules;
+      const rules = parseOrlReportPayload(parsed)?.spec?.rules;
       if (Array.isArray(rules)) {
         const base = this.stripOrlInstanceSuffix(ruleNameRaw);
         const wanted = new Set([ruleNameRaw, base]);
-        const hit = rules.find((r: any) => {
+        const hit = rules.find((r: OrlReportRule) => {
           const n: string | undefined =
             (typeof r?.name === 'string' && r.name.trim()) ||
             (typeof r?.metadata?.name === 'string' && r.metadata.name.trim()) ||
@@ -458,7 +466,7 @@ export class ScanResultsProvider {
     }
     try {
       const parsed = parseOrlReport(reportText);
-      const rules = (parsed as any)?.spec?.rules;
+      const rules = parseOrlReportPayload(parsed)?.spec?.rules;
       if (!Array.isArray(rules)) {
         return out;
       }
@@ -569,7 +577,9 @@ export class ScanResultsProvider {
       ScanResultsProvider.FIXPROOF_CHECKOV_CACHE_KEY,
     ) as unknown;
     const current: Record<string, FixProofCheckovTargetsCacheEntry> =
-      raw && typeof raw === 'object' ? (raw as any) : {};
+      raw && typeof raw === 'object'
+        ? (raw as Record<string, FixProofCheckovTargetsCacheEntry>)
+        : {};
 
     const { pruned } = this.pruneFixProofCheckovCache(current);
     const existing = pruned[workspacePath];
@@ -624,22 +634,25 @@ export class ScanResultsProvider {
           mergedEvidence![checkId] = [];
         }
         for (const e of entries) {
-          const ruleName =
-            typeof (e as any)?.ruleName === 'string' ? (e as any).ruleName : '';
-          const source =
-            typeof (e as any)?.source === 'string' ? (e as any).source : '';
-          const key = typeof (e as any)?.key === 'string' ? (e as any).key : '';
-          if (!ruleName || !source || !key) {
+          const evidence = e as CheckovEvidence;
+          if (
+            typeof evidence.ruleName !== 'string' ||
+            (evidence.source !== 'annotation' &&
+              evidence.source !== 'usecase') ||
+            typeof evidence.key !== 'string'
+          ) {
             continue;
           }
           const arr = mergedEvidence![checkId]!;
           if (
             !arr.some(
               x =>
-                x.ruleName === ruleName && x.source === source && x.key === key,
+                x.ruleName === evidence.ruleName &&
+                x.source === evidence.source &&
+                x.key === evidence.key,
             )
           ) {
-            arr.push({ ruleName, source, key });
+            arr.push(evidence);
           }
         }
       }
@@ -684,7 +697,9 @@ export class ScanResultsProvider {
       ScanResultsProvider.FIXPROOF_CHECKOV_CACHE_KEY,
     ) as unknown;
     const current: Record<string, FixProofCheckovTargetsCacheEntry> =
-      raw && typeof raw === 'object' ? (raw as any) : {};
+      raw && typeof raw === 'object'
+        ? (raw as Record<string, FixProofCheckovTargetsCacheEntry>)
+        : {};
 
     const { pruned } = this.pruneFixProofCheckovCache(current);
     const existing = pruned[workspacePath];
@@ -720,7 +735,9 @@ export class ScanResultsProvider {
       ScanResultsProvider.FIXPROOF_CHECKOV_CACHE_KEY,
     ) as unknown;
     const current: Record<string, FixProofCheckovTargetsCacheEntry> =
-      raw && typeof raw === 'object' ? (raw as any) : {};
+      raw && typeof raw === 'object'
+        ? (raw as Record<string, FixProofCheckovTargetsCacheEntry>)
+        : {};
 
     const { pruned, changed } = this.pruneFixProofCheckovCache(current);
     if (changed) {
@@ -759,7 +776,9 @@ export class ScanResultsProvider {
     const existingGroupedFixes: Record<string, GroupedFixesRemediation> = {};
     let diagnosticTotal = 0;
 
-    const pickBestAnchorLine = (remediation: any): number => {
+    const pickBestAnchorLine = (
+      remediation: IndividualFixesRemediation,
+    ): number => {
       // Prefer anchoring to the resource header line for stability in the editor.
       const obs = Number(
         remediation?.codeObservation?.codeResourceInstance?.line,
@@ -806,13 +825,10 @@ export class ScanResultsProvider {
       > = [];
       const uniqueLines = new Set<number>();
 
-      const isOrl = (r: any): boolean =>
+      const isOrl = (r: IndividualFixesRemediation): boolean =>
         typeof r?.rule?.id === 'string' && r.rule.id.startsWith('orl-rule:');
 
-      if (
-        currentRemediation.length > 0 &&
-        isOrl(currentRemediation[0] as any)
-      ) {
+      if (currentRemediation.length > 0 && isOrl(currentRemediation[0])) {
         const prettifyShortName = (s: string): string => {
           const raw = (s || '').trim();
           if (!raw) {
@@ -830,8 +846,8 @@ export class ScanResultsProvider {
           string,
           { line: number; resourceHeader?: string }
         >();
-        for (const remediation of currentRemediation as any[]) {
-          const rule = remediation?.rule as any;
+        for (const remediation of currentRemediation) {
+          const rule = remediation.rule;
           const ruleNames = this.getRenderableOrlRuleNames(rule);
 
           // Pick a reasonable anchor line for diagnostics.
@@ -888,21 +904,20 @@ export class ScanResultsProvider {
           const message = meta.resourceHeader
             ? `${shortName}: ${meta.resourceHeader}`
             : shortName;
-          curDiag.push({
-            // Problems tab: keep it compact (resource + shortName)
+          const diagnostic = new OrlRuleFixGombocDiagnostic(
+            new vscode.Range(startPosition, endPosition),
             message,
-            ruleName,
-            filePath: filepath,
-            resourceHeader: meta.resourceHeader,
-            ruleShortName: shortName,
-            ruleDescription: description,
-            fixStrategy: metaHit?.fixStrategy,
-            fixTask: metaHit?.fixTask,
-            quickFixMessage: `Apply fix (${shortName})`,
-            range: new vscode.Range(startPosition, endPosition),
-            severity: vscode.DiagnosticSeverity.Error,
-            source: 'Gomboc',
-          } as any);
+            `Apply fix (${shortName})`,
+            { ruleName, filePath: filepath },
+            vscode.DiagnosticSeverity.Error,
+          );
+          diagnostic.source = 'Gomboc';
+          diagnostic.resourceHeader = meta.resourceHeader;
+          diagnostic.ruleShortName = shortName;
+          diagnostic.ruleDescription = description;
+          diagnostic.fixStrategy = metaHit?.fixStrategy;
+          diagnostic.fixTask = metaHit?.fixTask;
+          curDiag.push(diagnostic);
           orlIdx++;
         }
 
@@ -911,14 +926,15 @@ export class ScanResultsProvider {
           uniqueLines.size > 0 ? Math.min(...Array.from(uniqueLines)) : 1;
         const startPosition = new vscode.Position(firstLine - 1, 0);
         const endPosition = new vscode.Position(firstLine - 1, 999);
-        curDiag.push({
-          message: 'Apply all fixes',
-          groupedFixGombocResult: existingGroupedFixes[filepath],
-          quickFixMessage: 'Apply all fixes',
-          range: new vscode.Range(startPosition, endPosition),
-          severity: vscode.DiagnosticSeverity.Error,
-          source: 'Gomboc',
-        } as any);
+        const groupedDiagnostic = new GroupedFixGombocDiagnostic(
+          new vscode.Range(startPosition, endPosition),
+          'Apply all fixes',
+          'Apply all fixes',
+          existingGroupedFixes[filepath],
+          vscode.DiagnosticSeverity.Error,
+        );
+        groupedDiagnostic.source = 'Gomboc';
+        curDiag.push(groupedDiagnostic);
       } else {
         // API mode (or legacy): keep individual per-fix diagnostics + grouped apply-all.
         for (const remediation of currentRemediation) {
@@ -1034,7 +1050,7 @@ export class ScanResultsProvider {
       );
       const ruleNamesSet = new Set<string>();
       for (const r of remediations) {
-        const rule: any = r?.rule as any;
+        const rule = r?.rule;
         for (const ruleName of this.getRenderableOrlRuleNames(rule)) {
           ruleNamesSet.add(ruleName);
         }
@@ -1113,14 +1129,14 @@ export class ScanResultsProvider {
         const ruleIdentifiers = Array.from(
           new Set(
             (remediation.comments || [])
-              .map((c: any) => c?.rule?.id)
-              .filter((id: any): id is string => typeof id === 'string')
+              .map(c => c?.rule?.id)
+              .filter((id): id is string => typeof id === 'string')
               .filter(id => id.startsWith('orl-rule:')),
           ),
         );
         const ruleNamesSet = new Set<string>();
         for (const c of remediation.comments || []) {
-          const rule: any = (c as any)?.rule;
+          const rule = c?.rule;
           for (const ruleName of this.getRenderableOrlRuleNames(rule)) {
             ruleNamesSet.add(ruleName);
           }

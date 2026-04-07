@@ -35,8 +35,7 @@ variable "bucket_name" {
   type        = string
 }`;
 
-      // Access private method for testing
-      const result = (orlClient as any).parseOrlOutput(mockOutput);
+      const result = orlClient.parseOrlOutputForTests(mockOutput);
 
       expect(result).toEqual({
         '/workspace/main.tf':
@@ -56,7 +55,7 @@ variable "bucket_name" {
   type        = string
 }`;
 
-      const result = (orlClient as any).parseOrlOutput(mockOutput);
+      const result = orlClient.parseOrlOutputForTests(mockOutput);
 
       expect(result).toEqual({
         '/workspace/variables.tf':
@@ -65,32 +64,32 @@ variable "bucket_name" {
     });
 
     it('should handle empty output', () => {
-      const result = (orlClient as any).parseOrlOutput('');
+      const result = orlClient.parseOrlOutputForTests('');
       expect(result).toEqual({});
     });
   });
 
   describe('isIacFile', () => {
     it('should identify IaC files correctly', () => {
-      expect((orlClient as any).isIacFile('main.tf')).toBe(true);
-      expect((orlClient as any).isIacFile('template.yaml')).toBe(true);
-      expect((orlClient as any).isIacFile('config.yml')).toBe(true);
-      expect((orlClient as any).isIacFile('template.json')).toBe(true);
-      expect((orlClient as any).isIacFile('cloudformation.json')).toBe(true);
-      expect((orlClient as any).isIacFile('stack.json')).toBe(true);
+      expect(orlClient.isIacFileForTests('main.tf')).toBe(true);
+      expect(orlClient.isIacFileForTests('template.yaml')).toBe(true);
+      expect(orlClient.isIacFileForTests('config.yml')).toBe(true);
+      expect(orlClient.isIacFileForTests('template.json')).toBe(true);
+      expect(orlClient.isIacFileForTests('cloudformation.json')).toBe(true);
+      expect(orlClient.isIacFileForTests('stack.json')).toBe(true);
     });
 
     it('should identify npm package files as IaC', () => {
-      expect((orlClient as any).isIacFile('package.json')).toBe(true);
-      expect((orlClient as any).isIacFile('package-lock.json')).toBe(true);
+      expect(orlClient.isIacFileForTests('package.json')).toBe(true);
+      expect(orlClient.isIacFileForTests('package-lock.json')).toBe(true);
     });
 
     it('should reject non-IaC files', () => {
-      expect((orlClient as any).isIacFile('README.md')).toBe(false);
-      expect((orlClient as any).isIacFile('script.sh')).toBe(false);
-      expect((orlClient as any).isIacFile('data.json')).toBe(false);
-      expect((orlClient as any).isIacFile('config.json')).toBe(false);
-      expect((orlClient as any).isIacFile('tsconfig.json')).toBe(false);
+      expect(orlClient.isIacFileForTests('README.md')).toBe(false);
+      expect(orlClient.isIacFileForTests('script.sh')).toBe(false);
+      expect(orlClient.isIacFileForTests('data.json')).toBe(false);
+      expect(orlClient.isIacFileForTests('config.json')).toBe(false);
+      expect(orlClient.isIacFileForTests('tsconfig.json')).toBe(false);
     });
   });
 });
