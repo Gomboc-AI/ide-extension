@@ -134,14 +134,14 @@ async function scanWithOrl(
           : undefined);
       vsCodeIntegrationsService
         .sendError(
-        editorWorkspacePath || '',
-        undefined,
-        errorMessage,
-        400,
-        'Scan validation',
-      )
+          editorWorkspacePath || '',
+          undefined,
+          errorMessage,
+          400,
+          'Scan validation',
+        )
         .catch(() => {
-        // Error already logged in sendError
+          // Error already logged in sendError
         });
       return;
     }
@@ -229,15 +229,9 @@ async function scanWithOrl(
 
       // Report ORL execution error to integrations service (non-blocking)
       vsCodeIntegrationsService
-        .sendError(
-        workspacePath,
-        language,
-        errorMessage,
-        500,
-        'ORL execution',
-      )
+        .sendError(workspacePath, language, errorMessage, 500, 'ORL execution')
         .catch(() => {
-        // Error already logged in sendError
+          // Error already logged in sendError
         });
       return;
     }
@@ -306,14 +300,14 @@ async function scanWithOrl(
       // Report conversion error to integrations service (non-blocking)
       vsCodeIntegrationsService
         .sendError(
-        workspacePath,
-        language,
-        errorMessage,
-        500,
-        'Result conversion',
-      )
+          workspacePath,
+          language,
+          errorMessage,
+          500,
+          'Result conversion',
+        )
         .catch(() => {
-        // Error already logged in sendError
+          // Error already logged in sendError
         });
       return;
     }
@@ -356,14 +350,14 @@ async function scanWithOrl(
     if (errorWorkspacePath) {
       vsCodeIntegrationsService
         .sendError(
-        errorWorkspacePath,
-        language,
-        errorMessage,
-        500,
-        'Unexpected error',
-      )
+          errorWorkspacePath,
+          language,
+          errorMessage,
+          500,
+          'Unexpected error',
+        )
         .catch(() => {
-        // Error already logged in sendError
+          // Error already logged in sendError
         });
     }
   }
@@ -379,9 +373,8 @@ async function pickRepresentativeFileInDirectory(args: {
     return undefined;
   }
 
-  const entries: [string, vscode.FileType][] = await vscode.workspace.fs.readDirectory(
-    vscode.Uri.file(workspacePath),
-  );
+  const entries: [string, vscode.FileType][] =
+    await vscode.workspace.fs.readDirectory(vscode.Uri.file(workspacePath));
   const files = entries
     .filter(([_, t]) => t === vscode.FileType.File)
     .map(([name]) => name);

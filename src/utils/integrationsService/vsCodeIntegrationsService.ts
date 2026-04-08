@@ -1,5 +1,9 @@
 import * as vscode from 'vscode';
-import { DEFAULTS, getBooleanSetting, getStringSetting } from '../configDefaults';
+import {
+  DEFAULTS,
+  getBooleanSetting,
+  getStringSetting,
+} from '../configDefaults';
 import { IntegrationsService } from './IntegrationsService';
 import type {
   IntegrationsEventStore,

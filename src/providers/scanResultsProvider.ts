@@ -1110,12 +1110,14 @@ export class ScanResultsProvider {
         workspacePath &&
         (ruleIdentifiers.length > 0 || ruleNamesSet.size > 0)
       ) {
-        vsCodeIntegrationsService.queueOrlFixAppliedEvent(workspacePath, {
-          fixKind: 'individual',
-          ruleNames: Array.from(ruleNamesSet),
-          ruleIdentifiers,
-          filePaths: files,
-        }).catch(() => {});
+        vsCodeIntegrationsService
+          .queueOrlFixAppliedEvent(workspacePath, {
+            fixKind: 'individual',
+            ruleNames: Array.from(ruleNamesSet),
+            ruleIdentifiers,
+            filePaths: files,
+          })
+          .catch(() => {});
       }
     }
 
@@ -1186,12 +1188,14 @@ export class ScanResultsProvider {
         }
         const workspacePath = path.dirname(remediation.path);
         if (ruleIdentifiers.length > 0 || ruleNamesSet.size > 0) {
-          vsCodeIntegrationsService.queueOrlFixAppliedEvent(workspacePath, {
-            fixKind: 'grouped',
-            ruleNames: Array.from(ruleNamesSet),
-            ruleIdentifiers,
-            filePaths: [remediation.path],
-          }).catch(() => {});
+          vsCodeIntegrationsService
+            .queueOrlFixAppliedEvent(workspacePath, {
+              fixKind: 'grouped',
+              ruleNames: Array.from(ruleNamesSet),
+              ruleIdentifiers,
+              filePaths: [remediation.path],
+            })
+            .catch(() => {});
         }
       } catch {
         // ignore analytics errors

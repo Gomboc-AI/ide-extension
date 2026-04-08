@@ -26,7 +26,9 @@ export class IntegrationsService {
   private static readonly MAX_QUEUE_SIZE = 200;
   private static readonly MAX_ATTEMPTS = 10;
 
-  constructor(config: IntegrationsServiceConfig<OrlFixAppliedEventQueueItemV1>) {
+  constructor(
+    config: IntegrationsServiceConfig<OrlFixAppliedEventQueueItemV1>,
+  ) {
     this.integrationsConfigProvider = config.getIntegrationsConfig;
     this.eventStore = config.eventStore;
   }
@@ -54,9 +56,12 @@ export class IntegrationsService {
    */
   private async getGitBranch(workspacePath: string): Promise<string | null> {
     try {
-      const { stdout } = await this.execAsync('git rev-parse --abbrev-ref HEAD', {
-        cwd: workspacePath,
-      });
+      const { stdout } = await this.execAsync(
+        'git rev-parse --abbrev-ref HEAD',
+        {
+          cwd: workspacePath,
+        },
+      );
       return stdout.trim() || null;
     } catch (error) {
       // Silently handle errors - not in a git repo or git command failed
@@ -203,7 +208,9 @@ export class IntegrationsService {
         sent[item.event.idempotencyKey] = Date.now();
         sentCount++;
       } catch (err) {
-        const status = axios.isAxiosError(err) ? err.response?.status : undefined;
+        const status = axios.isAxiosError(err)
+          ? err.response?.status
+          : undefined;
 
         // If endpoint doesn't exist or request is invalid, drop to avoid infinite growth.
         if (status && status >= 400 && status < 500 && status !== 429) {
@@ -406,7 +413,10 @@ export class IntegrationsService {
       return filtered;
     };
 
-    const toNumber = (val: string | number | undefined, fallback = 0): number => {
+    const toNumber = (
+      val: string | number | undefined,
+      fallback = 0,
+    ): number => {
       if (typeof val === 'number' && Number.isFinite(val)) {
         return val;
       }
@@ -471,7 +481,8 @@ export class IntegrationsService {
           metadata.priority !== undefined
             ? toOptionalNumber(metadata.priority)
             : undefined,
-        skip: metadata.skip !== undefined ? toBoolean(metadata.skip) : undefined,
+        skip:
+          metadata.skip !== undefined ? toBoolean(metadata.skip) : undefined,
         required_contexts: ensureArray(metadata.required_contexts as string[]),
         annotations: filteredTopAnnotations,
       },
@@ -546,7 +557,8 @@ export class IntegrationsService {
     errorContext?: string,
   ): Promise<void> {
     try {
-      const { integrationsServiceUrl, apiKey } = this.integrationsConfigProvider();
+      const { integrationsServiceUrl, apiKey } =
+        this.integrationsConfigProvider();
 
       // Skip if integrations service URL is not configured
       if (!integrationsServiceUrl) {
@@ -587,13 +599,17 @@ export class IntegrationsService {
       });
 
       // Send request (non-blocking, errors are caught and logged)
-      await axios.post(`${integrationsServiceUrl}/reporting/orl-external`, requestBody, {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
+      await axios.post(
+        `${integrationsServiceUrl}/reporting/orl-external`,
+        requestBody,
+        {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 10000, // 10 second timeout
         },
-        timeout: 10000, // 10 second timeout
-      });
+      );
 
       logger.info('Successfully sent error to integrations service');
     } catch (error) {
@@ -621,7 +637,8 @@ export class IntegrationsService {
     language: string,
   ): Promise<void> {
     try {
-      const { integrationsServiceUrl, apiKey } = this.integrationsConfigProvider();
+      const { integrationsServiceUrl, apiKey } =
+        this.integrationsConfigProvider();
 
       // Skip if integrations service URL is not configured
       if (!integrationsServiceUrl) {
@@ -675,13 +692,17 @@ export class IntegrationsService {
       });
 
       // Send request (non-blocking, errors are caught and logged)
-      await axios.post(`${integrationsServiceUrl}/reporting/orl-external`, requestBody, {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
+      await axios.post(
+        `${integrationsServiceUrl}/reporting/orl-external`,
+        requestBody,
+        {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 10000, // 10 second timeout
         },
-        timeout: 10000, // 10 second timeout
-      });
+      );
 
       logger.info('Successfully sent ORL report to integrations service');
     } catch (error) {
