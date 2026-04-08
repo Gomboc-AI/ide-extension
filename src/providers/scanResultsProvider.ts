@@ -192,6 +192,42 @@ export class ScanResultsProvider {
     return this.groupedRemediations.length;
   }
 
+  /**
+   * Find the Terraform `resource` block that contains (or is nearest above) a target line.
+   *
+   * This is used by single-rule apply to scope edits to one resource block instead of
+   * replacing the entire file when ORL returns full-file content.
+   */
+  private findTerraformResourceBlockRange(
+    text: string,
+    line1Based: number,
+  ): { startLine: number; endLine: number } | undefined {
+    const lines = text.split('\n');
+    const idx = Math.max(0, Math.min(lines.length - 1, line1Based - 1));
+
+    let start = -1;
+    const lookback = 1000;
+    for (let i = idx; i >= 0 && idx - i <= lookback; i--) {
+      if (lines[i].match(/^\s*resource\s+"[^"]+"\s+"[^"]+"\s*\{/)) {
+        start = i;
+        break;
+      }
+    }
+    if (start < 0) {
+      return undefined;
+    }
+
+    let depth = 0;
+    for (let j = start; j < lines.length; j++) {
+      depth += (lines[j].match(/{/g) || []).length;
+      depth -= (lines[j].match(/}/g) || []).length;
+      if (depth === 0 && j > start) {
+        return { startLine: start + 1, endLine: j + 1 };
+      }
+    }
+    return undefined;
+  }
+
   private extractCheckovIdsFromAnnotations(
     annotations: Record<string, unknown>,
   ): string[] {
@@ -844,7 +880,7 @@ export class ScanResultsProvider {
         // ORL mode: show per-rule diagnostics (robust apply = rerun ORL with single rule).
         const ruleToMeta = new Map<
           string,
-          { line: number; resourceHeader?: string }
+          { ruleName: string; line: number; resourceHeader?: string }
         >();
         for (const remediation of currentRemediation) {
           const rule = remediation.rule;
@@ -863,15 +899,22 @@ export class ScanResultsProvider {
               : undefined;
 
           for (const rn of ruleNames) {
-            if (!ruleToMeta.has(rn)) {
-              ruleToMeta.set(rn, { line, resourceHeader });
+            const baseRuleName = this.stripOrlInstanceSuffix(rn);
+            const ruleLineKey = `${baseRuleName}::${line}`;
+            if (!ruleToMeta.has(ruleLineKey)) {
+              ruleToMeta.set(ruleLineKey, {
+                ruleName: rn,
+                line,
+                resourceHeader,
+              });
             }
           }
         }
 
         // Emit one diagnostic per rule.
         let orlIdx = 0;
-        for (const [ruleName, meta] of ruleToMeta.entries()) {
+        for (const [, meta] of ruleToMeta.entries()) {
+          const ruleName = meta.ruleName;
           const line = meta.line;
           const startPosition = new vscode.Position(line - 1, 0);
           // Make each ORL diagnostic range slightly unique so selecting an item
@@ -1169,11 +1212,17 @@ export class ScanResultsProvider {
   }
 
   async applyOrlRuleRemediation(
-    args: Array<{ ruleName: string; filePath: string }>,
+    args: Array<{
+      ruleName: string;
+      filePath: string;
+      line?: number;
+      resourceHeader?: string;
+    }>,
   ) {
     const first = Array.isArray(args) ? args[0] : undefined;
     const ruleName = first?.ruleName;
     const filePath = first?.filePath;
+    const line = first?.line;
     if (!ruleName || !filePath) {
       vscode.window.showErrorMessage(
         'Unable to apply rule fix: missing rule or file path',
@@ -1243,13 +1292,49 @@ export class ScanResultsProvider {
         // Skip no-op replacements to avoid confusing "applied but nothing changed" behavior.
         continue;
       }
-      changedAny = true;
-      updatedFiles.add(absPath);
-      const fullRange = new vscode.Range(
-        doc.positionAt(0),
-        doc.positionAt(doc.getText().length),
-      );
-      edit.replace(doc.uri, fullRange, content);
+      // When a diagnostic line is available, prefer replacing only that Terraform
+      // resource block. ORL returns full-file content for single-rule runs, so this
+      // keeps "Apply fix" scoped to the selected resource instead of applying all
+      // same-rule instances in the file.
+      let appliedScopedEdit = false;
+      if (typeof line === 'number' && Number.isFinite(line) && line > 0) {
+        const beforeBlock = this.findTerraformResourceBlockRange(before, line);
+        const afterBlock = this.findTerraformResourceBlockRange(content, line);
+
+        if (beforeBlock && afterBlock) {
+          const beforeLines = before.split('\n');
+          const afterLines = content.split('\n');
+          const replacement = afterLines
+            .slice(afterBlock.startLine - 1, afterBlock.endLine)
+            .join('\n');
+          const existing = beforeLines
+            .slice(beforeBlock.startLine - 1, beforeBlock.endLine)
+            .join('\n');
+          if (replacement !== existing) {
+            changedAny = true;
+            updatedFiles.add(absPath);
+            const scopedRange = new vscode.Range(
+              new vscode.Position(beforeBlock.startLine - 1, 0),
+              new vscode.Position(
+                beforeBlock.endLine - 1,
+                beforeLines[beforeBlock.endLine - 1]?.length || 0,
+              ),
+            );
+            edit.replace(doc.uri, scopedRange, replacement);
+            appliedScopedEdit = true;
+          }
+        }
+      }
+
+      if (!appliedScopedEdit) {
+        changedAny = true;
+        updatedFiles.add(absPath);
+        const fullRange = new vscode.Range(
+          doc.positionAt(0),
+          doc.positionAt(doc.getText().length),
+        );
+        edit.replace(doc.uri, fullRange, content);
+      }
     }
 
     if (!changedAny) {
