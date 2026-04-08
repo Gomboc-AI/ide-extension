@@ -114,7 +114,7 @@ The webview is driven by the issues snapshot (rule name, short name, description
 
 ### Where it’s implemented
 
-- `src/utils/integrationsService.ts`
+- `src/utils/integrationsService/IntegrationsService.ts`
 
 ### Required configuration
 
@@ -128,9 +128,9 @@ Integrations submissions are skipped unless BOTH are configured:
 In `src/commands/scanFile.ts` (ORL path):
 
 - **Report submission**: after ORL succeeds AND we successfully convert results, we call:
-  - `sendOrlReportToIntegrations(result, workspacePath, language)` (fire-and-forget)
+  - `integrationsService.sendOrlReport(result, workspacePath, language)` (fire-and-forget)
 - **Error submission**: on validation failures, ORL execution failures, or conversion failures:
-  - `sendErrorToIntegrations(...)` (fire-and-forget)
+  - `integrationsService.sendError(...)` (fire-and-forget)
 
 Legacy (non-ORL) scans do not use this `orl-external` reporting path.
 
@@ -172,7 +172,7 @@ Other common causes:
 
 When the user applies a fix, we can also send a small “fix applied” event stream:
 
-- `src/utils/integrationsService.ts` (`queueOrlFixAppliedEvent`, `flushOrlFixAppliedEvents`)
+- `src/utils/integrationsService/IntegrationsService.ts` (`queueOrlFixAppliedEvent`, `flushOrlFixAppliedEvents`)
 
 Controlled by settings:
 

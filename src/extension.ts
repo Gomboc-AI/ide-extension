@@ -14,7 +14,10 @@ import { clearOrlRulesCache } from './orl/orlClient';
 import { OrlHoverProvider } from './providers/orlHoverProvider';
 import { getInfrastructureToolFromFileUri } from './infrastructureTool';
 import { DiagnosticCollectionManager } from './diagnosticCollectionManager';
-import { flushOrlFixAppliedEvents } from './utils/integrationsService';
+import {
+  initializeIntegrationsService,
+  vsCodeIntegrationsService,
+} from './utils/integrationsService';
 import { initScanStatus } from './utils/scanStatus';
 
 const previousContentMap = new Map<string, string>();
@@ -29,6 +32,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // ignore
   }
   initScanStatus(context);
+  initializeIntegrationsService(context);
   // diagnostics initialization
   const diagnosticCollectionManager = DiagnosticCollectionManager.get();
   const diagnosticCollection =
@@ -42,7 +46,7 @@ export async function activate(context: vscode.ExtensionContext) {
   scanResults.registerApplyRemediation();
 
   // Best-effort: flush any queued "fix applied" analytics events from prior sessions.
-  flushOrlFixAppliedEvents(context).catch(() => {});
+  vsCodeIntegrationsService.flushOrlFixAppliedEvents().catch(() => {});
 
   const commands = [
     {

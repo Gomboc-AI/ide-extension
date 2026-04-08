@@ -14,7 +14,7 @@ import {
 } from '../schemas/scanRemediation';
 import { DiagnosticCollectionManager } from '../diagnosticCollectionManager';
 import { getInfrastructureToolFromFileUri } from '../infrastructureTool';
-import { queueOrlFixAppliedEvent } from '../utils/integrationsService';
+import { vsCodeIntegrationsService } from '../utils/integrationsService';
 import { createOrlClient } from '../orl/orlClient';
 import { extractRenderableOrlRuleNames } from '../orl/orlRuleNameResolver';
 import { detectLanguageFromFile } from '../utils/scanValidator';
@@ -1110,12 +1110,14 @@ export class ScanResultsProvider {
         workspacePath &&
         (ruleIdentifiers.length > 0 || ruleNamesSet.size > 0)
       ) {
-        queueOrlFixAppliedEvent(this.context, workspacePath, {
-          fixKind: 'individual',
-          ruleNames: Array.from(ruleNamesSet),
-          ruleIdentifiers,
-          filePaths: files,
-        }).catch(() => {});
+        vsCodeIntegrationsService
+          .queueOrlFixAppliedEvent(workspacePath, {
+            fixKind: 'individual',
+            ruleNames: Array.from(ruleNamesSet),
+            ruleIdentifiers,
+            filePaths: files,
+          })
+          .catch(() => {});
       }
     }
 
@@ -1186,12 +1188,14 @@ export class ScanResultsProvider {
         }
         const workspacePath = path.dirname(remediation.path);
         if (ruleIdentifiers.length > 0 || ruleNamesSet.size > 0) {
-          queueOrlFixAppliedEvent(this.context, workspacePath, {
-            fixKind: 'grouped',
-            ruleNames: Array.from(ruleNamesSet),
-            ruleIdentifiers,
-            filePaths: [remediation.path],
-          }).catch(() => {});
+          vsCodeIntegrationsService
+            .queueOrlFixAppliedEvent(workspacePath, {
+              fixKind: 'grouped',
+              ruleNames: Array.from(ruleNamesSet),
+              ruleIdentifiers,
+              filePaths: [remediation.path],
+            })
+            .catch(() => {});
         }
       } catch {
         // ignore analytics errors
@@ -1364,7 +1368,7 @@ export class ScanResultsProvider {
 
     // Emit analytics (best-effort). Treat as "individual" since it's a single rule apply.
     try {
-      await queueOrlFixAppliedEvent(this.context, workspacePath, {
+      await vsCodeIntegrationsService.queueOrlFixAppliedEvent(workspacePath, {
         fixKind: 'individual',
         ruleNames: [ruleName],
         ruleIdentifiers: [`orl-rule:${ruleName}`],

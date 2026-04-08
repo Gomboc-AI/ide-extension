@@ -10,10 +10,7 @@ import { PathConverter } from '../utils/pathConverter';
 import { FileDiffAnalyzer } from '../utils/fileDiffAnalyzer';
 import { OrlResultConverter } from '../orl/orlResultConverter';
 import { ScanValidator } from '../utils/scanValidator';
-import {
-  sendOrlReportToIntegrations,
-  sendErrorToIntegrations,
-} from '../utils/integrationsService';
+import { vsCodeIntegrationsService } from '../utils/integrationsService';
 import { setScanStatus } from '../utils/scanStatus';
 import { createProfiler } from '../utils/profiler';
 import { parseOrlReport } from '../utils/orlReportParser';
@@ -135,15 +132,17 @@ async function scanWithOrl(
         (vscode.window.activeTextEditor?.document?.uri?.fsPath
           ? path.dirname(vscode.window.activeTextEditor.document.uri.fsPath)
           : undefined);
-      sendErrorToIntegrations(
-        editorWorkspacePath || '',
-        undefined,
-        errorMessage,
-        400,
-        'Scan validation',
-      ).catch(() => {
-        // Error already logged in sendErrorToIntegrations
-      });
+      vsCodeIntegrationsService
+        .sendError(
+          editorWorkspacePath || '',
+          undefined,
+          errorMessage,
+          400,
+          'Scan validation',
+        )
+        .catch(() => {
+          // Error already logged in sendError
+        });
       return;
     }
 
@@ -229,15 +228,11 @@ async function scanWithOrl(
       vscode.window.showErrorMessage(`ORL remediation failed: ${errorMessage}`);
 
       // Report ORL execution error to integrations service (non-blocking)
-      sendErrorToIntegrations(
-        workspacePath,
-        language,
-        errorMessage,
-        500,
-        'ORL execution',
-      ).catch(() => {
-        // Error already logged in sendErrorToIntegrations
-      });
+      vsCodeIntegrationsService
+        .sendError(workspacePath, language, errorMessage, 500, 'ORL execution')
+        .catch(() => {
+          // Error already logged in sendError
+        });
       return;
     }
 
@@ -303,15 +298,17 @@ async function scanWithOrl(
       );
 
       // Report conversion error to integrations service (non-blocking)
-      sendErrorToIntegrations(
-        workspacePath,
-        language,
-        errorMessage,
-        500,
-        'Result conversion',
-      ).catch(() => {
-        // Error already logged in sendErrorToIntegrations
-      });
+      vsCodeIntegrationsService
+        .sendError(
+          workspacePath,
+          language,
+          errorMessage,
+          500,
+          'Result conversion',
+        )
+        .catch(() => {
+          // Error already logged in sendError
+        });
       return;
     }
 
@@ -327,13 +324,13 @@ async function scanWithOrl(
 
     // Send ORL report to integrations service (non-blocking)
     // This runs asynchronously and won't break the remediation workflow if it fails
-    sendOrlReportToIntegrations(result, workspacePath, language).catch(
-      error => {
-        // Error is already logged in sendOrlReportToIntegrations
+    vsCodeIntegrationsService
+      .sendOrlReport(result, workspacePath, language)
+      .catch(error => {
+        // Error is already logged in sendOrlReport
         // Just ensure it doesn't propagate
         logger.debug('ORL report submission error handled', { error });
-      },
-    );
+      });
     prof.end({ success: true });
   } catch (error) {
     // General catch-all for unexpected errors (500)
@@ -351,15 +348,17 @@ async function scanWithOrl(
         : undefined);
 
     if (errorWorkspacePath) {
-      sendErrorToIntegrations(
-        errorWorkspacePath,
-        language,
-        errorMessage,
-        500,
-        'Unexpected error',
-      ).catch(() => {
-        // Error already logged in sendErrorToIntegrations
-      });
+      vsCodeIntegrationsService
+        .sendError(
+          errorWorkspacePath,
+          language,
+          errorMessage,
+          500,
+          'Unexpected error',
+        )
+        .catch(() => {
+          // Error already logged in sendError
+        });
     }
   }
 }
@@ -374,9 +373,8 @@ async function pickRepresentativeFileInDirectory(args: {
     return undefined;
   }
 
-  const entries = await vscode.workspace.fs.readDirectory(
-    vscode.Uri.file(workspacePath),
-  );
+  const entries: [string, vscode.FileType][] =
+    await vscode.workspace.fs.readDirectory(vscode.Uri.file(workspacePath));
   const files = entries
     .filter(([_, t]) => t === vscode.FileType.File)
     .map(([name]) => name);
