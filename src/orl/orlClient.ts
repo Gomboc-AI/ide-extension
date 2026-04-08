@@ -16,6 +16,8 @@ import {
 } from '../utils/configDefaults';
 import { createProfiler } from '../utils/profiler';
 import { ChannelResolver } from '../utils/channelResolver';
+import { IStorage } from '../generics/types';
+import { FileSystemHandler } from '../generics/fileSystemHandler';
 
 type SpawnResult = {
   stdout: string;
@@ -211,8 +213,11 @@ export class OrlClient {
     | { sourceRulesDir: string; index: Map<string, string[]> }
     | undefined;
 
+  private storageClient: IStorage;
+
   constructor(config: OrlConfig) {
     this.config = config;
+    this.storageClient = new FileSystemHandler();
   }
 
   private getRulesCacheDir(): string {
