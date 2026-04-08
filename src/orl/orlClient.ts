@@ -172,6 +172,15 @@ export interface OrlConfig {
    * Default OFF to avoid accidental production usage.
    */
   localDevRulesEnabled?: boolean;
+  /**
+   * When enabled, ORL remediation uses only `customRulesPath` and skips rules service pulls.
+   */
+  customRulesOnly?: boolean;
+  /**
+   * Custom ORL rules folder path used when `customRulesOnly` is enabled.
+   * Supports `${workspaceFolder}`.
+   */
+  customRulesPath?: string;
 }
 
 // Pinned ORL container image. Intentionally not configurable via VS Code settings
@@ -733,27 +742,41 @@ export class OrlClient {
       prof.mark('mkdirTemp');
 
       try {
-        // Resolve local dev rules early so we can tolerate a remote pull failure
-        const injectedDevRulesHostDir =
-          await this.tryResolveLocalDevRulesHostDir(workspacePath);
+        const customRulesHostDir =
+          await this.resolveCustomRulesOnlyHostDir(workspacePath);
+        const customRulesOnlyEnabled = Boolean(customRulesHostDir);
+        // Resolve local dev rules early so we can tolerate a remote pull failure.
+        // In custom-rules-only mode, local dev rules injection is intentionally disabled.
+        const injectedDevRulesHostDir = customRulesOnlyEnabled
+          ? undefined
+          : await this.tryResolveLocalDevRulesHostDir(workspacePath);
 
         // Step 1: Ensure rules are available (use a persistent cache to avoid repeated pulls)
         let cached:
           | { rulesDir: string; usedCache: boolean; pulled: boolean }
           | undefined;
-        try {
-          cached = await this.ensureRulesCached();
-        } catch (pullError) {
-          if (injectedDevRulesHostDir) {
-            logger.warn(
-              'Remote rules pull failed but local dev rules are available; continuing with dev rules only',
-              { pullError },
-            );
-          } else {
-            throw pullError;
+        let mountedRulesDir = customRulesHostDir;
+        if (!customRulesOnlyEnabled) {
+          try {
+            cached = await this.ensureRulesCached();
+            mountedRulesDir = cached.rulesDir;
+          } catch (pullError) {
+            if (injectedDevRulesHostDir) {
+              logger.warn(
+                'Remote rules pull failed but local dev rules are available; continuing with dev rules only',
+                { pullError },
+              );
+            } else {
+              throw pullError;
+            }
           }
+        } else {
+          logger.info('Using custom-rules-only mode for ORL remediation', {
+            customRulesHostDir,
+          });
         }
         prof.mark('pullRulesUsingOrl', {
+          customRulesOnly: customRulesOnlyEnabled,
           usedCache: cached?.usedCache,
           pulled: cached?.pulled,
         });
@@ -789,7 +812,7 @@ export class OrlClient {
               const dockerArgsDiscovery = this.buildDockerArgs({
                 workspacePath: discoveryDir,
                 language,
-                mountedRulesDir: cached?.rulesDir,
+                mountedRulesDir,
                 disableHooks: true,
                 devRulesHostDir: injectedDevRulesHostDir,
               });
@@ -874,7 +897,7 @@ export class OrlClient {
               await fs.promises.mkdir(rulesDir, { recursive: true });
 
               const copied = await this.copyRulesSubsetFromCache({
-                sourceRulesDir: cached?.rulesDir ?? '',
+                sourceRulesDir: mountedRulesDir ?? '',
                 destRulesDir: rulesDir,
                 ruleNames: changedRuleNames,
               });
@@ -1040,7 +1063,7 @@ export class OrlClient {
           workspacePath: tempDir,
           language,
           rulesDir,
-          mountedRulesDir: cached?.rulesDir,
+          mountedRulesDir,
           devRulesHostDir: injectedDevRulesHostDir,
         });
         logger.info('Executing ORL via Docker', {
@@ -1451,6 +1474,77 @@ export class OrlClient {
       }
     }
     return undefined;
+  }
+
+  private resolveWorkspaceFolderPath(
+    workspacePath: string,
+  ): string | undefined {
+    const folders = vscode.workspace.workspaceFolders ?? [];
+    if (!folders.length) {
+      return undefined;
+    }
+    const normalizedWorkspacePath = path.resolve(workspacePath);
+    const containing = folders.find(folder => {
+      const folderPath = path.resolve(folder.uri.fsPath);
+      return (
+        normalizedWorkspacePath === folderPath ||
+        normalizedWorkspacePath.startsWith(`${folderPath}${path.sep}`)
+      );
+    });
+    if (containing) {
+      return containing.uri.fsPath;
+    }
+    return folders[0]?.uri.fsPath;
+  }
+
+  private async resolveCustomRulesOnlyHostDir(
+    workspacePath: string,
+  ): Promise<string | undefined> {
+    if (!this.config.customRulesOnly) {
+      return undefined;
+    }
+
+    const configured = (this.config.customRulesPath || '').trim();
+    if (!configured) {
+      throw new Error(
+        'ORL custom-rules-only mode is enabled, but no custom rules folder path is configured.',
+      );
+    }
+
+    const workspaceFolderPath = this.resolveWorkspaceFolderPath(workspacePath);
+    if (configured.includes('${workspaceFolder}') && !workspaceFolderPath) {
+      throw new Error(
+        'ORL custom-rules-only mode requires a workspace folder to resolve ${workspaceFolder} in the custom rules path.',
+      );
+    }
+
+    const expanded = workspaceFolderPath
+      ? configured.replace(/\$\{workspaceFolder\}/g, workspaceFolderPath)
+      : configured;
+    const resolvedPath = path.resolve(expanded);
+
+    let stat: fs.Stats;
+    try {
+      stat = await fs.promises.stat(resolvedPath);
+    } catch {
+      throw new Error(
+        `No custom rules folder found at "${resolvedPath}". Update gomboc-vscode-extension.orlCustomRulesPath.`,
+      );
+    }
+    if (!stat.isDirectory()) {
+      throw new Error(
+        `Custom rules path "${resolvedPath}" is not a directory. Update gomboc-vscode-extension.orlCustomRulesPath.`,
+      );
+    }
+
+    const hasRules = await this.hasAnyRulesInDir(resolvedPath);
+    if (!hasRules) {
+      throw new Error(
+        `No ORL rules were found in custom rules folder "${resolvedPath}".`,
+      );
+    }
+
+    return resolvedPath;
   }
 
   private extractChangedRuleNamesFromReport(report?: string): string[] {
@@ -2033,44 +2127,76 @@ export class OrlClient {
           ? `(or (eq $.name "${exact}") (eq $.name "${base}"))`
           : `(eq $.name "${exact}")`;
 
-      const injectedDevRulesHostDir = await this.tryResolveLocalDevRulesHostDir(
-        devRulesSearchPath || workspacePath,
-      );
+      const customRulesHostDir =
+        await this.resolveCustomRulesOnlyHostDir(workspacePath);
+      const customRulesOnlyEnabled = Boolean(customRulesHostDir);
+      const injectedDevRulesHostDir = customRulesOnlyEnabled
+        ? undefined
+        : await this.tryResolveLocalDevRulesHostDir(
+            devRulesSearchPath || workspacePath,
+          );
 
       let pulledSingleRule = false;
-      try {
-        await this.pullRulesUsingOrl(rulesDir, { searchQuery: query });
-        pulledSingleRule = await this.hasAnyRulesInDir(rulesDir);
-        if (!pulledSingleRule) {
-          logger.warn(
-            'Single-rule rules pull via --search returned no rules; falling back to channel pull',
-            { ruleName, baseRuleName },
-          );
-          await this.pullRulesUsingOrl(rulesDir);
+      if (customRulesOnlyEnabled) {
+        const copied = await this.copyRulesSubsetFromCache({
+          sourceRulesDir: customRulesHostDir ?? '',
+          destRulesDir: rulesDir,
+          ruleNames: [ruleName],
+        });
+        pulledSingleRule = copied.copiedFiles > 0;
+        if (copied.missingRules.length > 0 || copied.copiedFiles === 0) {
+          return {
+            success: false,
+            modifiedFiles: {},
+            exitCode: 1,
+            error: `Rule "${ruleName}" was not found in custom rules folder "${customRulesHostDir}".`,
+          };
         }
-      } catch (e) {
-        if (injectedDevRulesHostDir) {
-          logger.warn(
-            'Single-rule rules pull failed but local dev rules are available; continuing with dev rules only',
-            {
-              ruleName,
-              baseRuleName,
-              error: e instanceof Error ? e.message : String(e),
-            },
-          );
-        } else {
-          logger.warn(
-            'Single-rule rules pull via --search failed; falling back to channel pull',
-            {
-              ruleName,
-              baseRuleName,
-              error: e instanceof Error ? e.message : String(e),
-            },
-          );
-          await this.pullRulesUsingOrl(rulesDir);
+      } else {
+        try {
+          await this.pullRulesUsingOrl(rulesDir, { searchQuery: query });
+          pulledSingleRule = await this.hasAnyRulesInDir(rulesDir);
+          if (!pulledSingleRule) {
+            logger.warn(
+              'Single-rule rules pull via --search returned no rules; falling back to channel pull',
+              { ruleName, baseRuleName },
+            );
+            await this.pullRulesUsingOrl(rulesDir);
+          }
+        } catch (e) {
+          if (injectedDevRulesHostDir) {
+            logger.warn(
+              'Single-rule rules pull failed but local dev rules are available; continuing with dev rules only',
+              {
+                ruleName,
+                baseRuleName,
+                error: e instanceof Error ? e.message : String(e),
+              },
+            );
+          } else {
+            logger.warn(
+              'Single-rule rules pull via --search failed; falling back to channel pull',
+              {
+                ruleName,
+                baseRuleName,
+                error: e instanceof Error ? e.message : String(e),
+              },
+            );
+            await this.pullRulesUsingOrl(rulesDir);
+          }
         }
       }
-      prof.mark('pullRulesUsingOrl', { pulledSingleRule });
+      prof.mark('pullRulesUsingOrl', {
+        customRulesOnly: customRulesOnlyEnabled,
+        pulledSingleRule,
+      });
+
+      if (customRulesOnlyEnabled) {
+        logger.info('Using custom-rules-only mode for ORL single-rule fix', {
+          ruleName,
+          customRulesHostDir,
+        });
+      }
 
       // Execute ORL remediation with pulled rules.
       const dockerArgs = this.buildDockerArgs({
@@ -2265,6 +2391,16 @@ export async function createOrlClient(args: {
       config,
       'orlTwoPassEnabled',
       DEFAULTS.orlTwoPassEnabled,
+    ),
+    customRulesOnly: getBooleanSetting(
+      config,
+      'orlCustomRulesOnly',
+      DEFAULTS.orlCustomRulesOnly,
+    ),
+    customRulesPath: getStringSetting(
+      config,
+      'orlCustomRulesPath',
+      DEFAULTS.orlCustomRulesPath,
     ),
     localDevRulesEnabled: getBooleanSetting(
       config,
