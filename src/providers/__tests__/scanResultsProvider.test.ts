@@ -10,7 +10,9 @@ jest.mock('../../utils/scanValidator', () => ({
   detectLanguageFromFile: jest.fn(() => 'terraform'),
 }));
 jest.mock('../../utils/integrationsService', () => ({
-  queueOrlFixAppliedEvent: jest.fn().mockResolvedValue(undefined),
+  vsCodeIntegrationsService: {
+    queueOrlFixAppliedEvent: jest.fn().mockResolvedValue(undefined),
+  },
 }));
 
 import { createOrlClient } from '../../orl/orlClient';
