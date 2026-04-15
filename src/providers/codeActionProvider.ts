@@ -31,8 +31,20 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
     // multiple quick-fix actions for overlapping diagnostics on the same line.
     const exactMatches = diagnostics.filter(d => d.range.isEqual(range));
     const scoped = exactMatches.length > 0 ? exactMatches : diagnostics;
+    // Always keep grouped apply-all diagnostics available, even when exact-match scoping
+    // narrows to a single ORL diagnostic from the Problems panel.
+    const docDiagnostics = vscode.languages.getDiagnostics(document.uri) || [];
+    const groupedDiagnostics = docDiagnostics.filter(d =>
+      this._isGombocGroupedFixDiagnostic(d),
+    );
+    const scopedWithGrouped = [...scoped];
+    for (const grouped of groupedDiagnostics) {
+      if (!scopedWithGrouped.includes(grouped)) {
+        scopedWithGrouped.push(grouped);
+      }
+    }
 
-    return scoped.reduce((acc, cur) => {
+    return scopedWithGrouped.reduce((acc, cur) => {
       if (this._isGombocGroupedFixDiagnostic(cur)) {
         return [...acc, this._createGroupedFixCommandCodeAction(cur)];
       } else if (this._isGombocIndividualFixDiagnostic(cur)) {
@@ -127,6 +139,8 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
           {
             ruleName: diagnostic.ruleName,
             filePath: diagnostic.filePath,
+            line: diagnostic.range.start.line + 1,
+            resourceHeader: diagnostic.resourceHeader,
           },
         ],
       ],

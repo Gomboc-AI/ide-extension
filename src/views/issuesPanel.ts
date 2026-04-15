@@ -12,11 +12,21 @@ type IssuesPanelToExtMessage =
   | { type: 'rescan' }
   | {
       type: 'applySelected';
-      issues: Array<{ ruleName: string; filePath: string }>;
+      issues: Array<{
+        ruleName: string;
+        filePath: string;
+        line?: number;
+        resourceHeader?: string;
+      }>;
     }
   | {
       type: 'previewSelected';
-      issues: Array<{ ruleName: string; filePath: string }>;
+      issues: Array<{
+        ruleName: string;
+        filePath: string;
+        line?: number;
+        resourceHeader?: string;
+      }>;
     }
   | {
       type: 'applyPreviewSelection';
@@ -70,7 +80,12 @@ export class IssuesPanel {
           language: string;
           scannedAt?: string;
         };
-        selectedIssues: Array<{ ruleName: string; filePath: string }>;
+        selectedIssues: Array<{
+          ruleName: string;
+          filePath: string;
+          line?: number;
+          resourceHeader?: string;
+        }>;
       }
     | undefined;
 
@@ -735,7 +750,15 @@ export class IssuesPanel {
       const elPreviewUndoAllBtn = document.getElementById('previewUndoAllBtn');
       const elPreviewApplyKeptBtn = document.getElementById('previewApplyKeptBtn');
 
-      function keyOf(i) { return i.ruleName + '|' + i.filePath; }
+      function keyOf(i) {
+        // Include line/resource to uniquely identify repeated rule+file entries.
+        return [
+          i.ruleName || '',
+          i.filePath || '',
+          String(Number.isFinite(i.line) ? i.line : ''),
+          i.resourceHeader || '',
+        ].join('|');
+      }
       function setStatus(s) { elStatus.textContent = s; }
       function toast(kind, message) {
         const color = kind === 'error' ? 'var(--err)' : kind === 'warn' ? 'var(--warn)' : 'var(--ok)';
@@ -974,7 +997,14 @@ export class IssuesPanel {
       document.getElementById('previewBtn').addEventListener('click', () => {
         const snapshot = state.snapshot || {};
         const issues = Array.isArray(snapshot.issues) ? snapshot.issues : [];
-        const selected = issues.filter(i => state.selectedSet.has(keyOf(i))).map(i => ({ ruleName: i.ruleName, filePath: i.filePath }));
+        const selected = issues
+          .filter(i => state.selectedSet.has(keyOf(i)))
+          .map(i => ({
+            ruleName: i.ruleName,
+            filePath: i.filePath,
+            line: i.line,
+            resourceHeader: i.resourceHeader,
+          }));
         if (!selected.length) {
           toast('info', 'No issues selected.');
           return;
@@ -1035,7 +1065,14 @@ export class IssuesPanel {
       document.getElementById('applySelectedBtn').addEventListener('click', () => {
         const snapshot = state.snapshot || {};
         const issues = Array.isArray(snapshot.issues) ? snapshot.issues : [];
-        const selected = issues.filter(i => state.selectedSet.has(keyOf(i))).map(i => ({ ruleName: i.ruleName, filePath: i.filePath }));
+        const selected = issues
+          .filter(i => state.selectedSet.has(keyOf(i)))
+          .map(i => ({
+            ruleName: i.ruleName,
+            filePath: i.filePath,
+            line: i.line,
+            resourceHeader: i.resourceHeader,
+          }));
         if (!selected.length) {
           toast('info', 'No issues selected.');
           return;
