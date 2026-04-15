@@ -1,4 +1,4 @@
-import { HelmTemplateLanguageHandler } from './helmTemplateHandler';
+import { HelmTemplateLanguageHandler } from './handler';
 
 const helmTemplate = [
   '{{- define "myapp.labels" -}}',

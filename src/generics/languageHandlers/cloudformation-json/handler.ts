@@ -11,7 +11,7 @@ import {
   ResourceRange,
   ScopedEditRange,
   GetDocumentInfoArgs,
-} from '../types';
+} from '../../types';
 
 export class CloudFormationJSONLanguageHandler implements ILanguageHandler {
   displayName = 'CloudFormation JSON';

@@ -1,4 +1,4 @@
-import { CloudFormationJSONLanguageHandler } from './cloudformationJSONHandler';
+import { CloudFormationJSONLanguageHandler } from './handler';
 
 const cloudFormationJson = JSON.stringify(
   {

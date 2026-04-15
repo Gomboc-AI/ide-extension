@@ -1,4 +1,4 @@
-import { DockerfileLanguageHandler } from './dockerfileHandler';
+import { DockerfileLanguageHandler } from './handler';
 
 const dockerContent = [
   'FROM node:20 AS base',

@@ -11,86 +11,84 @@ import {
   ListResourcesArgs,
   ResourceRange,
   ScopedEditRange,
-} from '../types';
+} from '../../types';
 
-export class HelmTemplateLanguageHandler implements ILanguageHandler {
-  displayName = 'Helm Template';
-  extensions = ['.tpl', '.yaml', '.yml'];
+export class NpmPackageJSONLanguageHandler implements ILanguageHandler {
+  displayName = 'NPM Package JSON';
+  extensions = ['.json'];
 
   /**
-   * Parses Helm `define` blocks and YAML-like documents from template files.
+   * Parses package metadata and top-level dependency/script sections from package JSON files.
    */
-  private parseResources(content: string): ResourceRange[] {
-    const lines = content.split('\n');
+  private parseResources(args: {
+    filePath: string;
+    content: string;
+  }): ResourceRange[] {
     const resources: ResourceRange[] = [];
+    const lines = args.content.split('\n');
+    const fileName = path.basename(args.filePath);
 
-    const definePattern = /^\s*\{\{[-]?\s*define\s+"([^"]+)"\s*[-]?\}\}/;
-    const endPattern = /^\s*\{\{[-]?\s*end\s*[-]?\}\}/;
+    let packageName = fileName;
+    try {
+      const parsed = JSON.parse(args.content) as { name?: unknown };
+      if (typeof parsed?.name === 'string' && parsed.name.trim()) {
+        packageName = parsed.name.trim();
+      }
+    } catch {
+      // Keep best-effort file fallback.
+    }
+
+    const sectionNames = [
+      'scripts',
+      'dependencies',
+      'devDependencies',
+      'peerDependencies',
+      'optionalDependencies',
+      'engines',
+    ];
+    const sectionResources: ResourceRange[] = [];
+    const keyLines: Array<{ key: string; line: number }> = [];
     for (let i = 0; i < lines.length; i++) {
-      const defineMatch = lines[i].match(definePattern);
-      if (!defineMatch) {
+      const trimmed = lines[i].trim();
+      const indent = lines[i].match(/^(\s*)/)?.[1]?.length ?? 0;
+      if (indent !== 2) {
         continue;
       }
-      const name = defineMatch[1];
-      let endLine = lines.length;
-      for (let j = i + 1; j < lines.length; j++) {
-        if (endPattern.test(lines[j])) {
-          endLine = j + 1;
-          break;
-        }
+      const keyMatch = trimmed.match(/^"([^"]+)"\s*:/);
+      if (keyMatch) {
+        keyLines.push({ key: keyMatch[1], line: i + 1 });
       }
-      resources.push({
-        type: 'helm_template',
-        name,
-        startLine: i + 1,
-        endLine,
-        header: `define "${name}"`,
+    }
+
+    for (let i = 0; i < keyLines.length; i++) {
+      const curr = keyLines[i];
+      if (!sectionNames.includes(curr.key)) {
+        continue;
+      }
+      const next = keyLines[i + 1];
+      sectionResources.push({
+        type: 'npm_section',
+        name: curr.key,
+        startLine: curr.line,
+        endLine: next ? Math.max(curr.line, next.line - 1) : lines.length,
+        header: `npm ${curr.key}`,
       });
     }
 
-    const isTopLevelKey = (line: string, key: string): boolean => {
-      const trimmed = line.trim();
-      const indent = line.match(/^(\s*)/)?.[1]?.length ?? 0;
-      return indent === 0 && trimmed.startsWith(`${key}:`);
-    };
-
-    for (let i = 0; i < lines.length; i++) {
-      if (!isTopLevelKey(lines[i], 'kind')) {
-        continue;
+    resources.push(...sectionResources);
+    resources.push({
+      type: 'npm_package',
+      name: packageName,
+      startLine: 1,
+      endLine: Math.max(1, lines.length),
+      header: `npm "${packageName}"`,
+    });
+    resources.sort((a, b) => {
+      if (a.startLine !== b.startLine) {
+        return a.startLine - b.startLine;
       }
-      const kindMatch = lines[i].trim().match(/^kind:\s*(.+)$/);
-      if (!kindMatch) {
-        continue;
-      }
-      const kind = kindMatch[1].trim().replace(/^["']|["']$/g, '');
-      let name: string | undefined;
-      let endLine = lines.length;
-      for (let j = i + 1; j < lines.length; j++) {
-        const trimmed = lines[j].trim();
-        const indent = lines[j].match(/^(\s*)/)?.[1]?.length ?? 0;
-        if (trimmed === '---') {
-          endLine = j;
-          break;
-        }
-        if (indent === 0 && /^kind:/.test(trimmed)) {
-          endLine = j;
-          break;
-        }
-        const nameMatch = trimmed.match(/^name:\s*(.+)$/);
-        if (nameMatch && !name) {
-          name = nameMatch[1].trim().replace(/^["']|["']$/g, '');
-        }
-      }
-      resources.push({
-        type: `helm_${kind.toLowerCase()}`,
-        name,
-        startLine: i + 1,
-        endLine,
-        header: name ? `${kind} "${name}"` : kind,
-      });
-    }
-
-    resources.sort((a, b) => a.startLine - b.startLine);
+      return a.endLine - b.endLine;
+    });
     return resources;
   }
 
@@ -98,7 +96,7 @@ export class HelmTemplateLanguageHandler implements ILanguageHandler {
     const ext = path.extname(args.filePath).toLowerCase();
     const fileName = path.basename(args.filePath);
     return {
-      languageId: 'helm-template',
+      languageId: 'npm-package-json',
       filePath: args.filePath,
       fileName,
       extension: ext,
@@ -108,7 +106,10 @@ export class HelmTemplateLanguageHandler implements ILanguageHandler {
   }
 
   findResourceAtLine(args: FindResourceAtLineArgs): ResourceRange | null {
-    const resources = this.parseResources(args.content);
+    const resources = this.parseResources({
+      filePath: args.filePath,
+      content: args.content,
+    });
     const line = Math.max(1, args.line);
     return (
       resources.find(
@@ -118,7 +119,10 @@ export class HelmTemplateLanguageHandler implements ILanguageHandler {
   }
 
   findNearestResource(args: FindNearestResourceArgs): ResourceRange | null {
-    const resources = this.parseResources(args.content);
+    const resources = this.parseResources({
+      filePath: args.filePath,
+      content: args.content,
+    });
     if (resources.length === 0) {
       return null;
     }
@@ -145,7 +149,10 @@ export class HelmTemplateLanguageHandler implements ILanguageHandler {
   }
 
   listResources(args: ListResourcesArgs): ResourceRange[] {
-    return this.parseResources(args.content);
+    return this.parseResources({
+      filePath: args.filePath,
+      content: args.content,
+    });
   }
 
   buildDiagnosticContext(args: BuildDiagnosticContextArgs): DiagnosticContext {
@@ -163,7 +170,7 @@ export class HelmTemplateLanguageHandler implements ILanguageHandler {
       });
 
     return {
-      languageId: 'helm-template',
+      languageId: 'npm-package-json',
       filePath: args.filePath,
       resource: resource || undefined,
       nearestResource: nearestResource || undefined,

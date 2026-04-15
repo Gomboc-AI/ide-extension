@@ -11,55 +11,86 @@ import {
   ListResourcesArgs,
   ResourceRange,
   ScopedEditRange,
-} from '../types';
+} from '../../types';
 
-export class DockerfileLanguageHandler implements ILanguageHandler {
-  displayName = 'Dockerfile';
-  extensions = ['Dockerfile', '.dockerfile'];
+export class HelmTemplateLanguageHandler implements ILanguageHandler {
+  displayName = 'Helm Template';
+  extensions = ['.tpl', '.yaml', '.yml'];
 
   /**
-   * Parses Docker build stages (`FROM ... [AS name]`) into line ranges.
+   * Parses Helm `define` blocks and YAML-like documents from template files.
    */
   private parseResources(content: string): ResourceRange[] {
     const lines = content.split('\n');
     const resources: ResourceRange[] = [];
-    const fromPattern =
-      /^FROM\s+(?:--[^\s]+\s+)?([^\s]+(?::[^\s]+)?)(?:\s+AS\s+(\S+))?/i;
 
+    const definePattern = /^\s*\{\{[-]?\s*define\s+"([^"]+)"\s*[-]?\}\}/;
+    const endPattern = /^\s*\{\{[-]?\s*end\s*[-]?\}\}/;
     for (let i = 0; i < lines.length; i++) {
-      const trimmed = lines[i].trim();
-      if (!trimmed || trimmed.startsWith('#')) {
+      const defineMatch = lines[i].match(definePattern);
+      if (!defineMatch) {
         continue;
       }
-      const fromMatch = trimmed.match(fromPattern);
-      if (!fromMatch) {
-        continue;
-      }
-
-      const image = fromMatch[1];
-      const alias = fromMatch[2];
-      const display = alias || image;
+      const name = defineMatch[1];
       let endLine = lines.length;
       for (let j = i + 1; j < lines.length; j++) {
-        const next = lines[j].trim();
-        if (!next || next.startsWith('#')) {
-          continue;
-        }
-        if (fromPattern.test(next)) {
-          endLine = j;
+        if (endPattern.test(lines[j])) {
+          endLine = j + 1;
           break;
         }
       }
-
       resources.push({
-        type: 'docker_stage',
-        name: display,
+        type: 'helm_template',
+        name,
         startLine: i + 1,
         endLine,
-        header: `FROM ${display}`,
+        header: `define "${name}"`,
       });
     }
 
+    const isTopLevelKey = (line: string, key: string): boolean => {
+      const trimmed = line.trim();
+      const indent = line.match(/^(\s*)/)?.[1]?.length ?? 0;
+      return indent === 0 && trimmed.startsWith(`${key}:`);
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+      if (!isTopLevelKey(lines[i], 'kind')) {
+        continue;
+      }
+      const kindMatch = lines[i].trim().match(/^kind:\s*(.+)$/);
+      if (!kindMatch) {
+        continue;
+      }
+      const kind = kindMatch[1].trim().replace(/^["']|["']$/g, '');
+      let name: string | undefined;
+      let endLine = lines.length;
+      for (let j = i + 1; j < lines.length; j++) {
+        const trimmed = lines[j].trim();
+        const indent = lines[j].match(/^(\s*)/)?.[1]?.length ?? 0;
+        if (trimmed === '---') {
+          endLine = j;
+          break;
+        }
+        if (indent === 0 && /^kind:/.test(trimmed)) {
+          endLine = j;
+          break;
+        }
+        const nameMatch = trimmed.match(/^name:\s*(.+)$/);
+        if (nameMatch && !name) {
+          name = nameMatch[1].trim().replace(/^["']|["']$/g, '');
+        }
+      }
+      resources.push({
+        type: `helm_${kind.toLowerCase()}`,
+        name,
+        startLine: i + 1,
+        endLine,
+        header: name ? `${kind} "${name}"` : kind,
+      });
+    }
+
+    resources.sort((a, b) => a.startLine - b.startLine);
     return resources;
   }
 
@@ -67,7 +98,7 @@ export class DockerfileLanguageHandler implements ILanguageHandler {
     const ext = path.extname(args.filePath).toLowerCase();
     const fileName = path.basename(args.filePath);
     return {
-      languageId: 'dockerfile',
+      languageId: 'helm-template',
       filePath: args.filePath,
       fileName,
       extension: ext,
@@ -132,7 +163,7 @@ export class DockerfileLanguageHandler implements ILanguageHandler {
       });
 
     return {
-      languageId: 'dockerfile',
+      languageId: 'helm-template',
       filePath: args.filePath,
       resource: resource || undefined,
       nearestResource: nearestResource || undefined,

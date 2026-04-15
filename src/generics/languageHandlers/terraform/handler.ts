@@ -11,61 +11,44 @@ import {
   ListResourcesArgs,
   ResourceRange,
   ScopedEditRange,
-} from '../types';
+} from '../../types';
 
-export class GradleLanguageHandler implements ILanguageHandler {
-  displayName = 'Gradle';
-  extensions = ['.gradle', '.kts'];
+export class TerraformLanguageHandler implements ILanguageHandler {
+  displayName = 'Terraform';
+  extensions = ['.tf', '.tfvars', '.hcl'];
 
   /**
-   * Parses common Gradle block structures and task declarations.
+   * Parses Terraform-style resource blocks and returns their line ranges.
    */
-  private parseResources(args: {
-    filePath: string;
-    content: string;
-  }): ResourceRange[] {
-    const lines = args.content.split('\n');
+  private parseResources(content: string): ResourceRange[] {
+    const lines = content.split('\n');
     const resources: ResourceRange[] = [];
-    const taskPattern = /^\s*task\s+([A-Za-z0-9_]+)\s*\{/;
-    const registerTaskPattern =
-      /^\s*tasks\.(?:register|create)\(\s*["']([^"']+)["']/;
-    const blockPattern = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*\{/;
+    const resourcePattern = /resource\s+"([^"]+)"\s+"([^"]+)"/;
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      let type = 'gradle_block';
-      let name: string | undefined;
-      let match = line.match(taskPattern);
-      if (match) {
-        type = 'gradle_task';
-        name = match[1];
-      } else {
-        match = line.match(registerTaskPattern);
-        if (match) {
-          type = 'gradle_task';
-          name = match[1];
-        } else {
-          match = line.match(blockPattern);
-          if (match) {
-            name = match[1];
-          }
-        }
-      }
-      if (!match || !name) {
+      const resourceMatch = line.match(resourcePattern);
+      if (!resourceMatch) {
         continue;
       }
 
+      const type = resourceMatch[1];
+      const name = resourceMatch[2];
+      const startLine = i + 1;
+      let endLine = startLine;
+
       let braceDepth = 0;
-      let sawOpening = false;
-      let endLine = i + 1;
+      let sawOpeningBrace = false;
       for (let j = i; j < lines.length; j++) {
-        const openCount = (lines[j].match(/{/g) || []).length;
-        const closeCount = (lines[j].match(/}/g) || []).length;
+        const currentLine = lines[j];
+        const openCount = (currentLine.match(/{/g) || []).length;
+        const closeCount = (currentLine.match(/}/g) || []).length;
         if (openCount > 0) {
-          sawOpening = true;
+          sawOpeningBrace = true;
         }
         braceDepth += openCount - closeCount;
-        if (sawOpening && braceDepth === 0 && j >= i) {
+
+        if (sawOpeningBrace && braceDepth === 0 && j >= i) {
           endLine = j + 1;
           break;
         }
@@ -74,34 +57,21 @@ export class GradleLanguageHandler implements ILanguageHandler {
       resources.push({
         type,
         name,
-        startLine: i + 1,
+        startLine,
         endLine,
-        header: type === 'gradle_task' ? `task ${name}` : `${name} { ... }`,
+        header: `resource "${type}" "${name}"`,
       });
     }
 
-    resources.push({
-      type: 'gradle_project',
-      name: path.basename(args.filePath),
-      startLine: 1,
-      endLine: Math.max(1, lines.length),
-      header: `Gradle ${path.basename(args.filePath)}`,
-    });
-
-    resources.sort((a, b) => {
-      if (a.startLine !== b.startLine) {
-        return a.startLine - b.startLine;
-      }
-      return a.endLine - b.endLine;
-    });
     return resources;
   }
 
   getDocumentInfo(args: GetDocumentInfoArgs): DocumentInfo {
     const ext = path.extname(args.filePath).toLowerCase();
     const fileName = path.basename(args.filePath);
+
     return {
-      languageId: 'gradle',
+      languageId: 'terraform',
       filePath: args.filePath,
       fileName,
       extension: ext,
@@ -111,26 +81,22 @@ export class GradleLanguageHandler implements ILanguageHandler {
   }
 
   findResourceAtLine(args: FindResourceAtLineArgs): ResourceRange | null {
-    const resources = this.parseResources({
-      filePath: args.filePath,
-      content: args.content,
-    });
+    const resources = this.parseResources(args.content);
     const line = Math.max(1, args.line);
-    return (
-      resources.find(
-        resource => line >= resource.startLine && line <= resource.endLine,
-      ) || null
+
+    const hit = resources.find(
+      resource => line >= resource.startLine && line <= resource.endLine,
     );
+
+    return hit || null;
   }
 
   findNearestResource(args: FindNearestResourceArgs): ResourceRange | null {
-    const resources = this.parseResources({
-      filePath: args.filePath,
-      content: args.content,
-    });
+    const resources = this.parseResources(args.content);
     if (resources.length === 0) {
       return null;
     }
+
     const line = Math.max(1, args.line);
     const containing = resources.find(
       resource => line >= resource.startLine && line <= resource.endLine,
@@ -138,10 +104,15 @@ export class GradleLanguageHandler implements ILanguageHandler {
     if (containing) {
       return containing;
     }
+
     const previous = resources
       .filter(resource => resource.startLine <= line)
       .sort((a, b) => b.startLine - a.startLine)[0];
-    return previous || resources[0];
+    if (previous) {
+      return previous;
+    }
+
+    return resources[0];
   }
 
   findScopedEditRange(args: FindScopedEditRangeArgs): ScopedEditRange | null {
@@ -154,10 +125,7 @@ export class GradleLanguageHandler implements ILanguageHandler {
   }
 
   listResources(args: ListResourcesArgs): ResourceRange[] {
-    return this.parseResources({
-      filePath: args.filePath,
-      content: args.content,
-    });
+    return this.parseResources(args.content);
   }
 
   buildDiagnosticContext(args: BuildDiagnosticContextArgs): DiagnosticContext {
@@ -175,7 +143,7 @@ export class GradleLanguageHandler implements ILanguageHandler {
       });
 
     return {
-      languageId: 'gradle',
+      languageId: 'terraform',
       filePath: args.filePath,
       resource: resource || undefined,
       nearestResource: nearestResource || undefined,

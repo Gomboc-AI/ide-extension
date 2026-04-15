@@ -1,4 +1,4 @@
-import { MavenXMLLanguageHandler } from './mavenXMLHandler';
+import { MavenXMLLanguageHandler } from './handler';
 
 const mavenXml = [
   '<project>',

@@ -1,4 +1,4 @@
-import { TerraformLanguageHandler } from './terraformHandler';
+import { TerraformLanguageHandler } from './handler';
 
 const terraformContent = [
   'resource "aws_s3_bucket" "logs" {',

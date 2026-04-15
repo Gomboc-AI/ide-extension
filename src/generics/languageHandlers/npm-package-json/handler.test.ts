@@ -1,4 +1,4 @@
-import { NpmPackageJSONLanguageHandler } from './npmPackageJSONHandler';
+import { NpmPackageJSONLanguageHandler } from './handler';
 
 const packageJson = JSON.stringify(
   {

@@ -11,7 +11,7 @@ import {
   ListResourcesArgs,
   ResourceRange,
   ScopedEditRange,
-} from '../types';
+} from '../../types';
 
 export class MavenXMLLanguageHandler implements ILanguageHandler {
   displayName = 'Maven XML';

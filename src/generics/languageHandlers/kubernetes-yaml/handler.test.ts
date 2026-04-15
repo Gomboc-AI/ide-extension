@@ -1,4 +1,4 @@
-import { KubernetesYAMLLanguageHandler } from './kubernetesYAMLHandler';
+import { KubernetesYAMLLanguageHandler } from './handler';
 
 const kubernetesYaml = [
   'apiVersion: apps/v1',

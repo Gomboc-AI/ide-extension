@@ -1,4 +1,4 @@
-import { GradleLanguageHandler } from './gradleHandler';
+import { GradleLanguageHandler } from './handler';
 
 const gradleContent = [
   'plugins {',

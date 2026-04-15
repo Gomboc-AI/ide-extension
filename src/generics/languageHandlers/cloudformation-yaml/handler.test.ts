@@ -1,4 +1,4 @@
-import { CloudFormationYAMLLanguageHandler } from './cloudformationYAMLHandler';
+import { CloudFormationYAMLLanguageHandler } from './handler';
 
 const cloudFormationYaml = [
   'AWSTemplateFormatVersion: "2010-09-09"',

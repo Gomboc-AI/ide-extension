@@ -11,76 +11,52 @@ import {
   ListResourcesArgs,
   ResourceRange,
   ScopedEditRange,
-} from '../types';
+} from '../../types';
 
-export class KubernetesYAMLLanguageHandler implements ILanguageHandler {
-  displayName = 'Kubernetes YAML';
-  extensions = ['.yaml', '.yml'];
+export class DockerfileLanguageHandler implements ILanguageHandler {
+  displayName = 'Dockerfile';
+  extensions = ['Dockerfile', '.dockerfile'];
 
   /**
-   * Parses top-level Kubernetes resources by detecting `kind` + `metadata.name`.
+   * Parses Docker build stages (`FROM ... [AS name]`) into line ranges.
    */
   private parseResources(content: string): ResourceRange[] {
     const lines = content.split('\n');
     const resources: ResourceRange[] = [];
-    const isDocBoundary = (line: string): boolean => line.trim() === '---';
-    const isTopLevelKey = (line: string, key: string): boolean => {
-      const trimmed = line.trim();
-      const indent = line.match(/^(\s*)/)?.[1]?.length ?? 0;
-      return indent === 0 && trimmed.startsWith(`${key}:`);
-    };
+    const fromPattern =
+      /^FROM\s+(?:--[^\s]+\s+)?([^\s]+(?::[^\s]+)?)(?:\s+AS\s+(\S+))?/i;
 
     for (let i = 0; i < lines.length; i++) {
-      if (!isTopLevelKey(lines[i], 'kind')) {
+      const trimmed = lines[i].trim();
+      if (!trimmed || trimmed.startsWith('#')) {
+        continue;
+      }
+      const fromMatch = trimmed.match(fromPattern);
+      if (!fromMatch) {
         continue;
       }
 
-      const kindMatch = lines[i].trim().match(/^kind:\s*(.+)$/);
-      if (!kindMatch) {
-        continue;
-      }
-
-      const kind = kindMatch[1].trim().replace(/^["']|["']$/g, '');
-      let name: string | undefined;
-      let metadataLine = -1;
+      const image = fromMatch[1];
+      const alias = fromMatch[2];
+      const display = alias || image;
       let endLine = lines.length;
-
       for (let j = i + 1; j < lines.length; j++) {
-        if (isDocBoundary(lines[j])) {
-          endLine = j;
-          break;
-        }
-        if (isTopLevelKey(lines[j], 'apiVersion')) {
-          endLine = j;
-          break;
-        }
-
-        const trimmed = lines[j].trim();
-        if (metadataLine < 0 && /^metadata:\s*$/.test(trimmed)) {
-          metadataLine = j;
+        const next = lines[j].trim();
+        if (!next || next.startsWith('#')) {
           continue;
         }
-        if (metadataLine >= 0) {
-          const indent = lines[j].match(/^(\s*)/)?.[1]?.length ?? 0;
-          const metadataIndent =
-            lines[metadataLine].match(/^(\s*)/)?.[1]?.length ?? 0;
-          if (indent <= metadataIndent && trimmed.includes(':')) {
-            metadataLine = -1;
-            continue;
-          }
-          const nameMatch = trimmed.match(/^name:\s*(.+)$/);
-          if (nameMatch) {
-            name = nameMatch[1].trim().replace(/^["']|["']$/g, '');
-          }
+        if (fromPattern.test(next)) {
+          endLine = j;
+          break;
         }
       }
 
       resources.push({
-        type: kind,
-        name,
+        type: 'docker_stage',
+        name: display,
         startLine: i + 1,
         endLine,
-        header: name ? `${kind} "${name}"` : kind,
+        header: `FROM ${display}`,
       });
     }
 
@@ -91,7 +67,7 @@ export class KubernetesYAMLLanguageHandler implements ILanguageHandler {
     const ext = path.extname(args.filePath).toLowerCase();
     const fileName = path.basename(args.filePath);
     return {
-      languageId: 'kubernetes-yaml',
+      languageId: 'dockerfile',
       filePath: args.filePath,
       fileName,
       extension: ext,
@@ -156,7 +132,7 @@ export class KubernetesYAMLLanguageHandler implements ILanguageHandler {
       });
 
     return {
-      languageId: 'kubernetes-yaml',
+      languageId: 'dockerfile',
       filePath: args.filePath,
       resource: resource || undefined,
       nearestResource: nearestResource || undefined,
