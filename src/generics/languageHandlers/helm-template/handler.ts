@@ -2,6 +2,7 @@ import path from 'path';
 import {
   BuildDiagnosticContextArgs,
   DiagnosticContext,
+  DetectLanguageArgs,
   DocumentInfo,
   FindNearestBlockArgs,
   FindBlockAtLineArgs,
@@ -16,6 +17,50 @@ import {
 export class HelmTemplateLanguageHandler implements ILanguageHandler {
   displayName = 'Helm Template';
   extensions = ['.tpl', '.yaml', '.yml'];
+
+  private hasPatternAtLineStart(content: string, pattern: string): boolean {
+    const lines = content.split('\n');
+    for (const line of lines) {
+      if (line.trim().startsWith(pattern)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  detectLanguage(args: DetectLanguageArgs): boolean {
+    const filePath = args.filePath || '';
+    const content = args.content || '';
+    const fileName = path.basename(filePath).toLowerCase();
+    const dirPath = path.dirname(filePath).toLowerCase();
+    const ext = path.extname(filePath).toLowerCase();
+
+    if (ext === '.tpl') {
+      return true;
+    }
+
+    if (ext !== '.yaml' && ext !== '.yml') {
+      return false;
+    }
+
+    const firstLines = content.split('\n').slice(0, 50).join('\n');
+    const contentLower = firstLines.toLowerCase();
+    const isHelmDir =
+      dirPath.includes('/charts/') ||
+      dirPath.includes('/helm/') ||
+      dirPath.includes('\\charts\\') ||
+      dirPath.includes('\\helm\\');
+
+    return (
+      this.hasPatternAtLineStart(firstLines, '{{') ||
+      contentLower.includes('.values') ||
+      contentLower.includes('.chart') ||
+      contentLower.includes('.release') ||
+      fileName.includes('helm') ||
+      fileName.includes('chart') ||
+      isHelmDir
+    );
+  }
 
   /**
    * Parses Helm `define` blocks and YAML-like documents from template files.

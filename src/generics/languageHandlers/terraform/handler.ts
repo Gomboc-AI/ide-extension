@@ -2,6 +2,7 @@ import path from 'path';
 import {
   BuildDiagnosticContextArgs,
   DiagnosticContext,
+  DetectLanguageArgs,
   DocumentInfo,
   FindNearestBlockArgs,
   FindBlockAtLineArgs,
@@ -16,6 +17,11 @@ import {
 export class TerraformLanguageHandler implements ILanguageHandler {
   displayName = 'Terraform';
   extensions = ['.tf', '.tfvars', '.hcl'];
+
+  detectLanguage(args: DetectLanguageArgs): boolean {
+    const ext = path.extname(args.filePath || '').toLowerCase();
+    return ext === '.tf' || ext === '.tfvars' || ext === '.hcl';
+  }
 
   /**
    * Parses Terraform-style resource blocks and returns their line ranges.

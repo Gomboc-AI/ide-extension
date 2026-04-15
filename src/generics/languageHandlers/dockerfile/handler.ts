@@ -2,6 +2,7 @@ import path from 'path';
 import {
   BuildDiagnosticContextArgs,
   DiagnosticContext,
+  DetectLanguageArgs,
   DocumentInfo,
   FindNearestBlockArgs,
   FindBlockAtLineArgs,
@@ -16,6 +17,12 @@ import {
 export class DockerfileLanguageHandler implements ILanguageHandler {
   displayName = 'Dockerfile';
   extensions = ['Dockerfile', '.dockerfile'];
+
+  detectLanguage(args: DetectLanguageArgs): boolean {
+    const fileName = path.basename(args.filePath || '').toLowerCase();
+    const ext = path.extname(args.filePath || '').toLowerCase();
+    return fileName.startsWith('dockerfile') || ext === '.dockerfile';
+  }
 
   /**
    * Parses Docker build stages (`FROM ... [AS name]`) into line ranges.

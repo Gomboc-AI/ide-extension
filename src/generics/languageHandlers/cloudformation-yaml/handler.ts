@@ -2,6 +2,7 @@ import path from 'path';
 import {
   BuildDiagnosticContextArgs,
   DiagnosticContext,
+  DetectLanguageArgs,
   DocumentInfo,
   FindNearestBlockArgs,
   FindBlockAtLineArgs,
@@ -16,6 +17,57 @@ import {
 export class CloudFormationYAMLLanguageHandler implements ILanguageHandler {
   displayName = 'CloudFormation YAML';
   extensions = ['.yaml', '.yml'];
+
+  private hasPatternAtLineStart(content: string, pattern: string): boolean {
+    const lines = content.split('\n');
+    for (const line of lines) {
+      if (line.trim().startsWith(pattern)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  detectLanguage(args: DetectLanguageArgs): boolean {
+    const filePath = args.filePath || '';
+    const content = args.content || '';
+    const fileName = path.basename(filePath).toLowerCase();
+    const dirPath = path.dirname(filePath).toLowerCase();
+    const ext = path.extname(filePath).toLowerCase();
+    if (ext !== '.yaml' && ext !== '.yml') {
+      return false;
+    }
+
+    const firstLines = content.split('\n').slice(0, 50).join('\n');
+    const contentLower = firstLines.toLowerCase();
+    const isHelmDir =
+      dirPath.includes('/charts/') ||
+      dirPath.includes('/helm/') ||
+      dirPath.includes('\\charts\\') ||
+      dirPath.includes('\\helm\\');
+    const isK8sDir =
+      dirPath.includes('/k8s/') ||
+      dirPath.includes('/kubernetes/') ||
+      dirPath.includes('/manifests/') ||
+      dirPath.includes('\\k8s\\') ||
+      dirPath.includes('\\kubernetes\\') ||
+      dirPath.includes('\\manifests\\');
+
+    const isHelm =
+      this.hasPatternAtLineStart(firstLines, '{{') ||
+      contentLower.includes('.values') ||
+      contentLower.includes('.chart') ||
+      contentLower.includes('.release') ||
+      fileName.includes('helm') ||
+      fileName.includes('chart') ||
+      isHelmDir;
+    const isKubernetes =
+      (this.hasPatternAtLineStart(firstLines, 'kind:') &&
+        this.hasPatternAtLineStart(firstLines, 'apiVersion:')) ||
+      isK8sDir;
+
+    return !isHelm && !isKubernetes;
+  }
 
   /**
    * Parses top-level CloudFormation resources from YAML lines.

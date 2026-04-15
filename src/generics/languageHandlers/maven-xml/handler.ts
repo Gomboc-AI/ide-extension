@@ -2,6 +2,7 @@ import path from 'path';
 import {
   BuildDiagnosticContextArgs,
   DiagnosticContext,
+  DetectLanguageArgs,
   DocumentInfo,
   FindNearestBlockArgs,
   FindBlockAtLineArgs,
@@ -16,6 +17,11 @@ import {
 export class MavenXMLLanguageHandler implements ILanguageHandler {
   displayName = 'Maven XML';
   extensions = ['.xml'];
+
+  detectLanguage(args: DetectLanguageArgs): boolean {
+    const ext = path.extname(args.filePath || '').toLowerCase();
+    return ext === '.xml';
+  }
 
   /**
    * Parses Maven project and dependency blocks from XML content.

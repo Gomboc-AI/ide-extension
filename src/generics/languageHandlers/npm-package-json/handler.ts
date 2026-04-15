@@ -2,6 +2,7 @@ import path from 'path';
 import {
   BuildDiagnosticContextArgs,
   DiagnosticContext,
+  DetectLanguageArgs,
   DocumentInfo,
   FindNearestBlockArgs,
   FindBlockAtLineArgs,
@@ -16,6 +17,16 @@ import {
 export class NpmPackageJSONLanguageHandler implements ILanguageHandler {
   displayName = 'NPM Package JSON';
   extensions = ['.json'];
+
+  detectLanguage(args: DetectLanguageArgs): boolean {
+    const filePath = args.filePath || '';
+    const fileName = path.basename(filePath).toLowerCase();
+    const ext = path.extname(filePath).toLowerCase();
+    return (
+      ext === '.json' &&
+      (fileName === 'package.json' || fileName === 'package-lock.json')
+    );
+  }
 
   /**
    * Parses package metadata and top-level dependency/script sections from package JSON files.

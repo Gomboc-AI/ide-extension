@@ -2,6 +2,7 @@ import path from 'path';
 import {
   BuildDiagnosticContextArgs,
   DiagnosticContext,
+  DetectLanguageArgs,
   DocumentInfo,
   FindNearestBlockArgs,
   FindBlockAtLineArgs,
@@ -16,6 +17,41 @@ import {
 export class KubernetesYAMLLanguageHandler implements ILanguageHandler {
   displayName = 'Kubernetes YAML';
   extensions = ['.yaml', '.yml'];
+
+  private hasPatternAtLineStart(content: string, pattern: string): boolean {
+    const lines = content.split('\n');
+    for (const line of lines) {
+      if (line.trim().startsWith(pattern)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  detectLanguage(args: DetectLanguageArgs): boolean {
+    const filePath = args.filePath || '';
+    const content = args.content || '';
+    const dirPath = path.dirname(filePath).toLowerCase();
+    const ext = path.extname(filePath).toLowerCase();
+    if (ext !== '.yaml' && ext !== '.yml') {
+      return false;
+    }
+
+    const firstLines = content.split('\n').slice(0, 50).join('\n');
+    const isK8sDir =
+      dirPath.includes('/k8s/') ||
+      dirPath.includes('/kubernetes/') ||
+      dirPath.includes('/manifests/') ||
+      dirPath.includes('\\k8s\\') ||
+      dirPath.includes('\\kubernetes\\') ||
+      dirPath.includes('\\manifests\\');
+
+    return (
+      (this.hasPatternAtLineStart(firstLines, 'kind:') &&
+        this.hasPatternAtLineStart(firstLines, 'apiVersion:')) ||
+      isK8sDir
+    );
+  }
 
   /**
    * Parses top-level Kubernetes resources by detecting `kind` + `metadata.name`.

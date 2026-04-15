@@ -61,19 +61,6 @@ export interface MkdtempArgs {
   prefix: string;
 }
 
-export interface CacheGetArgs {
-  key: string;
-}
-
-export interface CacheSetArgs<V = unknown> {
-  key: string;
-  value: V;
-}
-
-export interface CacheDeleteArgs {
-  key: string;
-}
-
 /**
  * This is a interface to represent a storage system with read, write, copy properties
  */
@@ -97,20 +84,12 @@ export interface IStorage {
   mkdtemp?(args: MkdtempArgs): Promise<string>;
 }
 
-/**
- * Key/value cache abstraction (in-memory, disk-backed, etc.).
- * @typeParam V - value type stored under each key
- */
-export interface ICache<V = unknown> {
-  get(args: CacheGetArgs): Promise<V | undefined>;
-  has(args: CacheGetArgs): Promise<boolean>;
-  set(args: CacheSetArgs<V>): Promise<void>;
-  del(args: CacheDeleteArgs): Promise<void>;
-  clr(): Promise<void>;
-  count(): Promise<number>;
+export interface GetDocumentInfoArgs {
+  filePath: string;
+  content: string;
 }
 
-export interface GetDocumentInfoArgs {
+export interface DetectLanguageArgs {
   filePath: string;
   content: string;
 }
@@ -186,7 +165,7 @@ export interface DiagnosticContext {
  */
 export interface ILanguageHandler {
   displayName: string;
-  extensions: string[];
+  detectLanguage(args: DetectLanguageArgs): boolean;
   getDocumentInfo(args: GetDocumentInfoArgs): DocumentInfo;
   findBlockAtLine(args: FindBlockAtLineArgs): BlockRange | null;
   findNearestBlock(args: FindNearestBlockArgs): BlockRange | null;

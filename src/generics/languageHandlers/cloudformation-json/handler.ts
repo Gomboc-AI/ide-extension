@@ -2,6 +2,7 @@ import path from 'path';
 import {
   BuildDiagnosticContextArgs,
   DiagnosticContext,
+  DetectLanguageArgs,
   DocumentInfo,
   FindNearestBlockArgs,
   FindBlockAtLineArgs,
@@ -16,6 +17,17 @@ import {
 export class CloudFormationJSONLanguageHandler implements ILanguageHandler {
   displayName = 'CloudFormation JSON';
   extensions = ['.json'];
+
+  detectLanguage(args: DetectLanguageArgs): boolean {
+    const filePath = args.filePath || '';
+    const fileName = path.basename(filePath).toLowerCase();
+    const ext = path.extname(filePath).toLowerCase();
+    if (ext !== '.json') {
+      return false;
+    }
+
+    return fileName !== 'package.json' && fileName !== 'package-lock.json';
+  }
 
   /**
    * Parses CloudFormation JSON Resources and maps them to source lines.

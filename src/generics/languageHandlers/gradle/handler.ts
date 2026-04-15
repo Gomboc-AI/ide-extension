@@ -2,6 +2,7 @@ import path from 'path';
 import {
   BuildDiagnosticContextArgs,
   DiagnosticContext,
+  DetectLanguageArgs,
   DocumentInfo,
   FindNearestBlockArgs,
   FindBlockAtLineArgs,
@@ -16,6 +17,11 @@ import {
 export class GradleLanguageHandler implements ILanguageHandler {
   displayName = 'Gradle';
   extensions = ['.gradle', '.kts'];
+
+  detectLanguage(args: DetectLanguageArgs): boolean {
+    const ext = path.extname(args.filePath || '').toLowerCase();
+    return ext === '.gradle' || ext === '.kts';
+  }
 
   /**
    * Parses common Gradle block structures and task declarations.
