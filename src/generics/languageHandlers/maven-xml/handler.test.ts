@@ -37,8 +37,8 @@ describe('MavenXMLLanguageHandler', () => {
     expect(blocks.find(block => block.type === 'maven_dependency')?.name).toBe(
       'org.slf4j:slf4j-api',
     );
-    expect(blocks.find(block => block.type === 'maven_project')?.header).toContain(
-      'com.example:service',
-    );
+    expect(
+      blocks.find(block => block.type === 'maven_project')?.header,
+    ).toContain('com.example:service');
   });
 });
