@@ -9,3 +9,5 @@ test_development/
 coverage/
 
 .npmrc
+
+*.log
