@@ -541,8 +541,8 @@ export class OrlResultConverter {
             newLines: diff.newLines,
           });
         const selectedResource =
-          languageDiagnosticContext.resource ||
-          languageDiagnosticContext.nearestResource;
+          languageDiagnosticContext.block ||
+          languageDiagnosticContext.nearestBlock;
         if (selectedResource) {
           resourceName = selectedResource.type;
           resourceInstanceName = selectedResource.name || null;
@@ -607,8 +607,8 @@ export class OrlResultConverter {
 
         // Keep language-specific fallback behavior in handlers.
         const resourceHeader = (() => {
-          if (languageDiagnosticContext?.resourceHeader) {
-            return languageDiagnosticContext.resourceHeader;
+          if (languageDiagnosticContext?.blockHeader) {
+            return languageDiagnosticContext.blockHeader;
           }
           if (
             resourceName &&

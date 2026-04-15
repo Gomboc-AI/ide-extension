@@ -14,10 +14,10 @@ describe('languageDiagnosticOrchestrator', () => {
       line: 2,
     });
     expect(context.languageId).toBe('kubernetes-yaml');
-    expect(context.resourceHeader).toContain('Deployment');
+    expect(context.blockHeader).toContain('Deployment');
   });
 
-  it('falls back to modified content when original has no resources', () => {
+  it('falls back to modified content when original has no blocks', () => {
     const context = buildLanguageDiagnosticContextWithFallback({
       filePath: '/workspace/Dockerfile',
       originalContent: 'RUN echo hello',
@@ -25,6 +25,6 @@ describe('languageDiagnosticOrchestrator', () => {
       line: 1,
     });
     expect(context.languageId).toBe('dockerfile');
-    expect(context.resourceHeader).toContain('FROM');
+    expect(context.blockHeader).toContain('FROM');
   });
 });

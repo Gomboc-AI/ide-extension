@@ -3,13 +3,13 @@ import {
   BuildDiagnosticContextArgs,
   DiagnosticContext,
   DocumentInfo,
-  FindNearestResourceArgs,
-  FindResourceAtLineArgs,
+  FindNearestBlockArgs,
+  FindBlockAtLineArgs,
   FindScopedEditRangeArgs,
   GetDocumentInfoArgs,
   ILanguageHandler,
-  ListResourcesArgs,
-  ResourceRange,
+  ListBlocksArgs,
+  BlockRange,
   ScopedEditRange,
 } from '../../types';
 
@@ -23,8 +23,8 @@ export class NpmPackageJSONLanguageHandler implements ILanguageHandler {
   private parseResources(args: {
     filePath: string;
     content: string;
-  }): ResourceRange[] {
-    const resources: ResourceRange[] = [];
+  }): BlockRange[] {
+    const resources: BlockRange[] = [];
     const lines = args.content.split('\n');
     const fileName = path.basename(args.filePath);
 
@@ -46,7 +46,7 @@ export class NpmPackageJSONLanguageHandler implements ILanguageHandler {
       'optionalDependencies',
       'engines',
     ];
-    const sectionResources: ResourceRange[] = [];
+    const sectionResources: BlockRange[] = [];
     const keyLines: Array<{ key: string; line: number }> = [];
     for (let i = 0; i < lines.length; i++) {
       const trimmed = lines[i].trim();
@@ -101,11 +101,11 @@ export class NpmPackageJSONLanguageHandler implements ILanguageHandler {
       fileName,
       extension: ext,
       isConfigLike: true,
-      supportsResources: true,
+      supportsBlocks: true,
     };
   }
 
-  findResourceAtLine(args: FindResourceAtLineArgs): ResourceRange | null {
+  findBlockAtLine(args: FindBlockAtLineArgs): BlockRange | null {
     const resources = this.parseResources({
       filePath: args.filePath,
       content: args.content,
@@ -118,7 +118,7 @@ export class NpmPackageJSONLanguageHandler implements ILanguageHandler {
     );
   }
 
-  findNearestResource(args: FindNearestResourceArgs): ResourceRange | null {
+  findNearestBlock(args: FindNearestBlockArgs): BlockRange | null {
     const resources = this.parseResources({
       filePath: args.filePath,
       content: args.content,
@@ -140,15 +140,14 @@ export class NpmPackageJSONLanguageHandler implements ILanguageHandler {
   }
 
   findScopedEditRange(args: FindScopedEditRangeArgs): ScopedEditRange | null {
-    const resource =
-      this.findResourceAtLine(args) || this.findNearestResource(args);
+    const resource = this.findBlockAtLine(args) || this.findNearestBlock(args);
     if (!resource) {
       return null;
     }
     return { startLine: resource.startLine, endLine: resource.endLine };
   }
 
-  listResources(args: ListResourcesArgs): ResourceRange[] {
+  listBlocks(args: ListBlocksArgs): BlockRange[] {
     return this.parseResources({
       filePath: args.filePath,
       content: args.content,
@@ -156,14 +155,14 @@ export class NpmPackageJSONLanguageHandler implements ILanguageHandler {
   }
 
   buildDiagnosticContext(args: BuildDiagnosticContextArgs): DiagnosticContext {
-    const resource = this.findResourceAtLine({
+    const resource = this.findBlockAtLine({
       filePath: args.filePath,
       content: args.content,
       line: args.hint.line,
     });
     const nearestResource =
       resource ||
-      this.findNearestResource({
+      this.findNearestBlock({
         filePath: args.filePath,
         content: args.content,
         line: args.hint.line,
@@ -172,13 +171,13 @@ export class NpmPackageJSONLanguageHandler implements ILanguageHandler {
     return {
       languageId: 'npm-package-json',
       filePath: args.filePath,
-      resource: resource || undefined,
-      nearestResource: nearestResource || undefined,
+      block: resource || undefined,
+      nearestBlock: nearestResource || undefined,
       diagnosticAnchorLine:
         (resource || nearestResource)?.startLine || Math.max(1, args.hint.line),
-      resourceHeader:
+      blockHeader:
         (resource || nearestResource)?.header || path.basename(args.filePath),
-      fallbackResource: !(resource || nearestResource),
+      fallbackBlock: !(resource || nearestResource),
       tags: [],
     };
   }

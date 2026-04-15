@@ -29,15 +29,15 @@ describe('MavenXMLLanguageHandler', () => {
     });
   });
 
-  it('parses dependency + project resources with stable headers', () => {
-    const resources = handler.listResources({
+  it('parses dependency + project blocks with stable headers', () => {
+    const blocks = handler.listBlocks({
       filePath: '/workspace/pom.xml',
       content: mavenXml,
     });
-    expect(resources.find(r => r.type === 'maven_dependency')?.name).toBe(
+    expect(blocks.find(block => block.type === 'maven_dependency')?.name).toBe(
       'org.slf4j:slf4j-api',
     );
-    expect(resources.find(r => r.type === 'maven_project')?.header).toContain(
+    expect(blocks.find(block => block.type === 'maven_project')?.header).toContain(
       'com.example:service',
     );
   });

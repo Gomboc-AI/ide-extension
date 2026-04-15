@@ -26,16 +26,20 @@ describe('NpmPackageJSONHandler', () => {
     ).toMatchObject({
       languageId: 'npm-package-json',
       extension: '.json',
-      supportsResources: true,
+      supportsBlocks: true,
     });
   });
 
-  it('parses package and section resources', () => {
-    const resources = handler.listResources({
+  it('parses package and section blocks', () => {
+    const blocks = handler.listBlocks({
       filePath: '/workspace/package.json',
       content: packageJson,
     });
-    expect(resources.find(r => r.type === 'npm_package')?.name).toBe('my-app');
-    expect(resources.find(r => r.type === 'npm_section')?.name).toBe('scripts');
+    expect(blocks.find(block => block.type === 'npm_package')?.name).toBe(
+      'my-app',
+    );
+    expect(blocks.find(block => block.type === 'npm_section')?.name).toBe(
+      'scripts',
+    );
   });
 });

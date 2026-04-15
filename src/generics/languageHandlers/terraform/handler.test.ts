@@ -23,25 +23,25 @@ describe('TerraformLanguageHandler', () => {
       languageId: 'terraform',
       fileName: 'main.tf',
       extension: '.tf',
-      supportsResources: true,
+      supportsBlocks: true,
     });
   });
 
-  it('lists terraform resources with parsed ranges and headers', () => {
-    const resources = handler.listResources({
+  it('lists terraform blocks with parsed ranges and headers', () => {
+    const blocks = handler.listBlocks({
       filePath: '/workspace/main.tf',
       content: terraformContent,
     });
 
-    expect(resources).toHaveLength(2);
-    expect(resources[0]).toMatchObject({
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]).toMatchObject({
       type: 'aws_s3_bucket',
       name: 'logs',
       startLine: 1,
       endLine: 3,
       header: 'resource "aws_s3_bucket" "logs"',
     });
-    expect(resources[1]).toMatchObject({
+    expect(blocks[1]).toMatchObject({
       type: 'aws_db_instance',
       name: 'main',
       startLine: 5,
@@ -50,13 +50,13 @@ describe('TerraformLanguageHandler', () => {
     });
   });
 
-  it('finds the resource at a line and nearest resource outside ranges', () => {
-    const atLine = handler.findResourceAtLine({
+  it('finds the block at a line and nearest block outside ranges', () => {
+    const atLine = handler.findBlockAtLine({
       filePath: '/workspace/main.tf',
       content: terraformContent,
       line: 6,
     });
-    const nearestAfter = handler.findNearestResource({
+    const nearestAfter = handler.findNearestBlock({
       filePath: '/workspace/main.tf',
       content: terraformContent,
       line: 100,
@@ -67,7 +67,7 @@ describe('TerraformLanguageHandler', () => {
   });
 
   it('builds diagnostic context with anchor/header and fallback', () => {
-    const withResource = handler.buildDiagnosticContext({
+    const withBlock = handler.buildDiagnosticContext({
       filePath: '/workspace/main.tf',
       content: terraformContent,
       hint: { line: 2, filePath: '/workspace/main.tf' },
@@ -78,15 +78,15 @@ describe('TerraformLanguageHandler', () => {
       hint: { line: 2, filePath: '/workspace/empty.tf' },
     });
 
-    expect(withResource.resource?.name).toBe('logs');
-    expect(withResource.diagnosticAnchorLine).toBe(1);
-    expect(withResource.resourceHeader).toBe('resource "aws_s3_bucket" "logs"');
-    expect(withResource.fallbackResource).toBe(false);
+    expect(withBlock.block?.name).toBe('logs');
+    expect(withBlock.diagnosticAnchorLine).toBe(1);
+    expect(withBlock.blockHeader).toBe('resource "aws_s3_bucket" "logs"');
+    expect(withBlock.fallbackBlock).toBe(false);
 
-    expect(fallback.resource).toBeUndefined();
-    expect(fallback.nearestResource).toBeUndefined();
+    expect(fallback.block).toBeUndefined();
+    expect(fallback.nearestBlock).toBeUndefined();
     expect(fallback.diagnosticAnchorLine).toBe(2);
-    expect(fallback.resourceHeader).toBe('empty.tf');
-    expect(fallback.fallbackResource).toBe(true);
+    expect(fallback.blockHeader).toBe('empty.tf');
+    expect(fallback.fallbackBlock).toBe(true);
   });
 });

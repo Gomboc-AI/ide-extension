@@ -41,7 +41,7 @@ export const buildLanguageDiagnosticContextWithFallback = (
   args: BuildLanguageDiagnosticContextArgs,
 ): DiagnosticContext => {
   const primary = buildLanguageDiagnosticContext(args);
-  if (primary.resource || primary.nearestResource) {
+  if (primary.block || primary.nearestBlock) {
     return primary;
   }
 
@@ -63,6 +63,6 @@ export const buildLanguageDiagnosticContextWithFallback = (
 
   return {
     ...fallback,
-    fallbackResource: !(fallback.resource || fallback.nearestResource),
+    fallbackBlock: !(fallback.block || fallback.nearestBlock),
   };
 };

@@ -24,17 +24,17 @@ describe('GradleLanguageHandler', () => {
     ).toMatchObject({
       languageId: 'gradle',
       extension: '.gradle',
-      supportsResources: true,
+      supportsBlocks: true,
     });
   });
 
-  it('parses gradle blocks and task resources', () => {
-    const resources = handler.listResources({
+  it('parses gradle blocks and task blocks', () => {
+    const blocks = handler.listBlocks({
       filePath: '/workspace/build.gradle',
       content: gradleContent,
     });
-    expect(resources.find(r => r.name === 'plugins')).toBeDefined();
-    expect(resources.find(r => r.type === 'gradle_task')?.name).toBe(
+    expect(blocks.find(block => block.name === 'plugins')).toBeDefined();
+    expect(blocks.find(block => block.type === 'gradle_task')?.name).toBe(
       'smokeTest',
     );
   });

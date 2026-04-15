@@ -21,26 +21,26 @@ describe('HelmTemplateLanguageHandler', () => {
       }),
     ).toMatchObject({
       languageId: 'helm-template',
-      supportsResources: true,
+      supportsBlocks: true,
     });
   });
 
-  it('parses define blocks and YAML resources', () => {
-    const resources = handler.listResources({
+  it('parses define blocks and YAML blocks', () => {
+    const blocks = handler.listBlocks({
       filePath: '/workspace/charts/app/templates/deployment.yaml',
       content: helmTemplate,
     });
-    expect(resources.length).toBeGreaterThanOrEqual(2);
-    expect(resources[0]).toMatchObject({
+    expect(blocks.length).toBeGreaterThanOrEqual(2);
+    expect(blocks[0]).toMatchObject({
       type: 'helm_template',
       name: 'myapp.labels',
       startLine: 1,
     });
-    const resourceAtLine = handler.findResourceAtLine({
+    const blockAtLine = handler.findBlockAtLine({
       filePath: '/workspace/charts/app/templates/deployment.yaml',
       content: helmTemplate,
       line: 6,
     });
-    expect(resourceAtLine?.header).toContain('Deployment');
+    expect(blockAtLine?.header).toContain('Deployment');
   });
 });

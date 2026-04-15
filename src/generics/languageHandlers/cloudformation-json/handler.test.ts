@@ -32,43 +32,43 @@ describe('CloudFormationJSONLanguageHandler', () => {
       languageId: 'cloudformation-json',
       fileName: 'template.json',
       extension: '.json',
-      supportsResources: true,
+      supportsBlocks: true,
     });
   });
 
-  it('lists resources and computes bounded line ranges', () => {
-    const resources = handler.listResources({
+  it('lists blocks and computes bounded line ranges', () => {
+    const blocks = handler.listBlocks({
       filePath: '/workspace/template.json',
       content: cloudFormationJson,
     });
 
-    expect(resources).toHaveLength(2);
-    expect(resources[0]).toMatchObject({
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]).toMatchObject({
       type: 'AWS::S3::Bucket',
       name: 'AppBucket',
       header: 'AppBucket (AWS::S3::Bucket)',
     });
-    expect(resources[1]).toMatchObject({
+    expect(blocks[1]).toMatchObject({
       type: 'AWS::SQS::Queue',
       name: 'AppQueue',
       header: 'AppQueue (AWS::SQS::Queue)',
     });
-    expect(resources[0].startLine).toBeLessThan(resources[1].startLine);
-    expect(resources[0].endLine).toBe(resources[1].startLine - 1);
+    expect(blocks[0].startLine).toBeLessThan(blocks[1].startLine);
+    expect(blocks[0].endLine).toBe(blocks[1].startLine - 1);
   });
 
-  it('finds resource at line and nearest resource outside bounds', () => {
-    const resources = handler.listResources({
+  it('finds block at line and nearest block outside bounds', () => {
+    const blocks = handler.listBlocks({
       filePath: '/workspace/template.json',
       content: cloudFormationJson,
     });
 
-    const appQueue = handler.findResourceAtLine({
+    const appQueue = handler.findBlockAtLine({
       filePath: '/workspace/template.json',
       content: cloudFormationJson,
-      line: resources[1].startLine,
+      line: blocks[1].startLine,
     });
-    const nearest = handler.findNearestResource({
+    const nearest = handler.findNearestBlock({
       filePath: '/workspace/template.json',
       content: cloudFormationJson,
       line: 10_000,
@@ -79,7 +79,7 @@ describe('CloudFormationJSONLanguageHandler', () => {
   });
 
   it('builds context with fallback for invalid JSON', () => {
-    const withResource = handler.buildDiagnosticContext({
+    const withBlock = handler.buildDiagnosticContext({
       filePath: '/workspace/template.json',
       content: cloudFormationJson,
       hint: { line: 1, filePath: '/workspace/template.json' },
@@ -90,14 +90,14 @@ describe('CloudFormationJSONLanguageHandler', () => {
       hint: { line: 4, filePath: '/workspace/broken.json' },
     });
 
-    expect(withResource.resourceHeader).toContain('App');
-    expect(withResource.fallbackResource).toBe(false);
-    expect(withResource.diagnosticAnchorLine).toBeGreaterThan(0);
+    expect(withBlock.blockHeader).toContain('App');
+    expect(withBlock.fallbackBlock).toBe(false);
+    expect(withBlock.diagnosticAnchorLine).toBeGreaterThan(0);
 
-    expect(fallback.resource).toBeUndefined();
-    expect(fallback.nearestResource).toBeUndefined();
+    expect(fallback.block).toBeUndefined();
+    expect(fallback.nearestBlock).toBeUndefined();
     expect(fallback.diagnosticAnchorLine).toBe(4);
-    expect(fallback.resourceHeader).toBe('CloudFormation broken.json');
-    expect(fallback.fallbackResource).toBe(true);
+    expect(fallback.blockHeader).toBe('CloudFormation broken.json');
+    expect(fallback.fallbackBlock).toBe(true);
   });
 });

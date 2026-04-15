@@ -20,23 +20,23 @@ describe('DockerfileLanguageHandler', () => {
     ).toMatchObject({
       languageId: 'dockerfile',
       fileName: 'Dockerfile',
-      supportsResources: true,
+      supportsBlocks: true,
     });
   });
 
   it('lists docker stages with bounded ranges', () => {
-    const resources = handler.listResources({
+    const blocks = handler.listBlocks({
       filePath: '/workspace/Dockerfile',
       content: dockerContent,
     });
-    expect(resources).toHaveLength(2);
-    expect(resources[0]).toMatchObject({
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]).toMatchObject({
       type: 'docker_stage',
       name: 'base',
       startLine: 1,
       endLine: 3,
     });
-    expect(resources[1]).toMatchObject({
+    expect(blocks[1]).toMatchObject({
       type: 'docker_stage',
       name: 'build',
       startLine: 4,
@@ -44,7 +44,7 @@ describe('DockerfileLanguageHandler', () => {
   });
 
   it('builds context with fallback when stage not found', () => {
-    const withResource = handler.buildDiagnosticContext({
+    const withBlock = handler.buildDiagnosticContext({
       filePath: '/workspace/Dockerfile',
       content: dockerContent,
       hint: { line: 2, filePath: '/workspace/Dockerfile' },
@@ -54,9 +54,9 @@ describe('DockerfileLanguageHandler', () => {
       content: 'RUN echo hello',
       hint: { line: 1, filePath: '/workspace/Dockerfile' },
     });
-    expect(withResource.resource?.name).toBe('base');
-    expect(withResource.fallbackResource).toBe(false);
-    expect(fallback.resource).toBeUndefined();
-    expect(fallback.fallbackResource).toBe(true);
+    expect(withBlock.block?.name).toBe('base');
+    expect(withBlock.fallbackBlock).toBe(false);
+    expect(fallback.block).toBeUndefined();
+    expect(fallback.fallbackBlock).toBe(true);
   });
 });

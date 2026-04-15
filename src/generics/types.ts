@@ -114,12 +114,12 @@ export interface GetDocumentInfoArgs {
   filePath: string;
   content: string;
 }
-export interface FindResourceAtLineArgs {
+export interface FindBlockAtLineArgs {
   filePath: string;
   content: string;
   line: number;
 }
-export interface FindNearestResourceArgs {
+export interface FindNearestBlockArgs {
   filePath: string;
   content: string;
   line: number;
@@ -129,7 +129,7 @@ export interface FindScopedEditRangeArgs {
   content: string;
   line: number;
 }
-export interface ListResourcesArgs {
+export interface ListBlocksArgs {
   filePath: string;
   content: string;
 }
@@ -153,10 +153,10 @@ export interface DocumentInfo {
   fileName: string;
   extension: string;
   isConfigLike?: boolean;
-  supportsResources?: boolean;
+  supportsBlocks?: boolean;
 }
 
-export interface ResourceRange {
+export interface BlockRange {
   type: string; // e.g. "aws_instance", "Deployment", "docker_stage"
   name?: string; // e.g. "web", "my-app"
   startLine: number; // 1-based
@@ -172,11 +172,11 @@ export interface ScopedEditRange {
 export interface DiagnosticContext {
   languageId: string;
   filePath: string;
-  resource?: ResourceRange;
-  nearestResource?: ResourceRange;
+  block?: BlockRange;
+  nearestBlock?: BlockRange;
   diagnosticAnchorLine?: number; // 1-based diagnostic line anchor
-  resourceHeader: string; // user-facing resource label
-  fallbackResource?: boolean; // true when resource context could not be resolved
+  blockHeader: string; // user-facing block label
+  fallbackBlock?: boolean; // true when block context could not be resolved
   tags?: string[]; // optional hints for rule matching
 }
 
@@ -188,9 +188,9 @@ export interface ILanguageHandler {
   displayName: string;
   extensions: string[];
   getDocumentInfo(args: GetDocumentInfoArgs): DocumentInfo;
-  findResourceAtLine(args: FindResourceAtLineArgs): ResourceRange | null;
-  findNearestResource(args: FindNearestResourceArgs): ResourceRange | null;
+  findBlockAtLine(args: FindBlockAtLineArgs): BlockRange | null;
+  findNearestBlock(args: FindNearestBlockArgs): BlockRange | null;
   findScopedEditRange(args: FindScopedEditRangeArgs): ScopedEditRange | null;
-  listResources(args: ListResourcesArgs): ResourceRange[];
+  listBlocks(args: ListBlocksArgs): BlockRange[];
   buildDiagnosticContext(args: BuildDiagnosticContextArgs): DiagnosticContext;
 }

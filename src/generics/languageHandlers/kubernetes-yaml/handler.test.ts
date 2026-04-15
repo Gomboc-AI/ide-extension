@@ -26,28 +26,28 @@ describe('KubernetesYAMLLanguageHandler', () => {
     ).toMatchObject({
       languageId: 'kubernetes-yaml',
       extension: '.yaml',
-      supportsResources: true,
+      supportsBlocks: true,
     });
   });
 
-  it('lists kubernetes resources and finds nearest resource', () => {
-    const resources = handler.listResources({
+  it('lists kubernetes blocks and finds nearest block', () => {
+    const blocks = handler.listBlocks({
       filePath: '/workspace/k8s/deployment.yaml',
       content: kubernetesYaml,
     });
-    expect(resources).toHaveLength(2);
-    expect(resources[0]).toMatchObject({
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]).toMatchObject({
       type: 'Deployment',
       name: 'web',
       startLine: 2,
     });
-    expect(resources[1]).toMatchObject({
+    expect(blocks[1]).toMatchObject({
       type: 'Service',
       name: 'web-svc',
       startLine: 9,
     });
 
-    const nearest = handler.findNearestResource({
+    const nearest = handler.findNearestBlock({
       filePath: '/workspace/k8s/deployment.yaml',
       content: kubernetesYaml,
       line: 10_000,

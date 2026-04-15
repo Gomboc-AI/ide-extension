@@ -3,13 +3,13 @@ import {
   BuildDiagnosticContextArgs,
   DiagnosticContext,
   DocumentInfo,
-  FindNearestResourceArgs,
-  FindResourceAtLineArgs,
+  FindNearestBlockArgs,
+  FindBlockAtLineArgs,
   FindScopedEditRangeArgs,
   GetDocumentInfoArgs,
   ILanguageHandler,
-  ListResourcesArgs,
-  ResourceRange,
+  ListBlocksArgs,
+  BlockRange,
   ScopedEditRange,
 } from '../../types';
 
@@ -23,9 +23,9 @@ export class GradleLanguageHandler implements ILanguageHandler {
   private parseResources(args: {
     filePath: string;
     content: string;
-  }): ResourceRange[] {
+  }): BlockRange[] {
     const lines = args.content.split('\n');
-    const resources: ResourceRange[] = [];
+    const resources: BlockRange[] = [];
     const taskPattern = /^\s*task\s+([A-Za-z0-9_]+)\s*\{/;
     const registerTaskPattern =
       /^\s*tasks\.(?:register|create)\(\s*["']([^"']+)["']/;
@@ -106,11 +106,11 @@ export class GradleLanguageHandler implements ILanguageHandler {
       fileName,
       extension: ext,
       isConfigLike: true,
-      supportsResources: true,
+      supportsBlocks: true,
     };
   }
 
-  findResourceAtLine(args: FindResourceAtLineArgs): ResourceRange | null {
+  findBlockAtLine(args: FindBlockAtLineArgs): BlockRange | null {
     const resources = this.parseResources({
       filePath: args.filePath,
       content: args.content,
@@ -123,7 +123,7 @@ export class GradleLanguageHandler implements ILanguageHandler {
     );
   }
 
-  findNearestResource(args: FindNearestResourceArgs): ResourceRange | null {
+  findNearestBlock(args: FindNearestBlockArgs): BlockRange | null {
     const resources = this.parseResources({
       filePath: args.filePath,
       content: args.content,
@@ -145,15 +145,14 @@ export class GradleLanguageHandler implements ILanguageHandler {
   }
 
   findScopedEditRange(args: FindScopedEditRangeArgs): ScopedEditRange | null {
-    const resource =
-      this.findResourceAtLine(args) || this.findNearestResource(args);
+    const resource = this.findBlockAtLine(args) || this.findNearestBlock(args);
     if (!resource) {
       return null;
     }
     return { startLine: resource.startLine, endLine: resource.endLine };
   }
 
-  listResources(args: ListResourcesArgs): ResourceRange[] {
+  listBlocks(args: ListBlocksArgs): BlockRange[] {
     return this.parseResources({
       filePath: args.filePath,
       content: args.content,
@@ -161,14 +160,14 @@ export class GradleLanguageHandler implements ILanguageHandler {
   }
 
   buildDiagnosticContext(args: BuildDiagnosticContextArgs): DiagnosticContext {
-    const resource = this.findResourceAtLine({
+    const resource = this.findBlockAtLine({
       filePath: args.filePath,
       content: args.content,
       line: args.hint.line,
     });
     const nearestResource =
       resource ||
-      this.findNearestResource({
+      this.findNearestBlock({
         filePath: args.filePath,
         content: args.content,
         line: args.hint.line,
@@ -177,13 +176,13 @@ export class GradleLanguageHandler implements ILanguageHandler {
     return {
       languageId: 'gradle',
       filePath: args.filePath,
-      resource: resource || undefined,
-      nearestResource: nearestResource || undefined,
+      block: resource || undefined,
+      nearestBlock: nearestResource || undefined,
       diagnosticAnchorLine:
         (resource || nearestResource)?.startLine || Math.max(1, args.hint.line),
-      resourceHeader:
+      blockHeader:
         (resource || nearestResource)?.header || path.basename(args.filePath),
-      fallbackResource: !(resource || nearestResource),
+      fallbackBlock: !(resource || nearestResource),
       tags: [],
     };
   }

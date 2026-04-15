@@ -26,25 +26,25 @@ describe('CloudFormationYAMLLanguageHandler', () => {
       languageId: 'cloudformation-yaml',
       fileName: 'template.yaml',
       extension: '.yaml',
-      supportsResources: true,
+      supportsBlocks: true,
     });
   });
 
-  it('lists resources from the YAML Resources block', () => {
-    const resources = handler.listResources({
+  it('lists blocks from the YAML Resources block', () => {
+    const blocks = handler.listBlocks({
       filePath: '/workspace/template.yaml',
       content: cloudFormationYaml,
     });
 
-    expect(resources).toHaveLength(2);
-    expect(resources[0]).toMatchObject({
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]).toMatchObject({
       type: 'AWS::S3::Bucket',
       name: 'AppBucket',
       startLine: 3,
       endLine: 6,
       header: 'AppBucket (AWS::S3::Bucket)',
     });
-    expect(resources[1]).toMatchObject({
+    expect(blocks[1]).toMatchObject({
       type: 'AWS::IAM::Role',
       name: 'AppRole',
       startLine: 7,
@@ -53,13 +53,13 @@ describe('CloudFormationYAMLLanguageHandler', () => {
     });
   });
 
-  it('finds resources by line and nearest previous resource', () => {
-    const atLine = handler.findResourceAtLine({
+  it('finds blocks by line and nearest previous block', () => {
+    const atLine = handler.findBlockAtLine({
       filePath: '/workspace/template.yaml',
       content: cloudFormationYaml,
       line: 8,
     });
-    const nearest = handler.findNearestResource({
+    const nearest = handler.findNearestBlock({
       filePath: '/workspace/template.yaml',
       content: cloudFormationYaml,
       line: 100,
@@ -70,7 +70,7 @@ describe('CloudFormationYAMLLanguageHandler', () => {
   });
 
   it('builds context with fallback when no Resources block exists', () => {
-    const withResource = handler.buildDiagnosticContext({
+    const withBlock = handler.buildDiagnosticContext({
       filePath: '/workspace/template.yaml',
       content: cloudFormationYaml,
       hint: { line: 5, filePath: '/workspace/template.yaml' },
@@ -81,14 +81,14 @@ describe('CloudFormationYAMLLanguageHandler', () => {
       hint: { line: 2, filePath: '/workspace/deployment.yaml' },
     });
 
-    expect(withResource.resource?.name).toBe('AppBucket');
-    expect(withResource.diagnosticAnchorLine).toBe(3);
-    expect(withResource.resourceHeader).toBe('AppBucket (AWS::S3::Bucket)');
-    expect(withResource.fallbackResource).toBe(false);
+    expect(withBlock.block?.name).toBe('AppBucket');
+    expect(withBlock.diagnosticAnchorLine).toBe(3);
+    expect(withBlock.blockHeader).toBe('AppBucket (AWS::S3::Bucket)');
+    expect(withBlock.fallbackBlock).toBe(false);
 
-    expect(fallback.resource).toBeUndefined();
-    expect(fallback.nearestResource).toBeUndefined();
-    expect(fallback.resourceHeader).toBe('CloudFormation deployment.yaml');
-    expect(fallback.fallbackResource).toBe(true);
+    expect(fallback.block).toBeUndefined();
+    expect(fallback.nearestBlock).toBeUndefined();
+    expect(fallback.blockHeader).toBe('CloudFormation deployment.yaml');
+    expect(fallback.fallbackBlock).toBe(true);
   });
 });
