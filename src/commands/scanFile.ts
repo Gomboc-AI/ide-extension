@@ -1,13 +1,9 @@
 // scans current working file or scenarioimport * as vscode from 'vscode';
 import * as vscode from 'vscode';
-import { getFileType } from '../utils/lib';
-import { IacScanContent } from '../types';
 import { ScanResultsProvider } from '../providers/scanResultsProvider';
 import * as path from 'path';
 import { createOrlClient } from '../orl/orlClient';
 import logger from '../utils/logger';
-import { PathConverter } from '../utils/pathConverter';
-import { FileDiffAnalyzer } from '../utils/fileDiffAnalyzer';
 import { OrlResultConverter } from '../orl/orlResultConverter';
 import { ScanValidator } from '../utils/scanValidator';
 import { vsCodeIntegrationsService } from '../utils/integrationsService';
@@ -15,6 +11,10 @@ import { setScanStatus } from '../utils/scanStatus';
 import { createProfiler } from '../utils/profiler';
 import { parseOrlReport } from '../utils/orlReportParser';
 import { CheckovIdExtractor } from '../fixproof/checkov/CheckovIdExtractor';
+import {
+  detectLanguageId,
+  mapLanguageIdToOrlLanguage,
+} from '../generics/languageHandler';
 
 /**
  * ORL scans are executed by spawning a docker container (`orlClient.remediate`).
@@ -28,6 +28,14 @@ import { CheckovIdExtractor } from '../fixproof/checkov/CheckovIdExtractor';
 let orlScanRunning = false;
 let orlScanQueued = false;
 let orlScanSeq = 0;
+
+function deriveFiletypeFromPath(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext) {
+    return ext.slice(1);
+  }
+  return path.basename(filePath).toLowerCase();
+}
 
 export async function scanFileCommand(
   context: vscode.ExtensionContext,
@@ -93,7 +101,6 @@ async function scanWithOrl(
         const scanPrep = ScanValidator.validateAndPrepareScan(editor);
         filePath = scanPrep.filePath;
         workspacePath = scanPrep.workspacePath;
-        filetype = scanPrep.filetype;
         language = scanPrep.language;
       } else {
         const last = scanResultsProvider.getLastOrlScanContext();
@@ -115,7 +122,9 @@ async function scanWithOrl(
           );
           return;
         }
-        filetype = getFileType(filePath);
+      }
+      if (filePath) {
+        filetype = deriveFiletypeFromPath(filePath);
       }
     } catch (error) {
       // Validation error (400) - file type not supported, language detection failed, etc.
@@ -368,8 +377,8 @@ async function pickRepresentativeFileInDirectory(args: {
   language: string;
 }): Promise<string | undefined> {
   const workspacePath = (args.workspacePath || '').trim();
-  const language = (args.language || '').trim().toLowerCase();
-  if (!workspacePath || !language) {
+  const targetOrlLanguage = (args.language || '').trim().toLowerCase();
+  if (!workspacePath || !targetOrlLanguage) {
     return undefined;
   }
 
@@ -377,94 +386,26 @@ async function pickRepresentativeFileInDirectory(args: {
     await vscode.workspace.fs.readDirectory(vscode.Uri.file(workspacePath));
   const files = entries
     .filter(([_, t]) => t === vscode.FileType.File)
-    .map(([name]) => name);
+    .map(([name]) => path.join(workspacePath, name));
 
-  const pickBy = (pred: (name: string) => boolean): string | undefined => {
-    const hit = files.find(pred);
-    return hit ? path.join(workspacePath, hit) : undefined;
-  };
-
-  // Terraform
-  if (language === 'terraform') {
-    return (
-      pickBy(n => n.toLowerCase().endsWith('.tf')) ||
-      pickBy(n => n.toLowerCase().endsWith('.hcl')) ||
-      pickBy(n => n.toLowerCase().endsWith('.tfvars')) ||
-      undefined
-    );
+  for (const filePath of files) {
+    try {
+      const bytes = await vscode.workspace.fs.readFile(
+        vscode.Uri.file(filePath),
+      );
+      const content = new TextDecoder().decode(bytes);
+      const languageId = detectLanguageId({ filePath, content });
+      if (!languageId) {
+        continue;
+      }
+      const orlLanguage = mapLanguageIdToOrlLanguage({ languageId, filePath });
+      if (orlLanguage === targetOrlLanguage) {
+        return filePath;
+      }
+    } catch {
+      // Ignore unreadable files and continue to next candidate.
+    }
   }
 
-  // Docker
-  if (language === 'docker') {
-    return (
-      pickBy(n => n.toLowerCase().startsWith('dockerfile')) ||
-      pickBy(n => n.toLowerCase().endsWith('.dockerfile')) ||
-      undefined
-    );
-  }
-
-  // Helm
-  if (language === 'helm') {
-    return (
-      pickBy(n => n.toLowerCase().endsWith('.tpl')) ||
-      pickBy(n => n.toLowerCase().endsWith('.yaml')) ||
-      pickBy(n => n.toLowerCase().endsWith('.yml')) ||
-      undefined
-    );
-  }
-
-  // npm (JSON language from package.json / package-lock.json)
-  if (language === 'json') {
-    return (
-      pickBy(n => n.toLowerCase() === 'package.json') ||
-      pickBy(n => n.toLowerCase() === 'package-lock.json') ||
-      pickBy(n => n.toLowerCase().endsWith('.json')) ||
-      undefined
-    );
-  }
-
-  // CloudFormation / Kubernetes / YAML-ish
-  if (
-    language.startsWith('cloudformation') ||
-    language === 'kubernetes' ||
-    language.endsWith('-yaml') ||
-    language.endsWith('-json')
-  ) {
-    return (
-      pickBy(n => n.toLowerCase().endsWith('.yaml')) ||
-      pickBy(n => n.toLowerCase().endsWith('.yml')) ||
-      pickBy(n => n.toLowerCase().endsWith('.json')) ||
-      undefined
-    );
-  }
-
-  // Maven XML
-  if (language === 'xml') {
-    return pickBy(n => n.toLowerCase().endsWith('.xml')) || undefined;
-  }
-
-  // Gradle Groovy / Kotlin
-  if (language === 'groovy') {
-    return pickBy(n => n.toLowerCase().endsWith('.gradle')) || undefined;
-  }
-  if (language === 'kotlin') {
-    return pickBy(n => n.toLowerCase().endsWith('.kts')) || undefined;
-  }
-
-  // Fallback: any file in the directory.
-  return files.length ? path.join(workspacePath, files[0]) : undefined;
-}
-
-/**
- * Only care about the current file, just return base64 of it
- */
-export function getCFNFile(
-  document: Pick<vscode.TextDocument, 'uri' | 'getText'>,
-): IacScanContent[] {
-  return [
-    {
-      filePath: document.uri.fsPath,
-      fileContent: Buffer.from(document.getText(), 'utf8').toString('base64'),
-    },
-  ];
+  return files.length ? files[0] : undefined;
 }

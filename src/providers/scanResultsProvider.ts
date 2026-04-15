@@ -229,9 +229,7 @@ export class ScanResultsProvider {
       const openDocs = Array.isArray(vscode.workspace.textDocuments)
         ? vscode.workspace.textDocuments
         : [];
-      const openDoc = openDocs.find(
-        doc => doc.uri.fsPath === filePath,
-      );
+      const openDoc = openDocs.find(doc => doc.uri.fsPath === filePath);
       return openDoc?.getText();
     }
   }
@@ -241,9 +239,10 @@ export class ScanResultsProvider {
     content?: string;
     suggestedLine: number;
   }): number {
-    const suggested = Number.isFinite(args.suggestedLine) && args.suggestedLine > 0
-      ? Math.floor(args.suggestedLine)
-      : 1;
+    const suggested =
+      Number.isFinite(args.suggestedLine) && args.suggestedLine > 0
+        ? Math.floor(args.suggestedLine)
+        : 1;
     if (!args.content) {
       return suggested;
     }
