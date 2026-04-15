@@ -5,10 +5,12 @@ import {
   DocumentInfo,
   FindNearestResourceArgs,
   FindResourceAtLineArgs,
+  FindScopedEditRangeArgs,
   GetDocumentInfoArgs,
   ILanguageHandler,
   ListResourcesArgs,
   ResourceRange,
+  ScopedEditRange,
 } from '../types';
 
 export class TerraformLanguageHandler implements ILanguageHandler {
@@ -111,6 +113,15 @@ export class TerraformLanguageHandler implements ILanguageHandler {
     }
 
     return resources[0];
+  }
+
+  findScopedEditRange(args: FindScopedEditRangeArgs): ScopedEditRange | null {
+    const resource =
+      this.findResourceAtLine(args) || this.findNearestResource(args);
+    if (!resource) {
+      return null;
+    }
+    return { startLine: resource.startLine, endLine: resource.endLine };
   }
 
   listResources(args: ListResourcesArgs): ResourceRange[] {

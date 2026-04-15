@@ -5,10 +5,12 @@ import {
   DocumentInfo,
   FindNearestResourceArgs,
   FindResourceAtLineArgs,
+  FindScopedEditRangeArgs,
   GetDocumentInfoArgs,
   ILanguageHandler,
   ListResourcesArgs,
   ResourceRange,
+  ScopedEditRange,
 } from '../types';
 
 export class NpmPackageJSONLanguageHandler implements ILanguageHandler {
@@ -135,6 +137,15 @@ export class NpmPackageJSONLanguageHandler implements ILanguageHandler {
       .filter(resource => resource.startLine <= line)
       .sort((a, b) => b.startLine - a.startLine)[0];
     return previous || resources[0];
+  }
+
+  findScopedEditRange(args: FindScopedEditRangeArgs): ScopedEditRange | null {
+    const resource =
+      this.findResourceAtLine(args) || this.findNearestResource(args);
+    if (!resource) {
+      return null;
+    }
+    return { startLine: resource.startLine, endLine: resource.endLine };
   }
 
   listResources(args: ListResourcesArgs): ResourceRange[] {

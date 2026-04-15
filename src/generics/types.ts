@@ -124,6 +124,11 @@ export interface FindNearestResourceArgs {
   content: string;
   line: number;
 }
+export interface FindScopedEditRangeArgs {
+  filePath: string;
+  content: string;
+  line: number;
+}
 export interface ListResourcesArgs {
   filePath: string;
   content: string;
@@ -159,6 +164,11 @@ export interface ResourceRange {
   header: string; // display label for diagnostics/code actions
 }
 
+export interface ScopedEditRange {
+  startLine: number; // 1-based
+  endLine: number; // 1-based
+}
+
 export interface DiagnosticContext {
   languageId: string;
   filePath: string;
@@ -180,6 +190,7 @@ export interface ILanguageHandler {
   getDocumentInfo(args: GetDocumentInfoArgs): DocumentInfo;
   findResourceAtLine(args: FindResourceAtLineArgs): ResourceRange | null;
   findNearestResource(args: FindNearestResourceArgs): ResourceRange | null;
+  findScopedEditRange(args: FindScopedEditRangeArgs): ScopedEditRange | null;
   listResources(args: ListResourcesArgs): ResourceRange[];
   buildDiagnosticContext(args: BuildDiagnosticContextArgs): DiagnosticContext;
 }

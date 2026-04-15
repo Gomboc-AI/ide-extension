@@ -25,7 +25,20 @@ const logger = winston.createLogger({
   // Default to error-only; debug/info logging can be very noisy and slow down scans.
   // Can be overridden via env or extension settings (see setLoggerLevel()).
   level: normalizeLevel(process.env.GOMBOC_LOG_LEVEL),
+  // Old structured format (temporary disabled):
   format: winston.format.combine(customFormat(), winston.format.json()),
+  // format: winston.format.printf(info => {
+  //   const level = info.level || 'info';
+  //   const message = info.message || '';
+  //   const hasMeta = Object.keys(info).some(
+  //     key => !['level', 'message'].includes(key),
+  //   );
+  //   if (!hasMeta) {
+  //     return `[${level}] ${message}`;
+  //   }
+  //   const { level: _, message: __, ...meta } = info;
+  //   return `[${level}] ${message} ${JSON.stringify(meta)}`;
+  // }),
   transports: [
     new winston.transports.Console({
       stderrLevels: ['error'],

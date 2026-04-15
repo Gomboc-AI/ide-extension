@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
 import {
   IndividualFixGombocDiagnostic,
   GroupedFixGombocDiagnostic,
@@ -17,7 +18,10 @@ import { getInfrastructureToolFromFileUri } from '../infrastructureTool';
 import { vsCodeIntegrationsService } from '../utils/integrationsService';
 import { createOrlClient } from '../orl/orlClient';
 import { extractRenderableOrlRuleNames } from '../orl/orlRuleNameResolver';
-import { detectLanguageFromFile } from '../utils/scanValidator';
+import {
+  chooseLanguageImplementation,
+  mapLanguageIdToOrlLanguage,
+} from '../generics/languageHandler';
 import logger from '../utils/logger';
 import { parseOrlReport } from '../utils/orlReportParser';
 import {
@@ -193,39 +197,75 @@ export class ScanResultsProvider {
   }
 
   /**
-   * Find the Terraform `resource` block that contains (or is nearest above) a target line.
+   * Resolve a language-aware scoped edit range anchored at the target line.
    *
-   * This is used by single-rule apply to scope edits to one resource block instead of
-   * replacing the entire file when ORL returns full-file content.
+   * This keeps single-rule apply focused on one resource block when the language
+   * handler can identify a concrete resource range.
    */
-  private findTerraformResourceBlockRange(
-    text: string,
+  private findScopedEditRange(
+    filePath: string,
+    content: string,
     line1Based: number,
   ): { startLine: number; endLine: number } | undefined {
-    const lines = text.split('\n');
-    const idx = Math.max(0, Math.min(lines.length - 1, line1Based - 1));
-
-    let start = -1;
-    const lookback = 1000;
-    for (let i = idx; i >= 0 && idx - i <= lookback; i--) {
-      if (lines[i].match(/^\s*resource\s+"[^"]+"\s+"[^"]+"\s*\{/)) {
-        start = i;
-        break;
-      }
-    }
-    if (start < 0) {
+    if (!filePath || !content) {
       return undefined;
     }
+    const handler = chooseLanguageImplementation({
+      filePath,
+      content,
+    });
+    const scopedRange = handler.findScopedEditRange({
+      filePath,
+      content,
+      line: line1Based,
+    });
+    return scopedRange || undefined;
+  }
 
-    let depth = 0;
-    for (let j = start; j < lines.length; j++) {
-      depth += (lines[j].match(/{/g) || []).length;
-      depth -= (lines[j].match(/}/g) || []).length;
-      if (depth === 0 && j > start) {
-        return { startLine: start + 1, endLine: j + 1 };
-      }
+  private readFileTextForDiagnostics(filePath: string): string | undefined {
+    try {
+      return fs.readFileSync(filePath, 'utf8');
+    } catch {
+      const openDocs = Array.isArray(vscode.workspace.textDocuments)
+        ? vscode.workspace.textDocuments
+        : [];
+      const openDoc = openDocs.find(
+        doc => doc.uri.fsPath === filePath,
+      );
+      return openDoc?.getText();
     }
-    return undefined;
+  }
+
+  private resolveDiagnosticAnchorLine(args: {
+    filePath: string;
+    content?: string;
+    suggestedLine: number;
+  }): number {
+    const suggested = Number.isFinite(args.suggestedLine) && args.suggestedLine > 0
+      ? Math.floor(args.suggestedLine)
+      : 1;
+    if (!args.content) {
+      return suggested;
+    }
+
+    const handler = chooseLanguageImplementation({
+      filePath: args.filePath,
+      content: args.content,
+    });
+    const context = handler.buildDiagnosticContext({
+      filePath: args.filePath,
+      content: args.content,
+      hint: {
+        line: suggested,
+        filePath: args.filePath,
+      },
+    });
+    const anchored =
+      context.diagnosticAnchorLine && context.diagnosticAnchorLine > 0
+        ? context.diagnosticAnchorLine
+        : suggested;
+    const maxLine = Math.max(1, args.content.split('\n').length);
+    return Math.min(maxLine, Math.max(1, Math.floor(anchored)));
   }
 
   private extractCheckovIdsFromAnnotations(
@@ -854,6 +894,7 @@ export class ScanResultsProvider {
       // use Uri.file to get unix style, Uri.parse gets the windows style
       const uri = vscode.Uri.file(filepath);
       const currentRemediation = existingResourceRuleFixes[filepath];
+      const fileContent = this.readFileTextForDiagnostics(filepath);
       const curDiag: Array<
         | IndividualFixGombocDiagnostic
         | GroupedFixGombocDiagnostic
@@ -891,6 +932,11 @@ export class ScanResultsProvider {
           if (!Number.isFinite(line) || line <= 0) {
             line = 1;
           }
+          line = this.resolveDiagnosticAnchorLine({
+            filePath: filepath,
+            content: fileContent,
+            suggestedLine: line,
+          });
 
           const resourceHeader: string | undefined =
             typeof remediation?.codeObservation?.codeResourceInstance?.name ===
@@ -992,6 +1038,11 @@ export class ScanResultsProvider {
           if (!containsAddFixType && remediation.fixes.length > 0) {
             startLine = remediation.fixes[0].codePosition.line;
           }
+          startLine = this.resolveDiagnosticAnchorLine({
+            filePath: filepath,
+            content: fileContent,
+            suggestedLine: startLine,
+          });
           const startPosition = new vscode.Position(startLine - 1, 0);
           uniqueLines.add(startLine);
           const endPosition = new vscode.Position(startLine - 1, 999);
@@ -1239,10 +1290,22 @@ export class ScanResultsProvider {
 
     const fileUri = vscode.Uri.file(filePath);
     const document = await vscode.workspace.openTextDocument(fileUri);
-    const language = detectLanguageFromFile(filePath, document.getText());
+    const docText = document.getText();
+    const handler = chooseLanguageImplementation({
+      filePath,
+      content: docText,
+    });
+    const languageInfo = handler.getDocumentInfo({
+      filePath,
+      content: docText,
+    });
+    const language = mapLanguageIdToOrlLanguage({
+      languageId: languageInfo.languageId,
+      filePath,
+    });
     if (!language) {
       vscode.window.showErrorMessage(
-        'Unable to apply rule fix: file language could not be detected',
+        `Unable to apply rule fix: unsupported language (${languageInfo.languageId || 'unknown'})`,
       );
       return;
     }
@@ -1296,14 +1359,14 @@ export class ScanResultsProvider {
         // Skip no-op replacements to avoid confusing "applied but nothing changed" behavior.
         continue;
       }
-      // When a diagnostic line is available, prefer replacing only that Terraform
-      // resource block. ORL returns full-file content for single-rule runs, so this
-      // keeps "Apply fix" scoped to the selected resource instead of applying all
-      // same-rule instances in the file.
+      // When a diagnostic line is available, prefer replacing only the language
+      // handler scoped resource range. ORL returns full-file content for single-rule
+      // runs, so this keeps "Apply fix" scoped to the selected resource instead of
+      // applying all same-rule instances in the file.
       let appliedScopedEdit = false;
       if (typeof line === 'number' && Number.isFinite(line) && line > 0) {
-        const beforeBlock = this.findTerraformResourceBlockRange(before, line);
-        const afterBlock = this.findTerraformResourceBlockRange(content, line);
+        const beforeBlock = this.findScopedEditRange(absPath, before, line);
+        const afterBlock = this.findScopedEditRange(absPath, content, line);
 
         if (beforeBlock && afterBlock) {
           const beforeLines = before.split('\n');

@@ -5,9 +5,11 @@ import {
   DocumentInfo,
   FindNearestResourceArgs,
   FindResourceAtLineArgs,
+  FindScopedEditRangeArgs,
   ILanguageHandler,
   ListResourcesArgs,
   ResourceRange,
+  ScopedEditRange,
   GetDocumentInfoArgs,
 } from '../types';
 
@@ -144,6 +146,15 @@ export class CloudFormationYAMLLanguageHandler implements ILanguageHandler {
     }
 
     return resources[0];
+  }
+
+  findScopedEditRange(args: FindScopedEditRangeArgs): ScopedEditRange | null {
+    const resource =
+      this.findResourceAtLine(args) || this.findNearestResource(args);
+    if (!resource) {
+      return null;
+    }
+    return { startLine: resource.startLine, endLine: resource.endLine };
   }
 
   listResources(args: ListResourcesArgs): ResourceRange[] {
