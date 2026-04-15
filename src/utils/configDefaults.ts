@@ -12,6 +12,9 @@ export const DEFAULTS = {
   orlTwoPassEnabled: true,
   // DEV ONLY: allow injecting `<workspace>/.orl-dev-rules/` into ORL rulespaces.
   orlLocalDevRulesEnabled: false,
+  // DEV ONLY: allows setting a folder that contains ORL Rules that will run a remediation on just those rules
+  orlCustomRulesOnly: false,
+  orlCustomRulesPath: '',
 };
 
 export function getStringSetting(

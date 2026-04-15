@@ -1,0 +1,9 @@
+export { TerraformLanguageHandler } from './terraform/handler';
+export { CloudFormationYAMLLanguageHandler } from './cloudformation-yaml/handler';
+export { CloudFormationJSONLanguageHandler } from './cloudformation-json/handler';
+export { DockerfileLanguageHandler } from './dockerfile/handler';
+export { KubernetesYAMLLanguageHandler } from './kubernetes-yaml/handler';
+export { HelmTemplateLanguageHandler } from './helm-template/handler';
+export { MavenXMLLanguageHandler } from './maven-xml/handler';
+export { GradleLanguageHandler } from './gradle/handler';
+export { NpmPackageJSONLanguageHandler } from './npm-package-json/handler';

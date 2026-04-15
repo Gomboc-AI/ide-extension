@@ -1,4 +1,12 @@
 import { OrlClient } from '../orlClient';
+import { createOrlClient } from '../orlClient';
+import * as vscode from 'vscode';
+
+jest.mock('../../utils/channelResolver', () => ({
+  ChannelResolver: {
+    resolveChannel: jest.fn().mockResolvedValue('resolved-channel'),
+  },
+}));
 
 // Mock the logger to avoid setImmediate issues in test environment
 jest.mock('../../utils/logger', () => ({
@@ -90,6 +98,256 @@ variable "bucket_name" {
       expect(orlClient.isIacFileForTests('data.json')).toBe(false);
       expect(orlClient.isIacFileForTests('config.json')).toBe(false);
       expect(orlClient.isIacFileForTests('tsconfig.json')).toBe(false);
+    });
+  });
+
+  describe('custom rules only', () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('reads custom rules settings in createOrlClient', async () => {
+      const get = jest.fn((key: string) => {
+        if (key === 'orlCustomRulesOnly') {
+          return true;
+        }
+        if (key === 'orlCustomRulesPath') {
+          return ' ${workspaceFolder}/my-rules ';
+        }
+        if (key === 'orlRulesServiceToken') {
+          return 'rules-token';
+        }
+        if (key === 'apiKey') {
+          return '';
+        }
+        return undefined;
+      });
+      const getConfigurationMock = jest.mocked(
+        vscode.workspace.getConfiguration,
+      );
+      getConfigurationMock.mockReturnValue({
+        get,
+      } as unknown as vscode.WorkspaceConfiguration);
+
+      const client = await createOrlClient({
+        extensionPath: '/ext',
+        storagePath: '/storage',
+      });
+      const config = (client as unknown as { config: Record<string, unknown> })
+        .config;
+
+      expect(config.customRulesOnly).toBe(true);
+      expect(config.customRulesPath).toBe('${workspaceFolder}/my-rules');
+    });
+
+    it('throws when custom-rules-only is enabled and path is empty', async () => {
+      const client = new OrlClient({
+        containerImage: 'img',
+        rulesServiceUrl: 'url',
+        rulesServiceToken: 'token',
+        channel: 'default',
+        customRulesOnly: true,
+        customRulesPath: '  ',
+      });
+
+      await expect(
+        (
+          client as unknown as {
+            resolveCustomRulesOnlyHostDir: (
+              workspacePath: string,
+            ) => Promise<string>;
+          }
+        ).resolveCustomRulesOnlyHostDir('/repo'),
+      ).rejects.toThrow('no custom rules folder path is configured');
+    });
+
+    it('throws when ${workspaceFolder} is used without workspace folders', async () => {
+      const client = new OrlClient({
+        containerImage: 'img',
+        rulesServiceUrl: 'url',
+        rulesServiceToken: 'token',
+        channel: 'default',
+        customRulesOnly: true,
+        customRulesPath: '${workspaceFolder}/rules',
+      });
+      (
+        vscode.workspace as unknown as {
+          workspaceFolders: readonly vscode.WorkspaceFolder[] | undefined;
+        }
+      ).workspaceFolders = [];
+
+      await expect(
+        (
+          client as unknown as {
+            resolveCustomRulesOnlyHostDir: (
+              workspacePath: string,
+            ) => Promise<string>;
+          }
+        ).resolveCustomRulesOnlyHostDir('/repo'),
+      ).rejects.toThrow('requires a workspace folder');
+    });
+
+    it('throws when custom rules path is missing/not directory/no rules', async () => {
+      const client = new OrlClient({
+        containerImage: 'img',
+        rulesServiceUrl: 'url',
+        rulesServiceToken: 'token',
+        channel: 'default',
+        customRulesOnly: true,
+        customRulesPath: '/rules',
+      });
+
+      const storageClient = (
+        client as unknown as {
+          storageClient: {
+            stat: (path: string) => Promise<{ type: string }>;
+          };
+        }
+      ).storageClient;
+      const statSpy = jest.spyOn(storageClient, 'stat');
+      const hasRulesSpy = jest
+        .spyOn(
+          client as unknown as {
+            hasAnyRulesInDir: (dir: string) => Promise<boolean>;
+          },
+          'hasAnyRulesInDir',
+        )
+        .mockResolvedValue(true);
+
+      statSpy.mockRejectedValueOnce(new Error('missing'));
+      await expect(
+        (
+          client as unknown as {
+            resolveCustomRulesOnlyHostDir: (
+              workspacePath: string,
+            ) => Promise<string>;
+          }
+        ).resolveCustomRulesOnlyHostDir('/repo'),
+      ).rejects.toThrow('No custom rules folder found');
+
+      statSpy.mockResolvedValueOnce({ type: 'file' });
+      await expect(
+        (
+          client as unknown as {
+            resolveCustomRulesOnlyHostDir: (
+              workspacePath: string,
+            ) => Promise<string>;
+          }
+        ).resolveCustomRulesOnlyHostDir('/repo'),
+      ).rejects.toThrow('is not a directory');
+
+      statSpy.mockResolvedValueOnce({ type: 'directory' });
+      hasRulesSpy.mockResolvedValueOnce(false);
+      await expect(
+        (
+          client as unknown as {
+            resolveCustomRulesOnlyHostDir: (
+              workspacePath: string,
+            ) => Promise<string>;
+          }
+        ).resolveCustomRulesOnlyHostDir('/repo'),
+      ).rejects.toThrow('No ORL rules were found');
+    });
+
+    it('uses custom rules subset and returns explicit error when rule is missing', async () => {
+      const client = new OrlClient({
+        containerImage: 'img',
+        rulesServiceUrl: 'url',
+        rulesServiceToken: 'token',
+        channel: 'default',
+        customRulesOnly: true,
+        customRulesPath: '/rules',
+      });
+
+      const storageClient = (
+        client as unknown as {
+          storageClient: {
+            mkdtemp: (args: { prefix: string }) => Promise<string>;
+            mkdir: (args: {
+              path: string;
+              opts?: { recursive?: boolean };
+            }) => Promise<void>;
+          };
+        }
+      ).storageClient;
+      jest
+        .spyOn(storageClient, 'mkdtemp')
+        .mockResolvedValue('/tmp/orl-single-rule-test');
+      jest.spyOn(storageClient, 'mkdir').mockResolvedValue(undefined);
+      jest
+        .spyOn(
+          client as unknown as {
+            copySingleWorkspaceFile: (args: unknown) => Promise<void>;
+          },
+          'copySingleWorkspaceFile',
+        )
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(
+          client as unknown as {
+            writeHooksToTempWorkspace: (workspacePath: string) => Promise<void>;
+          },
+          'writeHooksToTempWorkspace',
+        )
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(
+          client as unknown as {
+            resolveCustomRulesOnlyHostDir: (
+              workspacePath: string,
+            ) => Promise<string>;
+          },
+          'resolveCustomRulesOnlyHostDir',
+        )
+        .mockResolvedValue('/my-custom-rules');
+      const copySubsetSpy = jest
+        .spyOn(
+          client as unknown as {
+            copyRulesSubsetFromCache: (args: {
+              sourceRulesDir: string;
+              destRulesDir: string;
+              ruleNames: string[];
+            }) => Promise<{
+              copiedFiles: number;
+              copiedRuleNames: string[];
+              missingRules: string[];
+            }>;
+          },
+          'copyRulesSubsetFromCache',
+        )
+        .mockResolvedValue({
+          copiedFiles: 0,
+          copiedRuleNames: [],
+          missingRules: ['rule_a'],
+        });
+      const pullSpy = jest
+        .spyOn(
+          client as unknown as {
+            pullRulesUsingOrl: (
+              rulesDir: string,
+              opts?: unknown,
+            ) => Promise<void>;
+          },
+          'pullRulesUsingOrl',
+        )
+        .mockResolvedValue(undefined);
+
+      const result = await client.remediateSingleRule({
+        workspacePath: '/repo',
+        language: 'terraform',
+        ruleName: 'rule_a',
+        targetFilePath: '/repo/main.tf',
+      });
+
+      expect(copySubsetSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sourceRulesDir: '/my-custom-rules',
+          ruleNames: ['rule_a'],
+        }),
+      );
+      expect(pullSpy).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('was not found in custom rules folder');
     });
   });
 });

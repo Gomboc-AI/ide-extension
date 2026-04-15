@@ -1,4 +1,5 @@
 import * as path from 'path';
+import { detectLanguageId } from '../generics/languageHandler';
 
 export interface OrlDocumentKinds {
   isDockerfile: boolean;
@@ -17,95 +18,29 @@ export interface CloudFormationTemplateContext {
   resourceEndLine: number;
 }
 
-function hasPatternAtLineStart(content: string, pattern: string): boolean {
-  const lines = content.split('\n');
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith(pattern)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function getFirstLines(content: string, maxLines: number = 50): string {
-  const lines = content.split('\n');
-  return lines.slice(0, maxLines).join('\n');
-}
-
 export function detectOrlDocumentKinds(args: {
   filePath: string;
   content: string;
 }): OrlDocumentKinds {
   const filePath = args.filePath || '';
-  const content = args.content || '';
   const fileName = path.basename(filePath).toLowerCase();
-  const dirPath = path.dirname(filePath).toLowerCase();
   const ext = path.extname(filePath).toLowerCase();
-
-  const isDockerfile =
-    fileName.startsWith('dockerfile') || ext === '.dockerfile';
+  const languageId = detectLanguageId({
+    filePath,
+    content: args.content || '',
+  });
+  const isDockerfile = languageId === 'dockerfile';
   const isXmlBuild = ext === '.xml';
   const isGradleBuild = ext === '.gradle' || ext === '.kts';
   const isNpmPackage =
-    fileName === 'package.json' || fileName === 'package-lock.json';
-
-  const isYamlLike = ext === '.yaml' || ext === '.yml';
-  const isJsonDoc = ext === '.json';
-  const firstLines = getFirstLines(content, 50);
-  const contentLower = firstLines.toLowerCase();
-
-  const isHelmDir =
-    dirPath.includes('/charts/') ||
-    dirPath.includes('/helm/') ||
-    dirPath.includes('\\charts\\') ||
-    dirPath.includes('\\helm\\');
-
-  const isHelm =
-    ext === '.tpl' ||
-    (isYamlLike &&
-      (hasPatternAtLineStart(firstLines, '{{') ||
-        contentLower.includes('.values') ||
-        contentLower.includes('.chart') ||
-        contentLower.includes('.release') ||
-        fileName.includes('helm') ||
-        fileName.includes('chart') ||
-        isHelmDir));
-
-  const isK8sDir =
-    dirPath.includes('/k8s/') ||
-    dirPath.includes('/kubernetes/') ||
-    dirPath.includes('/manifests/') ||
-    dirPath.includes('\\k8s\\') ||
-    dirPath.includes('\\kubernetes\\') ||
-    dirPath.includes('\\manifests\\');
-
-  const isKubernetes =
-    isYamlLike &&
-    ((hasPatternAtLineStart(firstLines, 'kind:') &&
-      hasPatternAtLineStart(firstLines, 'apiVersion:')) ||
-      isK8sDir);
-
-  const hasCloudFormationMarkers =
-    hasPatternAtLineStart(firstLines, 'AWSTemplateFormatVersion') ||
-    hasPatternAtLineStart(firstLines, 'Resources:') ||
-    hasPatternAtLineStart(firstLines, 'Transform:') ||
-    /"AWSTemplateFormatVersion"\s*:/.test(content) ||
-    /"Resources"\s*:/.test(content) ||
-    /"Transform"\s*:/.test(content) ||
-    fileName.includes('cloudformation') ||
-    fileName.includes('cfn') ||
-    fileName.includes('template') ||
-    fileName.includes('stack');
-
+    languageId === 'npm-package-json' ||
+    fileName === 'package.json' ||
+    fileName === 'package-lock.json';
+  const isHelm = languageId === 'helm-template';
+  const isKubernetes = languageId === 'kubernetes-yaml';
   const isCloudFormation =
-    !isDockerfile &&
-    !isHelm &&
-    !isKubernetes &&
-    !isXmlBuild &&
-    !isGradleBuild &&
-    !isNpmPackage &&
-    ((isJsonDoc && hasCloudFormationMarkers) || isYamlLike);
+    languageId === 'cloudformation-yaml' ||
+    languageId === 'cloudformation-json';
 
   return {
     isDockerfile,

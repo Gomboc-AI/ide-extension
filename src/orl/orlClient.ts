@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { spawn } from 'child_process';
 import * as path from 'path';
-import * as fs from 'fs';
 import * as os from 'os';
 import * as crypto from 'crypto';
 import yaml from 'js-yaml';
@@ -16,6 +15,8 @@ import {
 } from '../utils/configDefaults';
 import { createProfiler } from '../utils/profiler';
 import { ChannelResolver } from '../utils/channelResolver';
+import { IStorage } from '../generics/types';
+import { FileSystemHandler } from '../generics/fileSystemHandler';
 
 type SpawnResult = {
   stdout: string;
@@ -172,6 +173,15 @@ export interface OrlConfig {
    * Default OFF to avoid accidental production usage.
    */
   localDevRulesEnabled?: boolean;
+  /**
+   * When enabled, ORL remediation uses only `customRulesPath` and skips rules service pulls.
+   */
+  customRulesOnly?: boolean;
+  /**
+   * Custom ORL rules folder path used when `customRulesOnly` is enabled.
+   * Supports `${workspaceFolder}`.
+   */
+  customRulesPath?: string;
 }
 
 // Pinned ORL container image. Intentionally not configurable via VS Code settings
@@ -202,8 +212,11 @@ export class OrlClient {
     | { sourceRulesDir: string; index: Map<string, string[]> }
     | undefined;
 
+  private storageClient: IStorage;
+
   constructor(config: OrlConfig) {
     this.config = config;
+    this.storageClient = new FileSystemHandler();
   }
 
   private getRulesCacheDir(): string {
@@ -222,10 +235,23 @@ export class OrlClient {
     return path.join(base, 'orl-rules-cache', `rules-${hash}`);
   }
 
+  /** Create a unique temp directory using storage-backed mkdtemp when available, otherwise fall back to a random mkdir path. */
+  private async createTempDir(prefix: string): Promise<string> {
+    if (this.storageClient.mkdtemp) {
+      return await this.storageClient.mkdtemp({ prefix });
+    }
+    const fallback = `${prefix}${crypto.randomBytes(8).toString('hex')}`;
+    await this.storageClient.mkdir({
+      path: fallback,
+      opts: { recursive: true },
+    });
+    return fallback;
+  }
+
   private async isRulesCacheWarm(cacheDir: string): Promise<boolean> {
     const metaPath = path.join(cacheDir, 'meta.json');
     try {
-      const raw = await fs.promises.readFile(metaPath, 'utf8');
+      const raw = await this.storageClient.readText({ path: metaPath });
       const parsedMeta = zRulesCacheMeta.safeParse(JSON.parse(raw));
       if (!parsedMeta.success) {
         return false;
@@ -270,7 +296,9 @@ export class OrlClient {
     pulled: boolean;
   }> {
     const cacheDir = this.getRulesCacheDir();
-    await fs.promises.mkdir(cacheDir, { recursive: true }).catch(() => {});
+    await this.storageClient
+      .mkdir({ path: cacheDir, opts: { recursive: true } })
+      .catch(() => {});
 
     const warm = await this.isRulesCacheWarm(cacheDir);
     if (warm) {
@@ -281,10 +309,16 @@ export class OrlClient {
     // Cache miss/stale: repull into cache dir.
     // Best-effort cleanup so we don't accumulate stale rule files.
     try {
-      const entries = await fs.promises.readdir(cacheDir);
+      const entries = await this.storageClient.listDir(cacheDir);
       if (entries.length) {
-        await fs.promises.rm(cacheDir, { recursive: true, force: true });
-        await fs.promises.mkdir(cacheDir, { recursive: true });
+        await this.storageClient.remove({
+          path: cacheDir,
+          opts: { recursive: true, force: true },
+        });
+        await this.storageClient.mkdir({
+          path: cacheDir,
+          opts: { recursive: true },
+        });
       }
     } catch {
       // ignore
@@ -293,9 +327,9 @@ export class OrlClient {
     await this.pullRulesUsingOrl(cacheDir);
     try {
       const metaPath = path.join(cacheDir, 'meta.json');
-      await fs.promises.writeFile(
-        metaPath,
-        JSON.stringify(
+      await this.storageClient.writeText({
+        path: metaPath,
+        content: JSON.stringify(
           {
             pulledAtMs: Date.now(),
             rulesServiceUrl: this.config.rulesServiceUrl,
@@ -305,8 +339,7 @@ export class OrlClient {
           null,
           2,
         ),
-        'utf8',
-      );
+      });
     } catch {
       // ignore
     }
@@ -320,7 +353,10 @@ export class OrlClient {
    */
   private async writeHooksToTempWorkspace(tempDir: string): Promise<void> {
     const hooksDir = path.join(tempDir, '.orl', 'hooks');
-    await fs.promises.mkdir(hooksDir, { recursive: true });
+    await this.storageClient.mkdir({
+      path: hooksDir,
+      opts: { recursive: true },
+    });
 
     // Read hook scripts from separate files for maintainability
     const hookFiles = [
@@ -368,7 +404,10 @@ export class OrlClient {
           `${hookName}.sh`,
         );
         try {
-          await fs.promises.access(distHookPath, fs.constants.F_OK);
+          const exists = await this.storageClient.exists(distHookPath);
+          if (!exists) {
+            throw new Error('dist path not found');
+          }
           hookPath = distHookPath;
         } catch (e) {
           // dist path doesn't exist, try src/orl/hooks (development)
@@ -380,7 +419,10 @@ export class OrlClient {
             `${hookName}.sh`,
           );
           try {
-            await fs.promises.access(srcHookPath, fs.constants.F_OK);
+            const exists = await this.storageClient.exists(srcHookPath);
+            if (!exists) {
+              throw new Error('src path not found');
+            }
             hookPath = srcHookPath;
           } catch (e2) {
             // src path doesn't exist either
@@ -391,7 +433,7 @@ export class OrlClient {
       // If we found a path, read the file
       if (hookPath) {
         try {
-          const content = await fs.promises.readFile(hookPath, 'utf8');
+          const content = await this.storageClient.readText({ path: hookPath });
           scripts[hookName] = content;
           logger.info(`Successfully read hook file: ${hookName}`, {
             path: hookPath,
@@ -473,11 +515,13 @@ export class OrlClient {
       // but support file is sourced as common.sh by the hooks. Preserve that name.
       const fileName = name === 'common' ? 'common.sh' : name;
       const file = path.join(hooksDir, fileName);
-      await fs.promises.writeFile(file, content, {
-        encoding: 'utf8',
-        mode: 0o755,
+      await this.storageClient.writeText({
+        path: file,
+        content,
+        opts: {
+          mode: 0o755,
+        },
       });
-      await fs.promises.chmod(file, 0o755);
       logger.debug(`Wrote hook file: ${name}`, {
         path: file,
         length: content.length,
@@ -496,14 +540,11 @@ export class OrlClient {
         'diagnostics',
         'diagnostics.json',
       );
-      const exists = await fs.promises
-        .access(diagnosticsPath, fs.constants.F_OK)
-        .then(() => true)
-        .catch(() => false);
+      const exists = await this.storageClient.exists(diagnosticsPath);
       if (!exists) {
         return undefined;
       }
-      const raw = await fs.promises.readFile(diagnosticsPath, 'utf8');
+      const raw = await this.storageClient.readText({ path: diagnosticsPath });
       return JSON.parse(raw);
     } catch (err) {
       logger.warn('Failed to read diagnostics from hooks', { err });
@@ -514,8 +555,11 @@ export class OrlClient {
   private async readReportFile(tempDir: string): Promise<string | undefined> {
     const reportPath = path.join(tempDir, '.orl', 'report.yaml');
     try {
-      await fs.promises.access(reportPath, fs.constants.F_OK);
-      const raw = await fs.promises.readFile(reportPath, 'utf8');
+      const exists = await this.storageClient.exists(reportPath);
+      if (!exists) {
+        return undefined;
+      }
+      const raw = await this.storageClient.readText({ path: reportPath });
       return raw && raw.trim() ? raw : undefined;
     } catch {
       return undefined;
@@ -532,8 +576,11 @@ export class OrlClient {
       'manifest.jsonl',
     );
     try {
-      await fs.promises.access(manifestPath, fs.constants.F_OK);
-      const raw = await fs.promises.readFile(manifestPath, 'utf8');
+      const exists = await this.storageClient.exists(manifestPath);
+      if (!exists) {
+        return [];
+      }
+      const raw = await this.storageClient.readText({ path: manifestPath });
       const out: HookManifestEvent[] = [];
       for (const line of raw.split('\n')) {
         const t = line.trim();
@@ -647,15 +694,24 @@ export class OrlClient {
     try {
       const srcDir = path.join(tempDir, '.orl', 'diagnostics');
       const outDir = path.join(workspacePath, '.orl-debug', 'last-run');
-      await fs.promises.mkdir(outDir, { recursive: true });
+      await this.storageClient.mkdir({
+        path: outDir,
+        opts: { recursive: true },
+      });
 
       const copyIfExists = async (rel: string) => {
         const src = path.join(srcDir, rel);
         const dst = path.join(outDir, rel);
         try {
-          await fs.promises.access(src, fs.constants.F_OK);
-          await fs.promises.mkdir(path.dirname(dst), { recursive: true });
-          await fs.promises.copyFile(src, dst);
+          const exists = await this.storageClient.exists(src);
+          if (!exists) {
+            return;
+          }
+          await this.storageClient.mkdir({
+            path: path.dirname(dst),
+            opts: { recursive: true },
+          });
+          await this.storageClient.copy({ srcPath: src, destPath: dst });
         } catch {
           // ignore
         }
@@ -667,11 +723,10 @@ export class OrlClient {
       // Persist raw ORL report (best-effort) so we can inspect rule->file attribution after cleanup.
       if (reportText && reportText.trim()) {
         try {
-          await fs.promises.writeFile(
-            path.join(outDir, 'report.yaml'),
-            reportText,
-            'utf8',
-          );
+          await this.storageClient.writeText({
+            path: path.join(outDir, 'report.yaml'),
+            content: reportText,
+          });
         } catch {
           // ignore
         }
@@ -680,18 +735,21 @@ export class OrlClient {
       // Copy per-rule files list (best-effort; may be large)
       const rulesDir = path.join(srcDir, 'rules');
       try {
-        const entries = await fs.promises.readdir(rulesDir, {
-          withFileTypes: true,
-        });
+        const entries = await this.storageClient.listDir(rulesDir);
         const dstRulesDir = path.join(outDir, 'rules');
-        await fs.promises.mkdir(dstRulesDir, { recursive: true });
+        await this.storageClient.mkdir({
+          path: dstRulesDir,
+          opts: { recursive: true },
+        });
         for (const e of entries) {
-          if (!e.isFile()) {
+          if (e.type !== 'file') {
             continue;
           }
           const src = path.join(rulesDir, e.name);
           const dst = path.join(dstRulesDir, e.name);
-          await fs.promises.copyFile(src, dst).catch(() => {});
+          await this.storageClient
+            .copy({ srcPath: src, destPath: dst })
+            .catch(() => {});
         }
       } catch {
         // ignore
@@ -729,31 +787,48 @@ export class OrlClient {
 
       // Create a temporary directory for ORL execution
       const tempDir = path.join(workspacePath, '.orl-temp');
-      await fs.promises.mkdir(tempDir, { recursive: true });
+      await this.storageClient.mkdir({
+        path: tempDir,
+        opts: { recursive: true },
+      });
       prof.mark('mkdirTemp');
 
       try {
-        // Resolve local dev rules early so we can tolerate a remote pull failure
-        const injectedDevRulesHostDir =
-          await this.tryResolveLocalDevRulesHostDir(workspacePath);
+        const customRulesHostDir =
+          await this.resolveCustomRulesOnlyHostDir(workspacePath);
+        const customRulesOnlyEnabled = Boolean(customRulesHostDir);
+        // Resolve local dev rules early so we can tolerate a remote pull failure.
+        // In custom-rules-only mode, local dev rules injection is intentionally disabled.
+        const injectedDevRulesHostDir = customRulesOnlyEnabled
+          ? undefined
+          : await this.tryResolveLocalDevRulesHostDir(workspacePath);
 
         // Step 1: Ensure rules are available (use a persistent cache to avoid repeated pulls)
         let cached:
           | { rulesDir: string; usedCache: boolean; pulled: boolean }
           | undefined;
-        try {
-          cached = await this.ensureRulesCached();
-        } catch (pullError) {
-          if (injectedDevRulesHostDir) {
-            logger.warn(
-              'Remote rules pull failed but local dev rules are available; continuing with dev rules only',
-              { pullError },
-            );
-          } else {
-            throw pullError;
+        let mountedRulesDir = customRulesHostDir;
+        if (!customRulesOnlyEnabled) {
+          try {
+            cached = await this.ensureRulesCached();
+            mountedRulesDir = cached.rulesDir;
+          } catch (pullError) {
+            if (injectedDevRulesHostDir) {
+              logger.warn(
+                'Remote rules pull failed but local dev rules are available; continuing with dev rules only',
+                { pullError },
+              );
+            } else {
+              throw pullError;
+            }
           }
+        } else {
+          logger.info('Using custom-rules-only mode for ORL remediation', {
+            customRulesHostDir,
+          });
         }
         prof.mark('pullRulesUsingOrl', {
+          customRulesOnly: customRulesOnlyEnabled,
           usedCache: cached?.usedCache,
           pulled: cached?.pulled,
         });
@@ -765,7 +840,7 @@ export class OrlClient {
         // NOTE: default off; gated by config.
         if (twoPassEnabled) {
           const tryTwoPass = async (): Promise<OrlResult | undefined> => {
-            const discoveryDir = await fs.promises.mkdtemp(
+            const discoveryDir = await this.createTempDir(
               path.join(os.tmpdir(), 'orl-discovery-'),
             );
             prof.mark('twoPass.mkdtempDiscovery');
@@ -775,21 +850,27 @@ export class OrlClient {
 
               // ORL writes the report to /workspace/.orl/report.yaml; when hooks are disabled,
               // nothing creates the `.orl` directory for us. Ensure it exists so ORL can write.
-              await fs.promises.mkdir(path.join(discoveryDir, '.orl'), {
-                recursive: true,
+              await this.storageClient.mkdir({
+                path: path.join(discoveryDir, '.orl'),
+                opts: {
+                  recursive: true,
+                },
               });
 
               // Pre-create the rules mount point so it is owned by the current user.
               // Docker's nested volume mount (-v cachedRules:/workspace/rules) can leave
               // behind a root-owned directory stub that fs.promises.rm cannot remove.
-              await fs.promises.mkdir(path.join(discoveryDir, 'rules'), {
-                recursive: true,
+              await this.storageClient.mkdir({
+                path: path.join(discoveryDir, 'rules'),
+                opts: {
+                  recursive: true,
+                },
               });
 
               const dockerArgsDiscovery = this.buildDockerArgs({
                 workspacePath: discoveryDir,
                 language,
-                mountedRulesDir: cached?.rulesDir,
+                mountedRulesDir,
                 disableHooks: true,
                 devRulesHostDir: injectedDevRulesHostDir,
               });
@@ -871,10 +952,13 @@ export class OrlClient {
               prof.mark('writeHooksToTempWorkspace');
 
               const rulesDir = path.join(tempDir, 'rules');
-              await fs.promises.mkdir(rulesDir, { recursive: true });
+              await this.storageClient.mkdir({
+                path: rulesDir,
+                opts: { recursive: true },
+              });
 
               const copied = await this.copyRulesSubsetFromCache({
-                sourceRulesDir: cached?.rulesDir ?? '',
+                sourceRulesDir: mountedRulesDir ?? '',
                 destRulesDir: rulesDir,
                 ruleNames: changedRuleNames,
               });
@@ -1002,8 +1086,11 @@ export class OrlClient {
                 diagnostics,
               };
             } finally {
-              await fs.promises
-                .rm(discoveryDir, { recursive: true, force: true })
+              await this.storageClient
+                .remove({
+                  path: discoveryDir,
+                  opts: { recursive: true, force: true },
+                })
                 .catch(err => {
                   logger.warn(
                     'Failed to clean up discovery directory; stale temp dir may remain',
@@ -1033,14 +1120,17 @@ export class OrlClient {
         prof.mark('writeHooksToTempWorkspace');
 
         const rulesDir = path.join(tempDir, 'rules');
-        await fs.promises.mkdir(rulesDir, { recursive: true });
+        await this.storageClient.mkdir({
+          path: rulesDir,
+          opts: { recursive: true },
+        });
 
         // Step 2: Execute ORL remediation with pulled rules
         const dockerArgs = this.buildDockerArgs({
           workspacePath: tempDir,
           language,
           rulesDir,
-          mountedRulesDir: cached?.rulesDir,
+          mountedRulesDir,
           devRulesHostDir: injectedDevRulesHostDir,
         });
         logger.info('Executing ORL via Docker', {
@@ -1161,8 +1251,8 @@ export class OrlClient {
         };
       } finally {
         if (!this.config.debugKeepTemp) {
-          await fs.promises
-            .rm(tempDir, { recursive: true, force: true })
+          await this.storageClient
+            .remove({ path: tempDir, opts: { recursive: true, force: true } })
             .catch(() => {});
         } else {
           logger.warn('Debug: preserving .orl-temp after remediation', {
@@ -1218,7 +1308,10 @@ export class OrlClient {
         const fileName = iacFiles[myIdx];
         const sourceFile = path.join(sourcePath, fileName);
         const destFile = path.join(destPath, fileName);
-        await fs.promises.copyFile(sourceFile, destFile);
+        await this.storageClient.copy({
+          srcPath: sourceFile,
+          destPath: destFile,
+        });
       }
     });
     await Promise.all(workers);
@@ -1247,11 +1340,17 @@ export class OrlClient {
       throw new Error('Selected file is not within the scan directory');
     }
 
-    await fs.promises.mkdir(destDir, { recursive: true });
+    await this.storageClient.mkdir({
+      path: destDir,
+      opts: { recursive: true },
+    });
     const destFile = path.join(destDir, rel);
-    await fs.promises.mkdir(path.dirname(destFile), { recursive: true });
-    const content = await fs.promises.readFile(abs);
-    await fs.promises.writeFile(destFile, content);
+    await this.storageClient.mkdir({
+      path: path.dirname(destFile),
+      opts: { recursive: true },
+    });
+    const content = await this.storageClient.readBytes(abs);
+    await this.storageClient.writeBytes({ path: destFile, content });
   }
 
   /**
@@ -1316,19 +1415,17 @@ export class OrlClient {
 
   private async hasAnyRulesInDir(rulesDir: string): Promise<boolean> {
     try {
-      const entries = await fs.promises.readdir(rulesDir, {
-        withFileTypes: true,
-      });
+      const entries = await this.storageClient.listDir(rulesDir);
       // ORL rulespaces typically contain files + directories; we just need "non-empty"
       // to avoid the "search succeeded but returned zero rules" case.
       for (const e of entries) {
-        if (e.isFile()) {
+        if (e.type === 'file') {
           return true;
         }
-        if (e.isDirectory()) {
+        if (e.type === 'directory') {
           // If there is any file inside, consider it non-empty.
-          const nested = await fs.promises
-            .readdir(path.join(rulesDir, e.name))
+          const nested = await this.storageClient
+            .listDir(path.join(rulesDir, e.name))
             .catch(() => []);
           if (nested.length > 0) {
             return true;
@@ -1444,13 +1541,87 @@ export class OrlClient {
     while (dir !== root) {
       const candidate = path.join(dir, '.orl-dev-rules');
       try {
-        await fs.promises.access(candidate, fs.constants.F_OK);
+        const exists = await this.storageClient.exists(candidate);
+        if (!exists) {
+          throw new Error('candidate does not exist');
+        }
         return candidate;
       } catch {
         dir = path.dirname(dir);
       }
     }
     return undefined;
+  }
+
+  private resolveWorkspaceFolderPath(
+    workspacePath: string,
+  ): string | undefined {
+    const folders = vscode.workspace.workspaceFolders ?? [];
+    if (!folders.length) {
+      return undefined;
+    }
+    const normalizedWorkspacePath = path.resolve(workspacePath);
+    const containing = folders.find(folder => {
+      const folderPath = path.resolve(folder.uri.fsPath);
+      return (
+        normalizedWorkspacePath === folderPath ||
+        normalizedWorkspacePath.startsWith(`${folderPath}${path.sep}`)
+      );
+    });
+    if (containing) {
+      return containing.uri.fsPath;
+    }
+    return folders[0]?.uri.fsPath;
+  }
+
+  private async resolveCustomRulesOnlyHostDir(
+    workspacePath: string,
+  ): Promise<string | undefined> {
+    if (!this.config.customRulesOnly) {
+      return undefined;
+    }
+
+    const configured = (this.config.customRulesPath || '').trim();
+    if (!configured) {
+      throw new Error(
+        'ORL custom-rules-only mode is enabled, but no custom rules folder path is configured.',
+      );
+    }
+
+    const workspaceFolderPath = this.resolveWorkspaceFolderPath(workspacePath);
+    if (configured.includes('${workspaceFolder}') && !workspaceFolderPath) {
+      throw new Error(
+        'ORL custom-rules-only mode requires a workspace folder to resolve ${workspaceFolder} in the custom rules path.',
+      );
+    }
+
+    const expanded = workspaceFolderPath
+      ? configured.replace(/\$\{workspaceFolder\}/g, workspaceFolderPath)
+      : configured;
+    const resolvedPath = path.resolve(expanded);
+
+    let stat: { type: 'file' | 'directory' | 'symlink' | 'other' };
+    try {
+      stat = await this.storageClient.stat(resolvedPath);
+    } catch {
+      throw new Error(
+        `No custom rules folder found at "${resolvedPath}". Update gomboc-vscode-extension.orlCustomRulesPath.`,
+      );
+    }
+    if (stat.type !== 'directory') {
+      throw new Error(
+        `Custom rules path "${resolvedPath}" is not a directory. Update gomboc-vscode-extension.orlCustomRulesPath.`,
+      );
+    }
+
+    const hasRules = await this.hasAnyRulesInDir(resolvedPath);
+    if (!hasRules) {
+      throw new Error(
+        `No ORL rules were found in custom rules folder "${resolvedPath}".`,
+      );
+    }
+
+    return resolvedPath;
   }
 
   private extractChangedRuleNamesFromReport(report?: string): string[] {
@@ -1515,20 +1686,20 @@ export class OrlClient {
     const index = new Map<string, string[]>();
 
     const walk = async (dir: string): Promise<void> => {
-      let entries: fs.Dirent[] = [];
+      let entries: Array<{ name: string; type: string }> = [];
       try {
-        entries = await fs.promises.readdir(dir, { withFileTypes: true });
+        entries = await this.storageClient.listDir(dir);
       } catch {
         return;
       }
 
       for (const e of entries) {
         const full = path.join(dir, e.name);
-        if (e.isDirectory()) {
+        if (e.type === 'directory') {
           await walk(full);
           continue;
         }
-        if (!e.isFile()) {
+        if (e.type !== 'file') {
           continue;
         }
         if (!full.toLowerCase().endsWith('.orl')) {
@@ -1536,7 +1707,7 @@ export class OrlClient {
         }
 
         try {
-          const raw = await fs.promises.readFile(full, 'utf8');
+          const raw = await this.storageClient.readText({ path: full });
           const parsedDoc = zRulesetDocument.safeParse(
             yaml.load(raw, {
               schema: yaml.FAILSAFE_SCHEMA,
@@ -1596,8 +1767,11 @@ export class OrlClient {
       for (const src of files) {
         const rel = path.relative(sourceRulesDir, src);
         const dst = path.join(destRulesDir, rel);
-        await fs.promises.mkdir(path.dirname(dst), { recursive: true });
-        await fs.promises.copyFile(src, dst);
+        await this.storageClient.mkdir({
+          path: path.dirname(dst),
+          opts: { recursive: true },
+        });
+        await this.storageClient.copy({ srcPath: src, destPath: dst });
         copiedFiles++;
       }
     }
@@ -1629,9 +1803,12 @@ export class OrlClient {
       for (const filePath of files) {
         try {
           // Skip if file doesn't exist (can happen with report-derived paths)
-          await fs.promises.access(filePath, fs.constants.F_OK);
+          const exists = await this.storageClient.exists(filePath);
+          if (!exists) {
+            continue;
+          }
           // Read the modified file content
-          const content = await fs.promises.readFile(filePath, 'utf8');
+          const content = await this.storageClient.readText({ path: filePath });
 
           // Convert temp directory path to ORL workspace path format
           // e.g., /path/to/.orl-temp/test-aws.tf -> /workspace/test-aws.tf
@@ -1722,7 +1899,7 @@ export class OrlClient {
     const files: string[] = [];
 
     try {
-      const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+      const entries = await this.storageClient.listDir(dir);
 
       for (const entry of entries) {
         const fullPath = path.join(dir, entry.name);
@@ -1732,11 +1909,11 @@ export class OrlClient {
           continue;
         }
 
-        if (entry.isDirectory()) {
+        if (entry.type === 'directory') {
           // Recursively search subdirectories
           const subFiles = await this.getAllIacFiles(fullPath);
           files.push(...subFiles);
-        } else if (entry.isFile() && this.isIacFile(entry.name)) {
+        } else if (entry.type === 'file' && this.isIacFile(entry.name)) {
           files.push(fullPath);
         }
       }
@@ -1995,7 +2172,7 @@ export class OrlClient {
       });
 
       // Use an OS temp directory to avoid contending with .orl-temp from scans.
-      const tempDir = await fs.promises.mkdtemp(
+      const tempDir = await this.createTempDir(
         path.join(os.tmpdir(), 'orl-single-rule-'),
       );
       prof.mark('mkdtemp');
@@ -2018,7 +2195,10 @@ export class OrlClient {
 
       // Pull only this rule into a temp rulespace.
       const rulesDir = path.join(tempDir, 'rules');
-      await fs.promises.mkdir(rulesDir, { recursive: true });
+      await this.storageClient.mkdir({
+        path: rulesDir,
+        opts: { recursive: true },
+      });
 
       // Prefer an exact name match. If this fails (e.g., rules service mismatch),
       // fall back to pulling the channel (heavier but robust).
@@ -2033,44 +2213,76 @@ export class OrlClient {
           ? `(or (eq $.name "${exact}") (eq $.name "${base}"))`
           : `(eq $.name "${exact}")`;
 
-      const injectedDevRulesHostDir = await this.tryResolveLocalDevRulesHostDir(
-        devRulesSearchPath || workspacePath,
-      );
+      const customRulesHostDir =
+        await this.resolveCustomRulesOnlyHostDir(workspacePath);
+      const customRulesOnlyEnabled = Boolean(customRulesHostDir);
+      const injectedDevRulesHostDir = customRulesOnlyEnabled
+        ? undefined
+        : await this.tryResolveLocalDevRulesHostDir(
+            devRulesSearchPath || workspacePath,
+          );
 
       let pulledSingleRule = false;
-      try {
-        await this.pullRulesUsingOrl(rulesDir, { searchQuery: query });
-        pulledSingleRule = await this.hasAnyRulesInDir(rulesDir);
-        if (!pulledSingleRule) {
-          logger.warn(
-            'Single-rule rules pull via --search returned no rules; falling back to channel pull',
-            { ruleName, baseRuleName },
-          );
-          await this.pullRulesUsingOrl(rulesDir);
+      if (customRulesOnlyEnabled) {
+        const copied = await this.copyRulesSubsetFromCache({
+          sourceRulesDir: customRulesHostDir ?? '',
+          destRulesDir: rulesDir,
+          ruleNames: [ruleName],
+        });
+        pulledSingleRule = copied.copiedFiles > 0;
+        if (copied.missingRules.length > 0 || copied.copiedFiles === 0) {
+          return {
+            success: false,
+            modifiedFiles: {},
+            exitCode: 1,
+            error: `Rule "${ruleName}" was not found in custom rules folder "${customRulesHostDir}".`,
+          };
         }
-      } catch (e) {
-        if (injectedDevRulesHostDir) {
-          logger.warn(
-            'Single-rule rules pull failed but local dev rules are available; continuing with dev rules only',
-            {
-              ruleName,
-              baseRuleName,
-              error: e instanceof Error ? e.message : String(e),
-            },
-          );
-        } else {
-          logger.warn(
-            'Single-rule rules pull via --search failed; falling back to channel pull',
-            {
-              ruleName,
-              baseRuleName,
-              error: e instanceof Error ? e.message : String(e),
-            },
-          );
-          await this.pullRulesUsingOrl(rulesDir);
+      } else {
+        try {
+          await this.pullRulesUsingOrl(rulesDir, { searchQuery: query });
+          pulledSingleRule = await this.hasAnyRulesInDir(rulesDir);
+          if (!pulledSingleRule) {
+            logger.warn(
+              'Single-rule rules pull via --search returned no rules; falling back to channel pull',
+              { ruleName, baseRuleName },
+            );
+            await this.pullRulesUsingOrl(rulesDir);
+          }
+        } catch (e) {
+          if (injectedDevRulesHostDir) {
+            logger.warn(
+              'Single-rule rules pull failed but local dev rules are available; continuing with dev rules only',
+              {
+                ruleName,
+                baseRuleName,
+                error: e instanceof Error ? e.message : String(e),
+              },
+            );
+          } else {
+            logger.warn(
+              'Single-rule rules pull via --search failed; falling back to channel pull',
+              {
+                ruleName,
+                baseRuleName,
+                error: e instanceof Error ? e.message : String(e),
+              },
+            );
+            await this.pullRulesUsingOrl(rulesDir);
+          }
         }
       }
-      prof.mark('pullRulesUsingOrl', { pulledSingleRule });
+      prof.mark('pullRulesUsingOrl', {
+        customRulesOnly: customRulesOnlyEnabled,
+        pulledSingleRule,
+      });
+
+      if (customRulesOnlyEnabled) {
+        logger.info('Using custom-rules-only mode for ORL single-rule fix', {
+          ruleName,
+          customRulesHostDir,
+        });
+      }
 
       // Execute ORL remediation with pulled rules.
       const dockerArgs = this.buildDockerArgs({
@@ -2126,8 +2338,8 @@ export class OrlClient {
       );
       prof.mark('persistDiagnosticsArtifacts');
 
-      await fs.promises
-        .rm(tempDir, { recursive: true, force: true })
+      await this.storageClient
+        .remove({ path: tempDir, opts: { recursive: true, force: true } })
         .catch(err => {
           logger.warn(
             'Failed to clean up single-rule temp directory; stale temp dir may remain',
@@ -2266,6 +2478,16 @@ export async function createOrlClient(args: {
       'orlTwoPassEnabled',
       DEFAULTS.orlTwoPassEnabled,
     ),
+    customRulesOnly: getBooleanSetting(
+      config,
+      'orlCustomRulesOnly',
+      DEFAULTS.orlCustomRulesOnly,
+    ),
+    customRulesPath: getStringSetting(
+      config,
+      'orlCustomRulesPath',
+      DEFAULTS.orlCustomRulesPath,
+    ),
     localDevRulesEnabled: getBooleanSetting(
       config,
       'orlLocalDevRulesEnabled',
@@ -2284,9 +2506,13 @@ export async function clearOrlRulesCache(storagePath?: string): Promise<void> {
     (storagePath && storagePath.trim()) ||
     path.join(os.tmpdir(), 'gomboc-vscode-extension');
   const cacheRoot = path.join(base, 'orl-rules-cache');
+  const storageClient = new FileSystemHandler();
 
   try {
-    await fs.promises.rm(cacheRoot, { recursive: true, force: true });
+    await storageClient.remove({
+      path: cacheRoot,
+      opts: { recursive: true, force: true },
+    });
     logger.info('ORL rules cache cleared', { cacheRoot });
   } catch (e) {
     logger.warn('Failed to clear ORL rules cache', {
