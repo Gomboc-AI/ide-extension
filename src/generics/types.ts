@@ -52,6 +52,15 @@ export interface RemoveArgs {
   opts?: RemoveOptions;
 }
 
+/** Arguments for {@link IStorage.mkdtemp}, mirroring Node `fs.promises.mkdtemp`. */
+export interface MkdtempArgs {
+  /**
+   * Directory name prefix; Node appends random characters to the final path segment
+   * (e.g. `path.join(os.tmpdir(), 'orl-discovery-')`).
+   */
+  prefix: string;
+}
+
 export interface CacheGetArgs {
   key: string;
 }
@@ -80,12 +89,12 @@ export interface IStorage {
   readBytes(path: string): Promise<Uint8Array>;
   writeText(args: WriteTextArgs): Promise<void>;
   writeBytes(args: WriteBytesArgs): Promise<void>;
-  /** Not all backends support hierarchical folders (e.g. flat object stores). */
-  mkdir?(args: MkdirArgs): Promise<void>;
-  /** Not all backends support listing children (e.g. write-only sinks). */
-  listDir?(path: string): Promise<StorageEntry[]>;
+  mkdir(args: MkdirArgs): Promise<void>;
+  listDir(path: string): Promise<StorageEntry[]>;
   copy(args: CopyFileArgs): Promise<void>;
   remove(args: RemoveArgs): Promise<void>;
+  /** Create a unique temporary directory; not all storage backends support this. */
+  mkdtemp?(args: MkdtempArgs): Promise<string>;
 }
 
 /**

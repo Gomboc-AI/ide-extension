@@ -1,7 +1,6 @@
 import { OrlClient } from '../orlClient';
 import { createOrlClient } from '../orlClient';
 import * as vscode from 'vscode';
-import * as fs from 'fs';
 
 jest.mock('../../utils/channelResolver', () => ({
   ChannelResolver: {
@@ -198,7 +197,14 @@ variable "bucket_name" {
         customRulesPath: '/rules',
       });
 
-      const statSpy = jest.spyOn(fs.promises, 'stat');
+      const storageClient = (
+        client as unknown as {
+          storageClient: {
+            stat: (path: string) => Promise<{ type: string }>;
+          };
+        }
+      ).storageClient;
+      const statSpy = jest.spyOn(storageClient, 'stat');
       const hasRulesSpy = jest
         .spyOn(
           client as unknown as {
@@ -219,7 +225,7 @@ variable "bucket_name" {
         ).resolveCustomRulesOnlyHostDir('/repo'),
       ).rejects.toThrow('No custom rules folder found');
 
-      statSpy.mockResolvedValueOnce({ isDirectory: () => false } as fs.Stats);
+      statSpy.mockResolvedValueOnce({ type: 'file' });
       await expect(
         (
           client as unknown as {
@@ -230,7 +236,7 @@ variable "bucket_name" {
         ).resolveCustomRulesOnlyHostDir('/repo'),
       ).rejects.toThrow('is not a directory');
 
-      statSpy.mockResolvedValueOnce({ isDirectory: () => true } as fs.Stats);
+      statSpy.mockResolvedValueOnce({ type: 'directory' });
       hasRulesSpy.mockResolvedValueOnce(false);
       await expect(
         (
@@ -253,10 +259,21 @@ variable "bucket_name" {
         customRulesPath: '/rules',
       });
 
+      const storageClient = (
+        client as unknown as {
+          storageClient: {
+            mkdtemp: (args: { prefix: string }) => Promise<string>;
+            mkdir: (args: {
+              path: string;
+              opts?: { recursive?: boolean };
+            }) => Promise<void>;
+          };
+        }
+      ).storageClient;
       jest
-        .spyOn(fs.promises, 'mkdtemp')
+        .spyOn(storageClient, 'mkdtemp')
         .mockResolvedValue('/tmp/orl-single-rule-test');
-      jest.spyOn(fs.promises, 'mkdir').mockResolvedValue(undefined);
+      jest.spyOn(storageClient, 'mkdir').mockResolvedValue(undefined);
       jest
         .spyOn(
           client as unknown as {
