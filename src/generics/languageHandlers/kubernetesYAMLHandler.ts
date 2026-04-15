@@ -5,94 +5,80 @@ import {
   DocumentInfo,
   FindNearestResourceArgs,
   FindResourceAtLineArgs,
+  GetDocumentInfoArgs,
   ILanguageHandler,
   ListResourcesArgs,
   ResourceRange,
-  GetDocumentInfoArgs,
 } from '../types';
 
-export class CloudFormationYAMLLanguageHandler implements ILanguageHandler {
-  displayName = 'CloudFormation YAML';
+export class KubernetesYAMLLanguageHandler implements ILanguageHandler {
+  displayName = 'Kubernetes YAML';
   extensions = ['.yaml', '.yml'];
 
   /**
-   * Parses top-level CloudFormation resources from YAML lines.
+   * Parses top-level Kubernetes resources by detecting `kind` + `metadata.name`.
    */
   private parseResources(content: string): ResourceRange[] {
     const lines = content.split('\n');
     const resources: ResourceRange[] = [];
-    const resourcesLineIndex = lines.findIndex(
-      line => line.trim() === 'Resources:',
-    );
+    const isDocBoundary = (line: string): boolean => line.trim() === '---';
+    const isTopLevelKey = (line: string, key: string): boolean => {
+      const trimmed = line.trim();
+      const indent = line.match(/^(\s*)/)?.[1]?.length ?? 0;
+      return indent === 0 && trimmed.startsWith(`${key}:`);
+    };
 
-    if (resourcesLineIndex < 0) {
-      return resources;
-    }
-
-    const resourcesIndent =
-      lines[resourcesLineIndex].match(/^(\s*)/)?.[1]?.length ?? 0;
-    const logicalIdPattern = /^([A-Za-z0-9][A-Za-z0-9_-]*)\s*:\s*$/;
-
-    for (let i = resourcesLineIndex + 1; i < lines.length; i++) {
-      const raw = lines[i];
-      const trimmed = raw.trim();
-      const indent = raw.match(/^(\s*)/)?.[1]?.length ?? 0;
-
-      if (!trimmed || trimmed.startsWith('#')) {
+    for (let i = 0; i < lines.length; i++) {
+      if (!isTopLevelKey(lines[i], 'kind')) {
         continue;
       }
 
-      if (indent <= resourcesIndent) {
-        break;
-      }
-
-      if (indent !== resourcesIndent + 2) {
+      const kindMatch = lines[i].trim().match(/^kind:\s*(.+)$/);
+      if (!kindMatch) {
         continue;
       }
 
-      const logicalIdMatch = trimmed.match(logicalIdPattern);
-      if (!logicalIdMatch) {
-        continue;
-      }
-
-      const logicalId = logicalIdMatch[1];
+      const kind = kindMatch[1].trim().replace(/^["']|["']$/g, '');
+      let name: string | undefined;
+      let metadataLine = -1;
       let endLine = lines.length;
+
       for (let j = i + 1; j < lines.length; j++) {
-        const nextRaw = lines[j];
-        const nextTrimmed = nextRaw.trim();
-        const nextIndent = nextRaw.match(/^(\s*)/)?.[1]?.length ?? 0;
-        if (!nextTrimmed || nextTrimmed.startsWith('#')) {
+        if (isDocBoundary(lines[j])) {
+          endLine = j;
+          break;
+        }
+        if (isTopLevelKey(lines[j], 'apiVersion')) {
+          endLine = j;
+          break;
+        }
+
+        const trimmed = lines[j].trim();
+        if (metadataLine < 0 && /^metadata:\s*$/.test(trimmed)) {
+          metadataLine = j;
           continue;
         }
-        if (nextIndent <= resourcesIndent) {
-          endLine = j;
-          break;
-        }
-        if (
-          nextIndent === resourcesIndent + 2 &&
-          logicalIdPattern.test(nextTrimmed)
-        ) {
-          endLine = j;
-          break;
-        }
-      }
-
-      let type: string | undefined;
-      const typePattern = /^\s*Type\s*:\s*["']?([^"']+)["']?\s*$/;
-      for (let j = i + 1; j < endLine; j++) {
-        const typeMatch = lines[j].match(typePattern);
-        if (typeMatch) {
-          type = typeMatch[1].trim();
-          break;
+        if (metadataLine >= 0) {
+          const indent = lines[j].match(/^(\s*)/)?.[1]?.length ?? 0;
+          const metadataIndent =
+            lines[metadataLine].match(/^(\s*)/)?.[1]?.length ?? 0;
+          if (indent <= metadataIndent && trimmed.includes(':')) {
+            metadataLine = -1;
+            continue;
+          }
+          const nameMatch = trimmed.match(/^name:\s*(.+)$/);
+          if (nameMatch) {
+            name = nameMatch[1].trim().replace(/^["']|["']$/g, '');
+          }
         }
       }
 
       resources.push({
-        type: type || 'cloudformation_resource',
-        name: logicalId,
+        type: kind,
+        name,
         startLine: i + 1,
         endLine,
-        header: type ? `${logicalId} (${type})` : logicalId,
+        header: name ? `${kind} "${name}"` : kind,
       });
     }
 
@@ -102,9 +88,8 @@ export class CloudFormationYAMLLanguageHandler implements ILanguageHandler {
   getDocumentInfo(args: GetDocumentInfoArgs): DocumentInfo {
     const ext = path.extname(args.filePath).toLowerCase();
     const fileName = path.basename(args.filePath);
-
     return {
-      languageId: 'cloudformation-yaml',
+      languageId: 'kubernetes-yaml',
       filePath: args.filePath,
       fileName,
       extension: ext,
@@ -116,10 +101,11 @@ export class CloudFormationYAMLLanguageHandler implements ILanguageHandler {
   findResourceAtLine(args: FindResourceAtLineArgs): ResourceRange | null {
     const resources = this.parseResources(args.content);
     const line = Math.max(1, args.line);
-    const hit = resources.find(
-      resource => line >= resource.startLine && line <= resource.endLine,
+    return (
+      resources.find(
+        resource => line >= resource.startLine && line <= resource.endLine,
+      ) || null
     );
-    return hit || null;
   }
 
   findNearestResource(args: FindNearestResourceArgs): ResourceRange | null {
@@ -127,7 +113,6 @@ export class CloudFormationYAMLLanguageHandler implements ILanguageHandler {
     if (resources.length === 0) {
       return null;
     }
-
     const line = Math.max(1, args.line);
     const containing = resources.find(
       resource => line >= resource.startLine && line <= resource.endLine,
@@ -135,15 +120,10 @@ export class CloudFormationYAMLLanguageHandler implements ILanguageHandler {
     if (containing) {
       return containing;
     }
-
     const previous = resources
       .filter(resource => resource.startLine <= line)
       .sort((a, b) => b.startLine - a.startLine)[0];
-    if (previous) {
-      return previous;
-    }
-
-    return resources[0];
+    return previous || resources[0];
   }
 
   listResources(args: ListResourcesArgs): ResourceRange[] {
@@ -165,15 +145,14 @@ export class CloudFormationYAMLLanguageHandler implements ILanguageHandler {
       });
 
     return {
-      languageId: 'cloudformation-yaml',
+      languageId: 'kubernetes-yaml',
       filePath: args.filePath,
       resource: resource || undefined,
       nearestResource: nearestResource || undefined,
       diagnosticAnchorLine:
         (resource || nearestResource)?.startLine || Math.max(1, args.hint.line),
       resourceHeader:
-        (resource || nearestResource)?.header ||
-        `CloudFormation ${path.basename(args.filePath)}`,
+        (resource || nearestResource)?.header || path.basename(args.filePath),
       fallbackResource: !(resource || nearestResource),
       tags: [],
     };

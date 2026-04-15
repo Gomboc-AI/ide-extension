@@ -6,10 +6,7 @@ import { PathConverter } from '../utils/pathConverter';
 import { FileDiffAnalyzer, Difference } from '../utils/fileDiffAnalyzer';
 import { DiffContentAnalyzer } from '../utils/diffContentAnalyzer';
 import { parseOrlReport } from '../utils/orlReportParser';
-import {
-  buildCloudFormationTemplateContext,
-  detectOrlDocumentKinds,
-} from './orlDocumentClassifier';
+import { buildLanguageDiagnosticContextWithFallback } from '../generics/languageDiagnosticOrchestrator';
 import type { ScanRemediationPayload } from '../schemas/scanRemediation';
 import { zOrlReport } from '../schemas/orlReport';
 
@@ -529,435 +526,67 @@ export class OrlResultConverter {
       for (let i = 0; i < differences.length; i++) {
         const diff = differences[i];
 
-        // Extract resource type and instance name from the actual file content at the diff line
-        // Look backwards from the diff line to find the resource definition
-        // This helps distinguish between multiple resources of the same type in the same file
+        // Resolve resource context through the centralized language handler stack.
         let resourceName = 'Resource';
         let resourceInstanceName: string | null = null;
-        const fileLines = originalText.split('\n');
-        const diffLineIndex = diff.targetLine - 1; // Convert to 0-based index
-
-        const ext = path.extname(actualFilePath).toLowerCase();
         const baseName = path.basename(actualFilePath).toLowerCase();
-        const documentKinds = detectOrlDocumentKinds({
-          filePath: actualFilePath,
-          content: originalText,
-        });
-        const {
-          isDockerfile,
-          isKubernetes,
-          isCloudFormation,
-          isXmlBuild,
-          isGradleBuild,
-          isNpmPackage,
-        } = documentKinds;
-
-        // Search backwards from the diff line to find the resource definition
-        // Also track where this resource block ends to identify the specific instance
         let resourceStartLine = -1;
         let resourceEndLine = -1;
-
-        if (isNpmPackage) {
-          resourceName = 'npm_package';
-          resourceStartLine = 0;
-          resourceEndLine = fileLines.length - 1;
-          try {
-            const parsed = JSON.parse(originalText);
-            resourceInstanceName =
-              typeof parsed.name === 'string' ? parsed.name : baseName;
-          } catch {
-            resourceInstanceName = baseName;
-          }
-        } else if (isXmlBuild) {
-          // For Maven XML files, treat the whole document as one "resource".
-          // Extract groupId + artifactId as the resource identity when possible.
-          resourceName = 'maven_project';
-          resourceStartLine = 0;
-          resourceEndLine = fileLines.length - 1;
-          const artifactMatch = originalText.match(
-            /<artifactId>\s*([^<]+)\s*<\/artifactId>/,
-          );
-          const groupMatch = originalText.match(
-            /<groupId>\s*([^<]+)\s*<\/groupId>/,
-          );
-          if (groupMatch && artifactMatch) {
-            resourceInstanceName = `${groupMatch[1].trim()}:${artifactMatch[1].trim()}`;
-          } else if (artifactMatch) {
-            resourceInstanceName = artifactMatch[1].trim();
-          } else {
-            resourceInstanceName = path.basename(actualFilePath);
-          }
-        } else if (isGradleBuild) {
-          // For Gradle files, treat the whole document as one "resource".
-          resourceName = 'gradle_project';
-          resourceStartLine = 0;
-          resourceEndLine = fileLines.length - 1;
-          resourceInstanceName = path.basename(actualFilePath);
-        } else if (isDockerfile) {
-          // For Dockerfiles, look for FROM instructions (build stages)
-          for (
-            let lineIdx = Math.min(diffLineIndex, fileLines.length - 1);
-            lineIdx >= 0;
-            lineIdx--
-          ) {
-            const line = fileLines[lineIdx].trim();
-            // Skip comments and empty lines
-            if (!line || line.startsWith('#')) {
-              continue;
-            }
-            // Look for FROM instruction: FROM image[:tag] [AS stage_name]
-            const fromMatch = line.match(
-              /^FROM\s+(?:--[^\s]+\s+)?([^\s]+(?::[^\s]+)?)(?:\s+AS\s+(\S+))?/i,
-            );
-            if (fromMatch) {
-              resourceName = 'docker_stage';
-              resourceInstanceName = fromMatch[2] || fromMatch[1]; // Use stage name if present, otherwise image name
-              resourceStartLine = lineIdx;
-              // For Dockerfiles, the stage ends at the next FROM or end of file
-              resourceEndLine = fileLines.length - 1; // Default to end of file
-              for (let j = lineIdx + 1; j < fileLines.length; j++) {
-                const nextLine = fileLines[j].trim();
-                if (nextLine && !nextLine.startsWith('#')) {
-                  if (nextLine.match(/^FROM\s+/i)) {
-                    resourceEndLine = j - 1;
-                    break;
-                  }
-                }
-              }
-              break;
-            }
-            // Stop searching if we've gone too far back (more than 50 lines)
-            if (diffLineIndex - lineIdx > 50) {
-              break;
-            }
-          }
-
-          // If we didn't find it in the original file, try the modified content
-          if (resourceName === 'Resource') {
-            const modifiedLines = (modifiedContent as string).split('\n');
-            for (
-              let lineIdx = Math.min(diffLineIndex, modifiedLines.length - 1);
-              lineIdx >= 0;
-              lineIdx--
-            ) {
-              const line = modifiedLines[lineIdx].trim();
-              if (!line || line.startsWith('#')) {
-                continue;
-              }
-              const fromMatch = line.match(
-                /^FROM\s+(?:--[^\s]+\s+)?([^\s]+(?::[^\s]+)?)(?:\s+AS\s+(\S+))?/i,
-              );
-              if (fromMatch) {
-                resourceName = 'docker_stage';
-                resourceInstanceName = fromMatch[2] || fromMatch[1];
-                resourceStartLine = lineIdx;
-                resourceEndLine = modifiedLines.length - 1;
-                for (let j = lineIdx + 1; j < modifiedLines.length; j++) {
-                  const nextLine = modifiedLines[j].trim();
-                  if (nextLine && !nextLine.startsWith('#')) {
-                    if (nextLine.match(/^FROM\s+/i)) {
-                      resourceEndLine = j - 1;
-                      break;
-                    }
-                  }
-                }
-                break;
-              }
-              if (diffLineIndex - lineIdx > 50) {
-                break;
-              }
-            }
-          }
-        } else if (isKubernetes) {
-          // For Kubernetes YAML files, look for kind: and metadata.name:
-          // Kubernetes resources have:
-          //   apiVersion: v1
-          //   kind: Deployment
-          //   metadata:
-          //     name: my-app
-          // Strategy: Search backwards to find kind:, then search forwards from kind: to find metadata.name:
-
-          // First, find kind: by searching backwards
-          let kindLineIdx = -1;
-          for (
-            let lineIdx = Math.min(diffLineIndex, fileLines.length - 1);
-            lineIdx >= 0;
-            lineIdx--
-          ) {
-            const line = fileLines[lineIdx];
-            const trimmed = line.trim();
-            const indent = line.match(/^(\s*)/)?.[1]?.length ?? 0;
-
-            // Skip empty lines and comments
-            if (!trimmed || trimmed.startsWith('#')) {
-              continue;
-            }
-
-            // Look for kind: (must be at top level, indent 0)
-            if (indent === 0 && trimmed.startsWith('kind:')) {
-              const kindMatch = trimmed.match(/^kind:\s*(.+)$/);
-              if (kindMatch) {
-                resourceName = kindMatch[1].trim();
-                resourceStartLine = lineIdx;
-                kindLineIdx = lineIdx;
-                break; // Found kind, now search forwards for metadata.name
-              }
-            }
-
-            // Stop searching if we've gone too far back (more than 100 lines for K8s)
-            if (diffLineIndex - lineIdx > 100) {
-              break;
-            }
-          }
-
-          // If we found kind:, search forwards to find metadata.name:
-          if (kindLineIdx >= 0) {
-            let inMetadata = false;
-            let metadataIndent = 0;
-
-            for (
-              let lineIdx = kindLineIdx + 1;
-              lineIdx < fileLines.length;
-              lineIdx++
-            ) {
-              const line = fileLines[lineIdx];
-              const trimmed = line.trim();
-              const indent = line.match(/^(\s*)/)?.[1]?.length ?? 0;
-
-              // Skip empty lines and comments
-              if (!trimmed || trimmed.startsWith('#')) {
-                continue;
-              }
-
-              // Look for metadata: section
-              if (trimmed.startsWith('metadata:')) {
-                inMetadata = true;
-                metadataIndent = indent;
-                continue;
-              }
-
-              // If we're in metadata section, look for name:
-              if (inMetadata && indent > metadataIndent) {
-                if (trimmed.startsWith('name:')) {
-                  const nameMatch = trimmed.match(/^name:\s*(.+)$/);
-                  if (nameMatch) {
-                    resourceInstanceName = nameMatch[1]
-                      .trim()
-                      .replace(/^["']|["']$/g, '');
-                    // Found both kind and name, now find the end of this resource
-                    resourceEndLine = fileLines.length - 1;
-                    for (let j = lineIdx + 1; j < fileLines.length; j++) {
-                      const nextLine = fileLines[j];
-                      const nextTrimmed = nextLine.trim();
-                      const nextIndent =
-                        nextLine.match(/^(\s*)/)?.[1]?.length ?? 0;
-                      // Next resource starts with --- separator or apiVersion: at top level
-                      if (
-                        nextTrimmed === '---' ||
-                        (nextIndent === 0 &&
-                          nextTrimmed.startsWith('apiVersion:'))
-                      ) {
-                        resourceEndLine = j - 1;
-                        break;
-                      }
-                    }
-                    break; // Found everything we need
-                  }
-                }
-                // If we hit a key at same indent as metadata, we've left metadata section
-                if (indent === metadataIndent && trimmed.includes(':')) {
-                  inMetadata = false;
-                }
-              } else if (inMetadata && indent <= metadataIndent) {
-                // We've left the metadata section
-                inMetadata = false;
-              }
-
-              // Stop searching if we've gone too far forward (more than 200 lines)
-              if (lineIdx - kindLineIdx > 200) {
-                break;
-              }
-            }
-          }
-
-          // If we didn't find it in the original file, try the modified content
-          if (resourceName === 'Resource' || resourceInstanceName === null) {
-            const modifiedLines = (modifiedContent as string).split('\n');
-
-            // First, find kind: by searching backwards
-            let kindLineIdx = -1;
-            for (
-              let lineIdx = Math.min(diffLineIndex, modifiedLines.length - 1);
-              lineIdx >= 0;
-              lineIdx--
-            ) {
-              const line = modifiedLines[lineIdx];
-              const trimmed = line.trim();
-              const indent = line.match(/^(\s*)/)?.[1]?.length ?? 0;
-
-              if (!trimmed || trimmed.startsWith('#')) {
-                continue;
-              }
-
-              if (indent === 0 && trimmed.startsWith('kind:')) {
-                const kindMatch = trimmed.match(/^kind:\s*(.+)$/);
-                if (kindMatch) {
-                  resourceName = kindMatch[1].trim();
-                  resourceStartLine = lineIdx;
-                  kindLineIdx = lineIdx;
-                  break;
-                }
-              }
-
-              if (diffLineIndex - lineIdx > 100) {
-                break;
-              }
-            }
-
-            // If we found kind:, search forwards to find metadata.name:
-            if (kindLineIdx >= 0) {
-              let inMetadata = false;
-              let metadataIndent = 0;
-
-              for (
-                let lineIdx = kindLineIdx + 1;
-                lineIdx < modifiedLines.length;
-                lineIdx++
-              ) {
-                const line = modifiedLines[lineIdx];
-                const trimmed = line.trim();
-                const indent = line.match(/^(\s*)/)?.[1]?.length ?? 0;
-
-                if (!trimmed || trimmed.startsWith('#')) {
-                  continue;
-                }
-
-                if (trimmed.startsWith('metadata:')) {
-                  inMetadata = true;
-                  metadataIndent = indent;
-                  continue;
-                }
-
-                if (inMetadata && indent > metadataIndent) {
-                  if (trimmed.startsWith('name:')) {
-                    const nameMatch = trimmed.match(/^name:\s*(.+)$/);
-                    if (nameMatch) {
-                      resourceInstanceName = nameMatch[1]
-                        .trim()
-                        .replace(/^["']|["']$/g, '');
-                      resourceEndLine = modifiedLines.length - 1;
-                      for (let j = lineIdx + 1; j < modifiedLines.length; j++) {
-                        const nextLine = modifiedLines[j];
-                        const nextTrimmed = nextLine.trim();
-                        const nextIndent =
-                          nextLine.match(/^(\s*)/)?.[1]?.length ?? 0;
-                        if (
-                          nextTrimmed === '---' ||
-                          (nextIndent === 0 &&
-                            nextTrimmed.startsWith('apiVersion:'))
-                        ) {
-                          resourceEndLine = j - 1;
-                          break;
-                        }
-                      }
-                      break;
-                    }
-                  }
-                  if (indent === metadataIndent && trimmed.includes(':')) {
-                    inMetadata = false;
-                  }
-                } else if (inMetadata && indent <= metadataIndent) {
-                  inMetadata = false;
-                }
-
-                if (lineIdx - kindLineIdx > 200) {
-                  break;
-                }
-              }
-            }
-          }
-        } else if (isCloudFormation) {
-          const cloudFormationContext = buildCloudFormationTemplateContext({
+        const languageDiagnosticContext =
+          buildLanguageDiagnosticContextWithFallback({
             filePath: actualFilePath,
-            totalLines: fileLines.length,
+            originalContent: originalText,
+            modifiedContent: modifiedContent as string,
+            line: diff.targetLine,
+            newLines: diff.newLines,
           });
-          resourceName = cloudFormationContext.resourceName;
-          resourceInstanceName = cloudFormationContext.resourceInstanceName;
-          resourceStartLine = cloudFormationContext.resourceStartLine;
-          resourceEndLine = cloudFormationContext.resourceEndLine;
+        const selectedResource =
+          languageDiagnosticContext.resource ||
+          languageDiagnosticContext.nearestResource;
+        if (selectedResource) {
+          resourceName = selectedResource.type;
+          resourceInstanceName = selectedResource.name || null;
+          resourceStartLine = selectedResource.startLine - 1;
+          resourceEndLine = selectedResource.endLine - 1;
         } else {
-          // For Terraform files, look for resource definitions
-          const terraformResourceLookback = 500;
-          for (
-            let lineIdx = Math.min(diffLineIndex, fileLines.length - 1);
-            lineIdx >= 0;
-            lineIdx--
-          ) {
-            const line = fileLines[lineIdx];
-            // Look for Terraform resource definition: resource "type" "name" {
-            const resourceMatch = line.match(
-              /resource\s+"([^"]+)"\s+"([^"]+)"/,
-            );
-            if (resourceMatch) {
-              resourceName = resourceMatch[1]; // Resource type (e.g., aws_db_instance)
-              resourceInstanceName = resourceMatch[2]; // Instance name (e.g., my_db)
-              resourceStartLine = lineIdx;
-              // Find the end of this resource block by looking for the closing brace
-              let braceCount = 0;
-              for (let j = lineIdx; j < fileLines.length; j++) {
-                const currentLine = fileLines[j];
-                braceCount += (currentLine.match(/{/g) || []).length;
-                braceCount -= (currentLine.match(/}/g) || []).length;
-                if (braceCount === 0 && j > lineIdx) {
-                  resourceEndLine = j;
-                  break;
-                }
-              }
-              break;
+          // Keep file-level context for handlers where line-range parsing may not hit a block.
+          if (languageDiagnosticContext.languageId === 'npm-package-json') {
+            resourceName = 'npm_package';
+            resourceStartLine = 0;
+            resourceEndLine = originalText.split('\n').length - 1;
+            try {
+              const parsed = JSON.parse(originalText);
+              resourceInstanceName =
+                typeof parsed.name === 'string' ? parsed.name : baseName;
+            } catch {
+              resourceInstanceName = baseName;
             }
-            // Stop searching if we've gone too far back (more than 50 lines)
-            if (diffLineIndex - lineIdx > terraformResourceLookback) {
-              break;
-            }
-          }
-
-          // If we didn't find it in the original file, try the modified content
-          if (resourceName === 'Resource') {
-            const modifiedLines = (modifiedContent as string).split('\n');
-            for (
-              let lineIdx = Math.min(diffLineIndex, modifiedLines.length - 1);
-              lineIdx >= 0;
-              lineIdx--
-            ) {
-              const line = modifiedLines[lineIdx];
-              const resourceMatch = line.match(
-                /resource\s+"([^"]+)"\s+"([^"]+)"/,
-              );
-              if (resourceMatch) {
-                resourceName = resourceMatch[1];
-                resourceInstanceName = resourceMatch[2];
-                resourceStartLine = lineIdx;
-                // Find the end of this resource block
-                let braceCount = 0;
-                for (let j = lineIdx; j < modifiedLines.length; j++) {
-                  const currentLine = modifiedLines[j];
-                  braceCount += (currentLine.match(/{/g) || []).length;
-                  braceCount -= (currentLine.match(/}/g) || []).length;
-                  if (braceCount === 0 && j > lineIdx) {
-                    resourceEndLine = j;
-                    break;
-                  }
-                }
-                break;
-              }
-              if (diffLineIndex - lineIdx > terraformResourceLookback) {
-                break;
-              }
-            }
+          } else if (languageDiagnosticContext.languageId === 'maven-xml') {
+            resourceName = 'maven_project';
+            resourceStartLine = 0;
+            resourceEndLine = originalText.split('\n').length - 1;
+          } else if (languageDiagnosticContext.languageId === 'gradle') {
+            resourceName = 'gradle_project';
+            resourceStartLine = 0;
+            resourceEndLine = originalText.split('\n').length - 1;
+            resourceInstanceName = path.basename(actualFilePath);
           }
         }
 
+        const isDockerfile =
+          languageDiagnosticContext.languageId === 'dockerfile';
+        const isKubernetes =
+          languageDiagnosticContext.languageId === 'kubernetes-yaml';
+        const isCloudFormation =
+          languageDiagnosticContext.languageId === 'cloudformation-yaml' ||
+          languageDiagnosticContext.languageId === 'cloudformation-json';
+        const isXmlBuild = languageDiagnosticContext.languageId === 'maven-xml';
+        const isGradleBuild = languageDiagnosticContext.languageId === 'gradle';
+        const isNpmPackage =
+          languageDiagnosticContext.languageId === 'npm-package-json';
+
         logger.debug('Identified resource for diff', {
+          languageId: languageDiagnosticContext.languageId,
           resourceType: resourceName,
           resourceInstance: resourceInstanceName,
           diffLine: diff.targetLine,
@@ -969,42 +598,18 @@ export class OrlResultConverter {
         // Prefer anchoring diagnostics at the start of the resource block.
         // This improves UX vs highlighting the closing brace or the very bottom of a block.
         const diagnosticAnchorLine =
-          resourceStartLine >= 0 ? resourceStartLine + 1 : diff.targetLine;
+          languageDiagnosticContext?.diagnosticAnchorLine &&
+          languageDiagnosticContext.diagnosticAnchorLine > 0
+            ? languageDiagnosticContext.diagnosticAnchorLine
+            : resourceStartLine >= 0
+              ? resourceStartLine + 1
+              : diff.targetLine;
 
-        // Build a human-friendly resource header for diagnostics so users can tell
-        // exactly which block a rule applies to (e.g. Terraform: resource "aws_instance" "worker").
+        // Keep language-specific fallback behavior in handlers.
         const resourceHeader = (() => {
-          if (isDockerfile) {
-            if (resourceName === 'docker_stage' && resourceInstanceName) {
-              return `FROM ${resourceInstanceName}`;
-            }
-            return 'Dockerfile';
+          if (languageDiagnosticContext?.resourceHeader) {
+            return languageDiagnosticContext.resourceHeader;
           }
-          if (isKubernetes) {
-            if (resourceName && resourceName !== 'Resource') {
-              return resourceInstanceName
-                ? `${resourceName} "${resourceInstanceName}"`
-                : resourceName;
-            }
-            return path.basename(actualFilePath);
-          }
-          if (isCloudFormation) {
-            return `CloudFormation ${path.basename(actualFilePath)}`;
-          }
-          if (isXmlBuild) {
-            return resourceInstanceName
-              ? `Maven ${resourceInstanceName}`
-              : path.basename(actualFilePath);
-          }
-          if (isGradleBuild) {
-            return `Gradle ${path.basename(actualFilePath)}`;
-          }
-          if (isNpmPackage) {
-            return resourceInstanceName
-              ? `npm "${resourceInstanceName}"`
-              : path.basename(actualFilePath);
-          }
-          // Terraform-ish
           if (
             resourceName &&
             resourceName !== 'Resource' &&

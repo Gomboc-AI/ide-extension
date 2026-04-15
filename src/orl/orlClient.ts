@@ -241,7 +241,10 @@ export class OrlClient {
       return await this.storageClient.mkdtemp({ prefix });
     }
     const fallback = `${prefix}${crypto.randomBytes(8).toString('hex')}`;
-    await this.storageClient.mkdir({ path: fallback, opts: { recursive: true } });
+    await this.storageClient.mkdir({
+      path: fallback,
+      opts: { recursive: true },
+    });
     return fallback;
   }
 
@@ -312,7 +315,10 @@ export class OrlClient {
           path: cacheDir,
           opts: { recursive: true, force: true },
         });
-        await this.storageClient.mkdir({ path: cacheDir, opts: { recursive: true } });
+        await this.storageClient.mkdir({
+          path: cacheDir,
+          opts: { recursive: true },
+        });
       }
     } catch {
       // ignore
@@ -347,7 +353,10 @@ export class OrlClient {
    */
   private async writeHooksToTempWorkspace(tempDir: string): Promise<void> {
     const hooksDir = path.join(tempDir, '.orl', 'hooks');
-    await this.storageClient.mkdir({ path: hooksDir, opts: { recursive: true } });
+    await this.storageClient.mkdir({
+      path: hooksDir,
+      opts: { recursive: true },
+    });
 
     // Read hook scripts from separate files for maintainability
     const hookFiles = [
@@ -685,7 +694,10 @@ export class OrlClient {
     try {
       const srcDir = path.join(tempDir, '.orl', 'diagnostics');
       const outDir = path.join(workspacePath, '.orl-debug', 'last-run');
-      await this.storageClient.mkdir({ path: outDir, opts: { recursive: true } });
+      await this.storageClient.mkdir({
+        path: outDir,
+        opts: { recursive: true },
+      });
 
       const copyIfExists = async (rel: string) => {
         const src = path.join(srcDir, rel);
@@ -735,7 +747,9 @@ export class OrlClient {
           }
           const src = path.join(rulesDir, e.name);
           const dst = path.join(dstRulesDir, e.name);
-          await this.storageClient.copy({ srcPath: src, destPath: dst }).catch(() => {});
+          await this.storageClient
+            .copy({ srcPath: src, destPath: dst })
+            .catch(() => {});
         }
       } catch {
         // ignore
@@ -773,7 +787,10 @@ export class OrlClient {
 
       // Create a temporary directory for ORL execution
       const tempDir = path.join(workspacePath, '.orl-temp');
-      await this.storageClient.mkdir({ path: tempDir, opts: { recursive: true } });
+      await this.storageClient.mkdir({
+        path: tempDir,
+        opts: { recursive: true },
+      });
       prof.mark('mkdirTemp');
 
       try {
@@ -1323,7 +1340,10 @@ export class OrlClient {
       throw new Error('Selected file is not within the scan directory');
     }
 
-    await this.storageClient.mkdir({ path: destDir, opts: { recursive: true } });
+    await this.storageClient.mkdir({
+      path: destDir,
+      opts: { recursive: true },
+    });
     const destFile = path.join(destDir, rel);
     await this.storageClient.mkdir({
       path: path.dirname(destFile),

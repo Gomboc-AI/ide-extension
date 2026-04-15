@@ -139,6 +139,7 @@ export interface DiagnosticHint {
   message?: string;
   ruleName?: string;
   filePath: string;
+  newLines?: string[];
 }
 
 export interface DocumentInfo {
@@ -163,6 +164,9 @@ export interface DiagnosticContext {
   filePath: string;
   resource?: ResourceRange;
   nearestResource?: ResourceRange;
+  diagnosticAnchorLine?: number; // 1-based diagnostic line anchor
+  resourceHeader: string; // user-facing resource label
+  fallbackResource?: boolean; // true when resource context could not be resolved
   tags?: string[]; // optional hints for rule matching
 }
 

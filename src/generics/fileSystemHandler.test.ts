@@ -50,9 +50,7 @@ describe('FileSystemHandler', () => {
     const file = path.join(root, 'utf8.txt');
     const content = 'line1\nunicode: \u2603\n';
     await handler.writeText({ path: file, content });
-    expect(
-      await handler.readText({ path: file }),
-    ).toBe(content);
+    expect(await handler.readText({ path: file })).toBe(content);
   });
 
   it('stat reports file type and size for a regular file', async () => {

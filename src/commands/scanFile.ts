@@ -440,6 +440,19 @@ async function pickRepresentativeFileInDirectory(args: {
     );
   }
 
+  // Maven XML
+  if (language === 'xml') {
+    return pickBy(n => n.toLowerCase().endsWith('.xml')) || undefined;
+  }
+
+  // Gradle Groovy / Kotlin
+  if (language === 'groovy') {
+    return pickBy(n => n.toLowerCase().endsWith('.gradle')) || undefined;
+  }
+  if (language === 'kotlin') {
+    return pickBy(n => n.toLowerCase().endsWith('.kts')) || undefined;
+  }
+
   // Fallback: any file in the directory.
   return files.length ? path.join(workspacePath, files[0]) : undefined;
 }
