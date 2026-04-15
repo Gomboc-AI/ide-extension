@@ -99,6 +99,8 @@ describe('ScanResultsProvider branch deltas', () => {
         textDocuments: Array<{ uri: { fsPath: string }; getText: () => string }>;
       }
     ).textDocuments = [];
+    (vscode.window as unknown as { activeTextEditor?: unknown }).activeTextEditor =
+      undefined;
     jest.clearAllMocks();
   });
 
