@@ -53,7 +53,52 @@ function createProviderHarness() {
 }
 
 describe('ScanResultsProvider branch deltas', () => {
+  const setRemediations = (
+    provider: ScanResultsProvider,
+    remediation: {
+      rule: { id: string; name: string; shortName: string };
+      codeObservation: {
+        codeResourceInstance: {
+          filepath: string;
+          line: number;
+          name?: string;
+          type: string;
+        };
+      };
+      fixes: Array<{
+        filepath: string;
+        codePosition: { line: number; column: number };
+        fixType: 'ADD' | 'DELETE' | 'UPDATE';
+        newLine: string[];
+      }>;
+    },
+  ) => {
+    (
+      provider as unknown as { individualRemediations: unknown[] }
+    ).individualRemediations = [remediation];
+    (
+      provider as unknown as { groupedRemediations: unknown[] }
+    ).groupedRemediations = [{ path: '/repo/main.tf', content: '', comments: [] }];
+  };
+
+  const getFirstDiagnosticStartLine = (
+    diagnosticCollectionManager: ReturnType<
+      typeof createProviderHarness
+    >['diagnosticCollectionManager'],
+  ): number => {
+    const calls = (
+      diagnosticCollectionManager.updateDiagnosticCollection as jest.Mock
+    ).mock.calls;
+    const diagnostics = calls[0][1] as Array<{ range: vscode.Range }>;
+    return diagnostics[0].range.start.line;
+  };
+
   afterEach(() => {
+    (
+      vscode.workspace as unknown as {
+        textDocuments: Array<{ uri: { fsPath: string }; getText: () => string }>;
+      }
+    ).textDocuments = [];
     jest.clearAllMocks();
   });
 
@@ -229,5 +274,291 @@ describe('ScanResultsProvider branch deltas', () => {
       edits: Array<{ range: vscode.Range; newText: string }>;
     };
     expect(edit.edits[0].newText).toBe(after);
+  });
+
+  it('applies ADD fixes with indentation from the target line when column is zero', async () => {
+    const { provider } = createProviderHarness();
+    (
+      vscode.workspace as unknown as {
+        textDocuments: Array<{ uri: { fsPath: string }; getText: () => string }>;
+      }
+    ).textDocuments = [
+      {
+        uri: { fsPath: '/repo/main.tf' },
+        getText: () =>
+          [
+            'resource "aws_instance" "explicit_bad" {',
+            '  instance_type = "c5.large"',
+            '}',
+          ].join('\n'),
+      },
+    ];
+    const applyEditMock = jest
+      .mocked(vscode.workspace.applyEdit)
+      .mockResolvedValue(true);
+
+    await provider.applyIndividualRemediation([
+      {
+        rule: {
+          id: 'api-rule:add',
+          name: 'Add property',
+          shortName: 'add_property',
+        },
+        codeObservation: {
+          codeResourceInstance: {
+            filepath: '/repo/main.tf',
+            line: 2,
+            type: 'terraform',
+          },
+          disposition: 'NonCompliant',
+        },
+        fixes: [
+          {
+            filepath: '/repo/main.tf',
+            oldLine: '',
+            newLine: ['ebs_optimized = false'],
+            codePosition: { line: 2, column: 0 },
+            lineOffset: 0,
+            fixType: 'ADD',
+          },
+        ],
+      },
+    ]);
+
+    const edit = applyEditMock.mock.calls[0][0] as unknown as {
+      edits: Array<{ type: string; newText: string }>;
+    };
+    const insertEdit = edit.edits.find(e => e.type === 'insert');
+
+    expect(insertEdit).toBeDefined();
+    expect(insertEdit?.newText).toBe('  ebs_optimized = false\n');
+  });
+
+  it('applies UPDATE fixes with indentation from the target line when column is zero', async () => {
+    const { provider } = createProviderHarness();
+    (
+      vscode.workspace as unknown as {
+        textDocuments: Array<{ uri: { fsPath: string }; getText: () => string }>;
+      }
+    ).textDocuments = [
+      {
+        uri: { fsPath: '/repo/main.tf' },
+        getText: () =>
+          [
+            'resource "aws_instance" "explicit_bad" {',
+            '  instance_type = "c5.large"',
+            '}',
+          ].join('\n'),
+      },
+    ];
+    const applyEditMock = jest
+      .mocked(vscode.workspace.applyEdit)
+      .mockResolvedValue(true);
+
+    await provider.applyIndividualRemediation([
+      {
+        rule: {
+          id: 'api-rule:update',
+          name: 'Update property',
+          shortName: 'update_property',
+        },
+        codeObservation: {
+          codeResourceInstance: {
+            filepath: '/repo/main.tf',
+            line: 2,
+            type: 'terraform',
+          },
+          disposition: 'NonCompliant',
+        },
+        fixes: [
+          {
+            filepath: '/repo/main.tf',
+            oldLine: '  instance_type = "c5.large"',
+            newLine: ['instance_type = "c6i.large"'],
+            codePosition: { line: 2, column: 0 },
+            lineOffset: 0,
+            fixType: 'UPDATE',
+          },
+        ],
+      },
+    ]);
+
+    const edit = applyEditMock.mock.calls[0][0] as unknown as {
+      edits: Array<{ type: string; newText: string }>;
+    };
+    const replaceEdit = edit.edits.find(e => e.type === 'replace');
+
+    expect(replaceEdit).toBeDefined();
+    expect(replaceEdit?.newText).toBe('  instance_type = "c6i.large"');
+  });
+
+  it('applies DELETE placeholder with indentation from the target line', async () => {
+    const { provider } = createProviderHarness();
+    (
+      vscode.workspace as unknown as {
+        textDocuments: Array<{ uri: { fsPath: string }; getText: () => string }>;
+      }
+    ).textDocuments = [
+      {
+        uri: { fsPath: '/repo/main.tf' },
+        getText: () =>
+          [
+            'resource "aws_instance" "explicit_bad" {',
+            '  ebs_optimized = false',
+            '}',
+          ].join('\n'),
+      },
+    ];
+    const applyEditMock = jest
+      .mocked(vscode.workspace.applyEdit)
+      .mockResolvedValue(true);
+
+    await provider.applyIndividualRemediation([
+      {
+        rule: {
+          id: 'api-rule:delete',
+          name: 'Delete property',
+          shortName: 'delete_property',
+        },
+        codeObservation: {
+          codeResourceInstance: {
+            filepath: '/repo/main.tf',
+            line: 2,
+            type: 'terraform',
+          },
+          disposition: 'NonCompliant',
+        },
+        fixes: [
+          {
+            filepath: '/repo/main.tf',
+            oldLine: '  ebs_optimized = false',
+            newLine: [],
+            codePosition: { line: 2, column: 0 },
+            lineOffset: 0,
+            fixType: 'DELETE',
+          },
+        ],
+      },
+    ]);
+
+    const edit = applyEditMock.mock.calls[0][0] as unknown as {
+      edits: Array<{ type: string; newText: string }>;
+    };
+    const replaceEdit = edit.edits.find(e => e.type === 'replace');
+
+    expect(replaceEdit).toBeDefined();
+    expect(replaceEdit?.newText).toBe(
+      '  Removed this line to fix Delete property with Gomboc',
+    );
+  });
+
+  it('anchors UPDATE diagnostics to the update line', () => {
+    const { provider, diagnosticCollectionManager } = createProviderHarness();
+    setRemediations(provider, {
+      rule: { id: 'api-rule:1', name: 'api_rule', shortName: 'api_rule' },
+      codeObservation: {
+        codeResourceInstance: {
+          filepath: '/repo/main.tf',
+          line: 25,
+          type: 'terraform',
+        },
+      },
+      fixes: [
+        {
+          filepath: '/repo/main.tf',
+          codePosition: { line: 5, column: 0 },
+          fixType: 'UPDATE',
+          newLine: ['updated'],
+        },
+      ],
+    });
+
+    provider.createDiagnostic();
+
+    expect(getFirstDiagnosticStartLine(diagnosticCollectionManager)).toBe(4);
+  });
+
+  it('anchors DELETE diagnostics to the delete line', () => {
+    const { provider, diagnosticCollectionManager } = createProviderHarness();
+    setRemediations(provider, {
+      rule: { id: 'api-rule:1', name: 'api_rule', shortName: 'api_rule' },
+      codeObservation: {
+        codeResourceInstance: {
+          filepath: '/repo/main.tf',
+          line: 25,
+          type: 'terraform',
+        },
+      },
+      fixes: [
+        {
+          filepath: '/repo/main.tf',
+          codePosition: { line: 6, column: 0 },
+          fixType: 'DELETE',
+          newLine: [''],
+        },
+      ],
+    });
+
+    provider.createDiagnostic();
+
+    expect(getFirstDiagnosticStartLine(diagnosticCollectionManager)).toBe(5);
+  });
+
+  it('anchors ADD diagnostics to the previous line and clamps to line one', () => {
+    const { provider, diagnosticCollectionManager } = createProviderHarness();
+    setRemediations(provider, {
+      rule: { id: 'api-rule:1', name: 'api_rule', shortName: 'api_rule' },
+      codeObservation: {
+        codeResourceInstance: {
+          filepath: '/repo/main.tf',
+          line: 25,
+          type: 'terraform',
+        },
+      },
+      fixes: [
+        {
+          filepath: '/repo/main.tf',
+          codePosition: { line: 1, column: 0 },
+          fixType: 'ADD',
+          newLine: ['new'],
+        },
+      ],
+    });
+
+    provider.createDiagnostic();
+
+    expect(getFirstDiagnosticStartLine(diagnosticCollectionManager)).toBe(0);
+  });
+
+  it('prefers UPDATE over ADD when both fixes exist', () => {
+    const { provider, diagnosticCollectionManager } = createProviderHarness();
+    setRemediations(provider, {
+      rule: { id: 'api-rule:1', name: 'api_rule', shortName: 'api_rule' },
+      codeObservation: {
+        codeResourceInstance: {
+          filepath: '/repo/main.tf',
+          line: 25,
+          type: 'terraform',
+        },
+      },
+      fixes: [
+        {
+          filepath: '/repo/main.tf',
+          codePosition: { line: 10, column: 0 },
+          fixType: 'ADD',
+          newLine: ['new'],
+        },
+        {
+          filepath: '/repo/main.tf',
+          codePosition: { line: 7, column: 0 },
+          fixType: 'UPDATE',
+          newLine: ['updated'],
+        },
+      ],
+    });
+
+    provider.createDiagnostic();
+
+    expect(getFirstDiagnosticStartLine(diagnosticCollectionManager)).toBe(6);
   });
 });
