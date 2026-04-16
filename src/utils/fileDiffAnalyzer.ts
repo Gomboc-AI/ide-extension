@@ -1,4 +1,5 @@
 import logger from './logger';
+import type { ILanguageHandler } from '../generics/types';
 
 export interface Difference {
   originalLine: number;
@@ -19,6 +20,107 @@ export interface Change {
  * with improved grouping to avoid syntax issues
  */
 export class FileDiffAnalyzer {
+  private static isWeakAnchorLine(line: string): boolean {
+    const trimmed = line.trim();
+    return (
+      trimmed.length === 0 ||
+      trimmed === '{' ||
+      trimmed === '}' ||
+      trimmed === '],' ||
+      trimmed === ']' ||
+      trimmed === '},' ||
+      trimmed.startsWith('#') ||
+      trimmed.startsWith('//')
+    );
+  }
+
+  private static countLineOccurrences(lines: string[], line: string): number {
+    let count = 0;
+    for (const entry of lines) {
+      if (entry === line) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * Choose the best lookahead resync candidate.
+   * We prefer nearby, non-generic, and less-repeated lines to avoid
+   * anchoring on ambiguous tokens like `}`.
+   */
+  private static findNextMatch(
+    originalLines: string[],
+    modifiedLines: string[],
+    originalIndex: number,
+    modifiedIndex: number,
+    handler?: ILanguageHandler,
+  ): { originalIdx: number; modifiedIdx: number } {
+    let bestMatch = { originalIdx: -1, modifiedIdx: -1 };
+    let bestScore = Number.POSITIVE_INFINITY;
+
+    for (let i = originalIndex + 1; i < originalLines.length; i++) {
+      for (let j = modifiedIndex + 1; j < modifiedLines.length; j++) {
+        if (originalLines[i] !== modifiedLines[j]) {
+          continue;
+        }
+
+        const value = originalLines[i];
+        const distanceScore = i - originalIndex + (j - modifiedIndex);
+        const isWeak = handler
+          ? handler.isWeakAnchorLine(value)
+          : this.isWeakAnchorLine(value);
+        const weakAnchorPenalty = isWeak ? 500 : 0;
+        const repeatedPenalty =
+          this.countLineOccurrences(originalLines, value) > 1 ||
+          this.countLineOccurrences(modifiedLines, value) > 1
+            ? 100
+            : 0;
+        const score = distanceScore + weakAnchorPenalty + repeatedPenalty;
+
+        if (score < bestScore) {
+          bestScore = score;
+          bestMatch = { originalIdx: i, modifiedIdx: j };
+        }
+      }
+    }
+
+    return bestMatch;
+  }
+
+  private static getCommonPrefixLength(
+    originalLines: string[],
+    modifiedLines: string[],
+  ): number {
+    const max = Math.min(originalLines.length, modifiedLines.length);
+    let idx = 0;
+    while (idx < max && originalLines[idx] === modifiedLines[idx]) {
+      idx++;
+    }
+    return idx;
+  }
+
+  private static getCommonSuffixLength(
+    originalLines: string[],
+    modifiedLines: string[],
+    prefixLength: number,
+  ): number {
+    const originalEnd = originalLines.length - 1;
+    const modifiedEnd = modifiedLines.length - 1;
+    let suffix = 0;
+
+    while (
+      originalEnd - suffix >= prefixLength &&
+      modifiedEnd - suffix >= prefixLength &&
+      originalLines[originalEnd - suffix] ===
+        modifiedLines[modifiedEnd - suffix]
+    ) {
+      suffix++;
+    }
+
+    return suffix;
+  }
+
   /**
    * Normalize all line endings so downstream diff logic behaves the same on
    * Windows (CRLF) and Unix (LF).
@@ -39,6 +141,7 @@ export class FileDiffAnalyzer {
   static findDifferences(
     originalContent: string,
     modifiedContent: string,
+    handler?: ILanguageHandler,
   ): Difference[] {
     const originalNormalized = this.normalizeLineEndings(originalContent);
     const modifiedNormalized = this.normalizeLineEndings(modifiedContent);
@@ -68,20 +171,13 @@ export class FileDiffAnalyzer {
         modifiedIndex++;
       } else {
         // Lines differ - find the next matching line
-        let nextMatch = { originalIdx: -1, modifiedIdx: -1 };
-
-        // Look ahead for the next matching line
-        for (let i = originalIndex + 1; i < originalLines.length; i++) {
-          for (let j = modifiedIndex + 1; j < modifiedLines.length; j++) {
-            if (originalLines[i] === modifiedLines[j]) {
-              nextMatch = { originalIdx: i, modifiedIdx: j };
-              break;
-            }
-          }
-          if (nextMatch.originalIdx !== -1) {
-            break;
-          }
-        }
+        const nextMatch = this.findNextMatch(
+          originalLines,
+          modifiedLines,
+          originalIndex,
+          modifiedIndex,
+          handler,
+        );
 
         if (nextMatch.originalIdx !== -1) {
           // Found a match - analyze the difference
@@ -99,6 +195,7 @@ export class FileDiffAnalyzer {
             originalDiffLines,
             modifiedDiffLines,
             originalIndex + 1,
+            handler,
           );
           differences.push(...groupedChanges);
 
@@ -110,12 +207,14 @@ export class FileDiffAnalyzer {
           const remainingModified = modifiedLines.slice(modifiedIndex);
 
           if (remainingOriginal.length > 0 || remainingModified.length > 0) {
-            differences.push({
-              originalLine: originalIndex + 1,
-              targetLine: originalIndex + 1,
-              newLines: remainingModified,
-              type: remainingOriginal.length === 0 ? 'ADD' : 'UPDATE',
-            });
+            differences.push(
+              ...this.createGroupedChanges(
+                remainingOriginal,
+                remainingModified,
+                originalIndex + 1,
+                handler,
+              ),
+            );
           }
 
           break; // No more content
@@ -143,35 +242,62 @@ export class FileDiffAnalyzer {
     originalLines: string[],
     modifiedLines: string[],
     baseLine: number,
+    handler?: ILanguageHandler,
   ): Difference[] {
     const changes: Difference[] = [];
 
-    if (originalLines.length === 0 && modifiedLines.length > 0) {
+    const prefixLength = this.getCommonPrefixLength(
+      originalLines,
+      modifiedLines,
+    );
+    const suffixLength = this.getCommonSuffixLength(
+      originalLines,
+      modifiedLines,
+      prefixLength,
+    );
+
+    const originalMiddle = originalLines.slice(
+      prefixLength,
+      originalLines.length - suffixLength,
+    );
+    const modifiedMiddle = modifiedLines.slice(
+      prefixLength,
+      modifiedLines.length - suffixLength,
+    );
+    const middleStartLine = baseLine + prefixLength;
+
+    if (originalMiddle.length === 0 && modifiedMiddle.length === 0) {
+      return changes;
+    }
+
+    if (originalMiddle.length === 0 && modifiedMiddle.length > 0) {
       // Pure addition - group related lines together
-      const groupedAdditions = this.groupRelatedLines(modifiedLines);
+      const groupedAdditions = handler
+        ? handler.groupRelatedLines(modifiedMiddle)
+        : this.groupRelatedLines(modifiedMiddle);
 
       for (const group of groupedAdditions) {
         changes.push({
-          originalLine: baseLine,
-          targetLine: baseLine,
+          originalLine: middleStartLine,
+          targetLine: middleStartLine,
           newLines: group,
           type: 'ADD',
         });
       }
-    } else if (modifiedLines.length === 0 && originalLines.length > 0) {
+    } else if (modifiedMiddle.length === 0 && originalMiddle.length > 0) {
       // Pure deletion
       changes.push({
-        originalLine: baseLine,
-        targetLine: baseLine,
+        originalLine: middleStartLine,
+        targetLine: middleStartLine,
         newLines: [],
         type: 'DELETE',
       });
     } else {
       // Mixed change - treat as replacement
       changes.push({
-        originalLine: baseLine,
-        targetLine: baseLine,
-        newLines: modifiedLines,
+        originalLine: middleStartLine,
+        targetLine: middleStartLine,
+        newLines: modifiedMiddle,
         type: 'UPDATE',
       });
     }

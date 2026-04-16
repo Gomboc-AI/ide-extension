@@ -12,7 +12,7 @@ import { CodeActionProvider } from './providers/codeActionProvider';
 import { GombocInfoViewProvider } from './providers/sidebarProvider';
 import { clearOrlRulesCache } from './orl/orlClient';
 import { OrlHoverProvider } from './providers/orlHoverProvider';
-import { getInfrastructureToolFromFileUri } from './infrastructureTool';
+import { chooseLanguageImplementation } from './generics/languageHandler';
 import { DiagnosticCollectionManager } from './diagnosticCollectionManager';
 import {
   initializeIntegrationsService,
@@ -94,12 +94,15 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   const onEdit = vscode.workspace.onDidChangeTextDocument(({ document }) => {
-    const currentDocumentIac = getInfrastructureToolFromFileUri(document.uri);
-    if (!currentDocumentIac) {
+    if (document.uri.scheme !== 'file') {
       return;
     }
+    const handler = chooseLanguageImplementation({
+      filePath: document.uri.fsPath,
+      content: document.getText(),
+    });
     diagnosticCollectionManager.clearDiagnosticCollection(
-      currentDocumentIac,
+      handler.diagnosticClearScope,
       document.uri,
     );
   });

@@ -1,26 +1,42 @@
 import path from 'path';
 import {
-  BuildDiagnosticContextArgs,
-  DiagnosticContext,
+  DetectLanguageArgs,
   DocumentInfo,
   FindNearestBlockArgs,
   FindBlockAtLineArgs,
-  FindScopedEditRangeArgs,
-  ILanguageHandler,
+  FormatBlockDisplayNameArgs,
+  GetDocumentInfoArgs,
   ListBlocksArgs,
   BlockRange,
-  ScopedEditRange,
-  GetDocumentInfoArgs,
+  BuildDiagnosticContextArgs,
+  DiagnosticContext,
 } from '../../types';
+import { BaseLanguageHandler } from '../base';
 
-export class CloudFormationJSONLanguageHandler implements ILanguageHandler {
+export class CloudFormationJSONLanguageHandler extends BaseLanguageHandler {
   displayName = 'CloudFormation JSON';
+  codeResourceType = 'cloudformation';
   extensions = ['.json'];
+
+  detectLanguage(args: DetectLanguageArgs): boolean {
+    const filePath = args.filePath || '';
+    const fileName = path.basename(filePath).toLowerCase();
+    const ext = path.extname(filePath).toLowerCase();
+    if (ext !== '.json') {
+      return false;
+    }
+
+    return fileName !== 'package.json' && fileName !== 'package-lock.json';
+  }
+
+  override formatBlockDisplayName(args: FormatBlockDisplayNameArgs): string {
+    return `CloudFormation: ${path.basename(args.filePath)}`;
+  }
 
   /**
    * Parses CloudFormation JSON Resources and maps them to source lines.
    */
-  private parseResources(content: string): BlockRange[] {
+  private parseBlocks(content: string): BlockRange[] {
     let parsed: unknown;
     try {
       parsed = JSON.parse(content);
@@ -39,7 +55,7 @@ export class CloudFormationJSONLanguageHandler implements ILanguageHandler {
 
     const lines = content.split('\n');
     const entries = Object.entries(resourcesObject as Record<string, unknown>);
-    const resources: BlockRange[] = [];
+    const blocks: BlockRange[] = [];
 
     const escapeRegex = (value: string): string =>
       value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -58,7 +74,7 @@ export class CloudFormationJSONLanguageHandler implements ILanguageHandler {
         lines.findIndex(line => idPattern.test(line)) + 1,
       );
 
-      resources.push({
+      blocks.push({
         type: type || 'cloudformation_resource',
         name: logicalId,
         startLine,
@@ -67,15 +83,15 @@ export class CloudFormationJSONLanguageHandler implements ILanguageHandler {
       });
     }
 
-    resources.sort((a, b) => a.startLine - b.startLine);
-    for (let i = 0; i < resources.length; i++) {
-      const next = resources[i + 1];
-      resources[i].endLine = next
-        ? Math.max(resources[i].startLine, next.startLine - 1)
+    blocks.sort((a, b) => a.startLine - b.startLine);
+    for (let i = 0; i < blocks.length; i++) {
+      const next = blocks[i + 1];
+      blocks[i].endLine = next
+        ? Math.max(blocks[i].startLine, next.startLine - 1)
         : lines.length;
     }
 
-    return resources;
+    return blocks;
   }
 
   getDocumentInfo(args: GetDocumentInfoArgs): DocumentInfo {
@@ -93,76 +109,49 @@ export class CloudFormationJSONLanguageHandler implements ILanguageHandler {
   }
 
   findBlockAtLine(args: FindBlockAtLineArgs): BlockRange | null {
-    const resources = this.parseResources(args.content);
+    const blocks = this.parseBlocks(args.content);
     const line = Math.max(1, args.line);
-    const hit = resources.find(
-      resource => line >= resource.startLine && line <= resource.endLine,
+    const hit = blocks.find(
+      block => line >= block.startLine && line <= block.endLine,
     );
     return hit || null;
   }
 
   findNearestBlock(args: FindNearestBlockArgs): BlockRange | null {
-    const resources = this.parseResources(args.content);
-    if (resources.length === 0) {
+    const blocks = this.parseBlocks(args.content);
+    if (blocks.length === 0) {
       return null;
     }
 
     const line = Math.max(1, args.line);
-    const containing = resources.find(
-      resource => line >= resource.startLine && line <= resource.endLine,
+    const containing = blocks.find(
+      block => line >= block.startLine && line <= block.endLine,
     );
     if (containing) {
       return containing;
     }
 
-    const previous = resources
-      .filter(resource => resource.startLine <= line)
+    const previous = blocks
+      .filter(block => block.startLine <= line)
       .sort((a, b) => b.startLine - a.startLine)[0];
     if (previous) {
       return previous;
     }
 
-    return resources[0];
-  }
-
-  findScopedEditRange(args: FindScopedEditRangeArgs): ScopedEditRange | null {
-    const resource = this.findBlockAtLine(args) || this.findNearestBlock(args);
-    if (!resource) {
-      return null;
-    }
-    return { startLine: resource.startLine, endLine: resource.endLine };
+    return blocks[0];
   }
 
   listBlocks(args: ListBlocksArgs): BlockRange[] {
-    return this.parseResources(args.content);
+    return this.parseBlocks(args.content);
   }
 
-  buildDiagnosticContext(args: BuildDiagnosticContextArgs): DiagnosticContext {
-    const resource = this.findBlockAtLine({
-      filePath: args.filePath,
-      content: args.content,
-      line: args.hint.line,
-    });
-    const nearestResource =
-      resource ||
-      this.findNearestBlock({
-        filePath: args.filePath,
-        content: args.content,
-        line: args.hint.line,
-      });
-
-    return {
-      languageId: 'cloudformation-json',
-      filePath: args.filePath,
-      block: resource || undefined,
-      nearestBlock: nearestResource || undefined,
-      diagnosticAnchorLine:
-        (resource || nearestResource)?.startLine || Math.max(1, args.hint.line),
-      blockHeader:
-        (resource || nearestResource)?.header ||
-        `CloudFormation ${path.basename(args.filePath)}`,
-      fallbackBlock: !(resource || nearestResource),
-      tags: [],
-    };
+  override buildDiagnosticContext(
+    args: BuildDiagnosticContextArgs,
+  ): DiagnosticContext {
+    const ctx = super.buildDiagnosticContext(args);
+    if (!ctx.blockHeader || ctx.blockHeader === path.basename(args.filePath)) {
+      ctx.blockHeader = `CloudFormation ${path.basename(args.filePath)}`;
+    }
+    return ctx;
   }
 }

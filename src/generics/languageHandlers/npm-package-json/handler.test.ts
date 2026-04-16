@@ -42,4 +42,30 @@ describe('NpmPackageJSONHandler', () => {
       'scripts',
     );
   });
+
+  it('has npm codeResourceType', () => {
+    expect(handler.codeResourceType).toBe('npm');
+  });
+
+  it('formatBlockDisplayName uses npm: prefix', () => {
+    expect(
+      handler.formatBlockDisplayName({
+        blockType: 'npm_package',
+        blockName: 'my-app',
+        filePath: '/workspace/package.json',
+      }),
+    ).toBe('npm: my-app');
+  });
+
+  it('describeBlock returns full-file span for npm packages', () => {
+    const desc = handler.describeBlock({
+      filePath: '/workspace/package.json',
+      content: packageJson,
+      line: 3,
+    });
+    expect(desc.blockType).toBe('npm_package');
+    expect(desc.blockName).toBe('my-app');
+    expect(desc.blockStartLine).toBe(0);
+    expect(desc.blockEndLine).toBe(packageJson.split('\n').length - 1);
+  });
 });

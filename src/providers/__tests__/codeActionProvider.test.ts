@@ -104,4 +104,48 @@ describe('CodeActionProvider', () => {
       ],
     ]);
   });
+
+  it('falls back to same-line document diagnostics when context is empty', () => {
+    const provider = new CodeActionProvider();
+    const compactRange = new vscode.Range(
+      new vscode.Position(10, 6),
+      new vscode.Position(10, 12),
+    );
+    const cursorRangeOutsideCompact = new vscode.Range(
+      new vscode.Position(10, 0),
+      new vscode.Position(10, 0),
+    );
+    const orlDiagnostic = new OrlRuleFixGombocDiagnostic(
+      compactRange,
+      'Rule C',
+      'Apply fix (Rule C)',
+      { ruleName: 'rule_c003', filePath: '/repo/main.tf' },
+      vscode.DiagnosticSeverity.Error,
+    );
+    const groupedDiagnostic = new GroupedFixGombocDiagnostic(
+      new vscode.Range(new vscode.Position(1, 0), new vscode.Position(1, 20)),
+      'Apply all fixes',
+      'Apply all fixes',
+      { path: '/repo/main.tf', content: '', comments: [] },
+      vscode.DiagnosticSeverity.Error,
+    );
+
+    (vscode.languages.getDiagnostics as unknown as jest.Mock).mockReturnValue([
+      groupedDiagnostic,
+      orlDiagnostic,
+    ]);
+
+    const actions = provider.provideCodeActions(
+      makeDocument(vscode.Uri.file('/repo/main.tf')),
+      cursorRangeOutsideCompact,
+      makeContext([]),
+      {} as vscode.CancellationToken,
+    );
+
+    const commandIds = actions
+      .map(action => action.command?.command)
+      .filter((v): v is string => typeof v === 'string');
+    expect(commandIds).toContain('gomboc-results.applyOrlRuleRemediation');
+    expect(commandIds).toContain('gomboc-results.applyGroupedRemediation');
+  });
 });

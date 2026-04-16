@@ -1,31 +1,36 @@
 import path from 'path';
 import {
-  BuildDiagnosticContextArgs,
-  DiagnosticContext,
+  DetectLanguageArgs,
   DocumentInfo,
   FindNearestBlockArgs,
   FindBlockAtLineArgs,
-  FindScopedEditRangeArgs,
   GetDocumentInfoArgs,
-  ILanguageHandler,
   ListBlocksArgs,
   BlockRange,
-  ScopedEditRange,
+  DescribeBlockArgs,
+  BlockDescription,
 } from '../../types';
+import { BaseLanguageHandler } from '../base';
 
-export class GradleLanguageHandler implements ILanguageHandler {
+export class GradleLanguageHandler extends BaseLanguageHandler {
   displayName = 'Gradle';
+  codeResourceType = 'gradle';
   extensions = ['.gradle', '.kts'];
+
+  detectLanguage(args: DetectLanguageArgs): boolean {
+    const ext = path.extname(args.filePath || '').toLowerCase();
+    return ext === '.gradle' || ext === '.kts';
+  }
 
   /**
    * Parses common Gradle block structures and task declarations.
    */
-  private parseResources(args: {
+  private parseBlocks(args: {
     filePath: string;
     content: string;
   }): BlockRange[] {
     const lines = args.content.split('\n');
-    const resources: BlockRange[] = [];
+    const blocks: BlockRange[] = [];
     const taskPattern = /^\s*task\s+([A-Za-z0-9_]+)\s*\{/;
     const registerTaskPattern =
       /^\s*tasks\.(?:register|create)\(\s*["']([^"']+)["']/;
@@ -71,7 +76,7 @@ export class GradleLanguageHandler implements ILanguageHandler {
         }
       }
 
-      resources.push({
+      blocks.push({
         type,
         name,
         startLine: i + 1,
@@ -80,7 +85,7 @@ export class GradleLanguageHandler implements ILanguageHandler {
       });
     }
 
-    resources.push({
+    blocks.push({
       type: 'gradle_project',
       name: path.basename(args.filePath),
       startLine: 1,
@@ -88,13 +93,13 @@ export class GradleLanguageHandler implements ILanguageHandler {
       header: `Gradle ${path.basename(args.filePath)}`,
     });
 
-    resources.sort((a, b) => {
+    blocks.sort((a, b) => {
       if (a.startLine !== b.startLine) {
         return a.startLine - b.startLine;
       }
       return a.endLine - b.endLine;
     });
-    return resources;
+    return blocks;
   }
 
   getDocumentInfo(args: GetDocumentInfoArgs): DocumentInfo {
@@ -111,79 +116,59 @@ export class GradleLanguageHandler implements ILanguageHandler {
   }
 
   findBlockAtLine(args: FindBlockAtLineArgs): BlockRange | null {
-    const resources = this.parseResources({
+    const blocks = this.parseBlocks({
       filePath: args.filePath,
       content: args.content,
     });
     const line = Math.max(1, args.line);
     return (
-      resources.find(
-        resource => line >= resource.startLine && line <= resource.endLine,
-      ) || null
+      blocks.find(block => line >= block.startLine && line <= block.endLine) ||
+      null
     );
   }
 
   findNearestBlock(args: FindNearestBlockArgs): BlockRange | null {
-    const resources = this.parseResources({
+    const blocks = this.parseBlocks({
       filePath: args.filePath,
       content: args.content,
     });
-    if (resources.length === 0) {
+    if (blocks.length === 0) {
       return null;
     }
     const line = Math.max(1, args.line);
-    const containing = resources.find(
-      resource => line >= resource.startLine && line <= resource.endLine,
+    const containing = blocks.find(
+      block => line >= block.startLine && line <= block.endLine,
     );
     if (containing) {
       return containing;
     }
-    const previous = resources
-      .filter(resource => resource.startLine <= line)
+    const previous = blocks
+      .filter(block => block.startLine <= line)
       .sort((a, b) => b.startLine - a.startLine)[0];
-    return previous || resources[0];
-  }
-
-  findScopedEditRange(args: FindScopedEditRangeArgs): ScopedEditRange | null {
-    const resource = this.findBlockAtLine(args) || this.findNearestBlock(args);
-    if (!resource) {
-      return null;
-    }
-    return { startLine: resource.startLine, endLine: resource.endLine };
+    return previous || blocks[0];
   }
 
   listBlocks(args: ListBlocksArgs): BlockRange[] {
-    return this.parseResources({
+    return this.parseBlocks({
       filePath: args.filePath,
       content: args.content,
     });
   }
 
-  buildDiagnosticContext(args: BuildDiagnosticContextArgs): DiagnosticContext {
-    const resource = this.findBlockAtLine({
-      filePath: args.filePath,
-      content: args.content,
-      line: args.hint.line,
-    });
-    const nearestResource =
-      resource ||
-      this.findNearestBlock({
-        filePath: args.filePath,
-        content: args.content,
-        line: args.hint.line,
-      });
+  /**
+   * Returns full-file block span when no specific block is found.
+   */
+  override describeBlock(args: DescribeBlockArgs): BlockDescription {
+    const result = super.describeBlock(args);
+    if (result.blockType !== 'Resource') {
+      return result;
+    }
 
     return {
-      languageId: 'gradle',
-      filePath: args.filePath,
-      block: resource || undefined,
-      nearestBlock: nearestResource || undefined,
-      diagnosticAnchorLine:
-        (resource || nearestResource)?.startLine || Math.max(1, args.hint.line),
-      blockHeader:
-        (resource || nearestResource)?.header || path.basename(args.filePath),
-      fallbackBlock: !(resource || nearestResource),
-      tags: [],
+      blockType: 'gradle_project',
+      blockName: path.basename(args.filePath),
+      blockStartLine: 0,
+      blockEndLine: args.content.split('\n').length - 1,
     };
   }
 }

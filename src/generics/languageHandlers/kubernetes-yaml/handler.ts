@@ -1,28 +1,69 @@
 import path from 'path';
 import {
-  BuildDiagnosticContextArgs,
-  DiagnosticContext,
+  DetectLanguageArgs,
   DocumentInfo,
   FindNearestBlockArgs,
   FindBlockAtLineArgs,
-  FindScopedEditRangeArgs,
+  FormatBlockDisplayNameArgs,
   GetDocumentInfoArgs,
-  ILanguageHandler,
   ListBlocksArgs,
   BlockRange,
-  ScopedEditRange,
 } from '../../types';
+import { YamlBaseLanguageHandler } from '../yamlBase';
 
-export class KubernetesYAMLLanguageHandler implements ILanguageHandler {
+export class KubernetesYAMLLanguageHandler extends YamlBaseLanguageHandler {
   displayName = 'Kubernetes YAML';
+  codeResourceType = 'kubernetes';
   extensions = ['.yaml', '.yml'];
+
+  private hasPatternAtLineStart(content: string, pattern: string): boolean {
+    const lines = content.split('\n');
+    for (const line of lines) {
+      if (line.trim().startsWith(pattern)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  detectLanguage(args: DetectLanguageArgs): boolean {
+    const filePath = args.filePath || '';
+    const content = args.content || '';
+    const dirPath = path.dirname(filePath).toLowerCase();
+    const ext = path.extname(filePath).toLowerCase();
+    if (ext !== '.yaml' && ext !== '.yml') {
+      return false;
+    }
+
+    const firstLines = content.split('\n').slice(0, 50).join('\n');
+    const isK8sDir =
+      dirPath.includes('/k8s/') ||
+      dirPath.includes('/kubernetes/') ||
+      dirPath.includes('/manifests/') ||
+      dirPath.includes('\\k8s\\') ||
+      dirPath.includes('\\kubernetes\\') ||
+      dirPath.includes('\\manifests\\');
+
+    return (
+      (this.hasPatternAtLineStart(firstLines, 'kind:') &&
+        this.hasPatternAtLineStart(firstLines, 'apiVersion:')) ||
+      isK8sDir
+    );
+  }
+
+  override formatBlockDisplayName(args: FormatBlockDisplayNameArgs): string {
+    if (args.blockName?.trim()) {
+      return `${args.blockType}/${args.blockName}`;
+    }
+    return path.basename(args.filePath);
+  }
 
   /**
    * Parses top-level Kubernetes resources by detecting `kind` + `metadata.name`.
    */
-  private parseResources(content: string): BlockRange[] {
+  private parseBlocks(content: string): BlockRange[] {
     const lines = content.split('\n');
-    const resources: BlockRange[] = [];
+    const blocks: BlockRange[] = [];
     const isDocBoundary = (line: string): boolean => line.trim() === '---';
     const isTopLevelKey = (line: string, key: string): boolean => {
       const trimmed = line.trim();
@@ -75,7 +116,7 @@ export class KubernetesYAMLLanguageHandler implements ILanguageHandler {
         }
       }
 
-      resources.push({
+      blocks.push({
         type: kind,
         name,
         startLine: i + 1,
@@ -84,7 +125,7 @@ export class KubernetesYAMLLanguageHandler implements ILanguageHandler {
       });
     }
 
-    return resources;
+    return blocks;
   }
 
   getDocumentInfo(args: GetDocumentInfoArgs): DocumentInfo {
@@ -101,70 +142,33 @@ export class KubernetesYAMLLanguageHandler implements ILanguageHandler {
   }
 
   findBlockAtLine(args: FindBlockAtLineArgs): BlockRange | null {
-    const resources = this.parseResources(args.content);
+    const blocks = this.parseBlocks(args.content);
     const line = Math.max(1, args.line);
     return (
-      resources.find(
-        resource => line >= resource.startLine && line <= resource.endLine,
-      ) || null
+      blocks.find(block => line >= block.startLine && line <= block.endLine) ||
+      null
     );
   }
 
   findNearestBlock(args: FindNearestBlockArgs): BlockRange | null {
-    const resources = this.parseResources(args.content);
-    if (resources.length === 0) {
+    const blocks = this.parseBlocks(args.content);
+    if (blocks.length === 0) {
       return null;
     }
     const line = Math.max(1, args.line);
-    const containing = resources.find(
-      resource => line >= resource.startLine && line <= resource.endLine,
+    const containing = blocks.find(
+      block => line >= block.startLine && line <= block.endLine,
     );
     if (containing) {
       return containing;
     }
-    const previous = resources
-      .filter(resource => resource.startLine <= line)
+    const previous = blocks
+      .filter(block => block.startLine <= line)
       .sort((a, b) => b.startLine - a.startLine)[0];
-    return previous || resources[0];
-  }
-
-  findScopedEditRange(args: FindScopedEditRangeArgs): ScopedEditRange | null {
-    const resource = this.findBlockAtLine(args) || this.findNearestBlock(args);
-    if (!resource) {
-      return null;
-    }
-    return { startLine: resource.startLine, endLine: resource.endLine };
+    return previous || blocks[0];
   }
 
   listBlocks(args: ListBlocksArgs): BlockRange[] {
-    return this.parseResources(args.content);
-  }
-
-  buildDiagnosticContext(args: BuildDiagnosticContextArgs): DiagnosticContext {
-    const resource = this.findBlockAtLine({
-      filePath: args.filePath,
-      content: args.content,
-      line: args.hint.line,
-    });
-    const nearestResource =
-      resource ||
-      this.findNearestBlock({
-        filePath: args.filePath,
-        content: args.content,
-        line: args.hint.line,
-      });
-
-    return {
-      languageId: 'kubernetes-yaml',
-      filePath: args.filePath,
-      block: resource || undefined,
-      nearestBlock: nearestResource || undefined,
-      diagnosticAnchorLine:
-        (resource || nearestResource)?.startLine || Math.max(1, args.hint.line),
-      blockHeader:
-        (resource || nearestResource)?.header || path.basename(args.filePath),
-      fallbackBlock: !(resource || nearestResource),
-      tags: [],
-    };
+    return this.parseBlocks(args.content);
   }
 }

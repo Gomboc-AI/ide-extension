@@ -27,6 +27,14 @@ describe('languageHandler selector', () => {
     expect(languageId).toBe('helm-template');
   });
 
+  it('keeps helm before kubernetes when both yaml signals are present', () => {
+    const languageId = detectLanguageId({
+      filePath: '/workspace/k8s/charts/app/templates/deploy.yaml',
+      content: ['apiVersion: apps/v1', 'kind: Deployment'].join('\n'),
+    });
+    expect(languageId).toBe('helm-template');
+  });
+
   it('resolves kubernetes yaml using content markers', () => {
     const languageId = detectLanguageId({
       filePath: '/workspace/k8s/deployment.yaml',

@@ -61,19 +61,6 @@ export interface MkdtempArgs {
   prefix: string;
 }
 
-export interface CacheGetArgs {
-  key: string;
-}
-
-export interface CacheSetArgs<V = unknown> {
-  key: string;
-  value: V;
-}
-
-export interface CacheDeleteArgs {
-  key: string;
-}
-
 /**
  * This is a interface to represent a storage system with read, write, copy properties
  */
@@ -97,20 +84,12 @@ export interface IStorage {
   mkdtemp?(args: MkdtempArgs): Promise<string>;
 }
 
-/**
- * Key/value cache abstraction (in-memory, disk-backed, etc.).
- * @typeParam V - value type stored under each key
- */
-export interface ICache<V = unknown> {
-  get(args: CacheGetArgs): Promise<V | undefined>;
-  has(args: CacheGetArgs): Promise<boolean>;
-  set(args: CacheSetArgs<V>): Promise<void>;
-  del(args: CacheDeleteArgs): Promise<void>;
-  clr(): Promise<void>;
-  count(): Promise<number>;
+export interface GetDocumentInfoArgs {
+  filePath: string;
+  content: string;
 }
 
-export interface GetDocumentInfoArgs {
+export interface DetectLanguageArgs {
   filePath: string;
   content: string;
 }
@@ -180,17 +159,87 @@ export interface DiagnosticContext {
   tags?: string[]; // optional hints for rule matching
 }
 
+export interface DescribeBlockArgs {
+  filePath: string;
+  content: string;
+  line: number;
+  block?: BlockRange;
+}
+
+export interface BlockDescription {
+  blockType: string;
+  blockName: string | null;
+  blockStartLine: number;
+  blockEndLine: number;
+}
+
+export interface BuildDiagnosticRangeArgs {
+  line1Based: number;
+  content: string;
+  uniqueOffset?: number;
+}
+
+export interface DiagnosticRangeResult {
+  startChar: number;
+  endChar: number;
+}
+
+export interface ResolveDiagnosticAnchorLineArgs {
+  content: string;
+  suggestedLine: number;
+  fromFixOperation: boolean;
+}
+
+export interface MatchRulesToDiffArgs {
+  blockType: string;
+  blockName: string | null;
+  allFileRules: string[];
+  diffLine: number;
+  diffContent: string;
+  properties: string[];
+}
+
 /**
  * This represents the implementation of a language and it's associated behavior and
  * properties.
  */
+export interface FormatBlockDisplayNameArgs {
+  blockType: string;
+  blockName: string | null;
+  filePath: string;
+}
+
 export interface ILanguageHandler {
   displayName: string;
-  extensions: string[];
+
+  /** Scope used when clearing diagnostics after a fix is applied. */
+  diagnosticClearScope: 'file' | 'directory';
+
+  /** Short token used for the codeResourceInstance.type field (e.g. "terraform", "docker"). */
+  codeResourceType: string;
+
+  detectLanguage(args: DetectLanguageArgs): boolean;
   getDocumentInfo(args: GetDocumentInfoArgs): DocumentInfo;
   findBlockAtLine(args: FindBlockAtLineArgs): BlockRange | null;
   findNearestBlock(args: FindNearestBlockArgs): BlockRange | null;
   findScopedEditRange(args: FindScopedEditRangeArgs): ScopedEditRange | null;
   listBlocks(args: ListBlocksArgs): BlockRange[];
   buildDiagnosticContext(args: BuildDiagnosticContextArgs): DiagnosticContext;
+
+  // --- Diff strategy ---
+  groupRelatedLines(lines: string[]): string[][];
+  isWeakAnchorLine(line: string): boolean;
+
+  // --- Diagnostic placement ---
+  buildDiagnosticRange(args: BuildDiagnosticRangeArgs): DiagnosticRangeResult;
+  resolveDiagnosticAnchorLine(args: ResolveDiagnosticAnchorLineArgs): number;
+
+  // --- Block context for converter ---
+  describeBlock(args: DescribeBlockArgs): BlockDescription;
+
+  /** Format block type + name for user-facing display in diagnostics. */
+  formatBlockDisplayName(args: FormatBlockDisplayNameArgs): string;
+
+  // --- Rule matching strategy ---
+  matchRulesToDiff(args: MatchRulesToDiffArgs): string[];
 }

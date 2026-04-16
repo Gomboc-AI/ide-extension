@@ -1,30 +1,47 @@
 import path from 'path';
 import {
-  BuildDiagnosticContextArgs,
-  DiagnosticContext,
+  DetectLanguageArgs,
   DocumentInfo,
   FindNearestBlockArgs,
   FindBlockAtLineArgs,
-  FindScopedEditRangeArgs,
+  FormatBlockDisplayNameArgs,
   GetDocumentInfoArgs,
-  ILanguageHandler,
   ListBlocksArgs,
   BlockRange,
-  ScopedEditRange,
+  DescribeBlockArgs,
+  BlockDescription,
 } from '../../types';
+import { BaseLanguageHandler } from '../base';
 
-export class NpmPackageJSONLanguageHandler implements ILanguageHandler {
+export class NpmPackageJSONLanguageHandler extends BaseLanguageHandler {
   displayName = 'NPM Package JSON';
+  codeResourceType = 'npm';
   extensions = ['.json'];
+
+  detectLanguage(args: DetectLanguageArgs): boolean {
+    const filePath = args.filePath || '';
+    const fileName = path.basename(filePath).toLowerCase();
+    const ext = path.extname(filePath).toLowerCase();
+    return (
+      ext === '.json' &&
+      (fileName === 'package.json' || fileName === 'package-lock.json')
+    );
+  }
+
+  override formatBlockDisplayName(args: FormatBlockDisplayNameArgs): string {
+    return args.blockName
+      ? `npm: ${args.blockName}`
+      : path.basename(args.filePath);
+  }
 
   /**
    * Parses package metadata and top-level dependency/script sections from package JSON files.
    */
-  private parseResources(args: {
+  private parseBlocks(args: {
     filePath: string;
     content: string;
   }): BlockRange[] {
-    const resources: BlockRange[] = [];
+    const blocks: BlockRange[] = [];
     const lines = args.content.split('\n');
     const fileName = path.basename(args.filePath);
 
@@ -46,7 +63,7 @@ export class NpmPackageJSONLanguageHandler implements ILanguageHandler {
       'optionalDependencies',
       'engines',
     ];
-    const sectionResources: BlockRange[] = [];
+    const sectionBlocks: BlockRange[] = [];
     const keyLines: Array<{ key: string; line: number }> = [];
     for (let i = 0; i < lines.length; i++) {
       const trimmed = lines[i].trim();
@@ -66,7 +83,7 @@ export class NpmPackageJSONLanguageHandler implements ILanguageHandler {
         continue;
       }
       const next = keyLines[i + 1];
-      sectionResources.push({
+      sectionBlocks.push({
         type: 'npm_section',
         name: curr.key,
         startLine: curr.line,
@@ -75,21 +92,21 @@ export class NpmPackageJSONLanguageHandler implements ILanguageHandler {
       });
     }
 
-    resources.push(...sectionResources);
-    resources.push({
+    blocks.push(...sectionBlocks);
+    blocks.push({
       type: 'npm_package',
       name: packageName,
       startLine: 1,
       endLine: Math.max(1, lines.length),
       header: `npm "${packageName}"`,
     });
-    resources.sort((a, b) => {
+    blocks.sort((a, b) => {
       if (a.startLine !== b.startLine) {
         return a.startLine - b.startLine;
       }
       return a.endLine - b.endLine;
     });
-    return resources;
+    return blocks;
   }
 
   getDocumentInfo(args: GetDocumentInfoArgs): DocumentInfo {
@@ -106,79 +123,70 @@ export class NpmPackageJSONLanguageHandler implements ILanguageHandler {
   }
 
   findBlockAtLine(args: FindBlockAtLineArgs): BlockRange | null {
-    const resources = this.parseResources({
+    const blocks = this.parseBlocks({
       filePath: args.filePath,
       content: args.content,
     });
     const line = Math.max(1, args.line);
     return (
-      resources.find(
-        resource => line >= resource.startLine && line <= resource.endLine,
-      ) || null
+      blocks.find(block => line >= block.startLine && line <= block.endLine) ||
+      null
     );
   }
 
   findNearestBlock(args: FindNearestBlockArgs): BlockRange | null {
-    const resources = this.parseResources({
+    const blocks = this.parseBlocks({
       filePath: args.filePath,
       content: args.content,
     });
-    if (resources.length === 0) {
+    if (blocks.length === 0) {
       return null;
     }
     const line = Math.max(1, args.line);
-    const containing = resources.find(
-      resource => line >= resource.startLine && line <= resource.endLine,
+    const containing = blocks.find(
+      block => line >= block.startLine && line <= block.endLine,
     );
     if (containing) {
       return containing;
     }
-    const previous = resources
-      .filter(resource => resource.startLine <= line)
+    const previous = blocks
+      .filter(block => block.startLine <= line)
       .sort((a, b) => b.startLine - a.startLine)[0];
-    return previous || resources[0];
-  }
-
-  findScopedEditRange(args: FindScopedEditRangeArgs): ScopedEditRange | null {
-    const resource = this.findBlockAtLine(args) || this.findNearestBlock(args);
-    if (!resource) {
-      return null;
-    }
-    return { startLine: resource.startLine, endLine: resource.endLine };
+    return previous || blocks[0];
   }
 
   listBlocks(args: ListBlocksArgs): BlockRange[] {
-    return this.parseResources({
+    return this.parseBlocks({
       filePath: args.filePath,
       content: args.content,
     });
   }
 
-  buildDiagnosticContext(args: BuildDiagnosticContextArgs): DiagnosticContext {
-    const resource = this.findBlockAtLine({
-      filePath: args.filePath,
-      content: args.content,
-      line: args.hint.line,
-    });
-    const nearestResource =
-      resource ||
-      this.findNearestBlock({
-        filePath: args.filePath,
-        content: args.content,
-        line: args.hint.line,
-      });
+  /**
+   * Returns full-file block span when no specific block is found.
+   */
+  override describeBlock(args: DescribeBlockArgs): BlockDescription {
+    const result = super.describeBlock(args);
+    if (result.blockType !== 'Resource') {
+      return result;
+    }
+
+    const baseName = path.basename(args.filePath).toLowerCase();
+    let packageName: string = baseName;
+    try {
+      const parsed = JSON.parse(args.content);
+      if (typeof parsed.name === 'string') {
+        packageName = parsed.name;
+      }
+    } catch {
+      // keep filename fallback
+    }
 
     return {
-      languageId: 'npm-package-json',
-      filePath: args.filePath,
-      block: resource || undefined,
-      nearestBlock: nearestResource || undefined,
-      diagnosticAnchorLine:
-        (resource || nearestResource)?.startLine || Math.max(1, args.hint.line),
-      blockHeader:
-        (resource || nearestResource)?.header || path.basename(args.filePath),
-      fallbackBlock: !(resource || nearestResource),
-      tags: [],
+      blockType: 'npm_package',
+      blockName: packageName,
+      blockStartLine: 0,
+      blockEndLine: args.content.split('\n').length - 1,
     };
   }
 }

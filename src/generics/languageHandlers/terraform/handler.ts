@@ -1,28 +1,33 @@
 import path from 'path';
 import {
-  BuildDiagnosticContextArgs,
-  DiagnosticContext,
+  DetectLanguageArgs,
   DocumentInfo,
   FindNearestBlockArgs,
   FindBlockAtLineArgs,
-  FindScopedEditRangeArgs,
   GetDocumentInfoArgs,
-  ILanguageHandler,
   ListBlocksArgs,
   BlockRange,
-  ScopedEditRange,
+  MatchRulesToDiffArgs,
 } from '../../types';
+import { BaseLanguageHandler } from '../base';
 
-export class TerraformLanguageHandler implements ILanguageHandler {
+export class TerraformLanguageHandler extends BaseLanguageHandler {
   displayName = 'Terraform';
+  diagnosticClearScope = 'directory' as const;
+  codeResourceType = 'terraform';
   extensions = ['.tf', '.tfvars', '.hcl'];
+
+  detectLanguage(args: DetectLanguageArgs): boolean {
+    const ext = path.extname(args.filePath || '').toLowerCase();
+    return ext === '.tf' || ext === '.tfvars' || ext === '.hcl';
+  }
 
   /**
    * Parses Terraform-style resource blocks and returns their line ranges.
    */
-  private parseResources(content: string): BlockRange[] {
+  private parseBlocks(content: string): BlockRange[] {
     const lines = content.split('\n');
-    const resources: BlockRange[] = [];
+    const blocks: BlockRange[] = [];
     const resourcePattern = /resource\s+"([^"]+)"\s+"([^"]+)"/;
 
     for (let i = 0; i < lines.length; i++) {
@@ -54,7 +59,7 @@ export class TerraformLanguageHandler implements ILanguageHandler {
         }
       }
 
-      resources.push({
+      blocks.push({
         type,
         name,
         startLine,
@@ -63,7 +68,7 @@ export class TerraformLanguageHandler implements ILanguageHandler {
       });
     }
 
-    return resources;
+    return blocks;
   }
 
   getDocumentInfo(args: GetDocumentInfoArgs): DocumentInfo {
@@ -81,77 +86,90 @@ export class TerraformLanguageHandler implements ILanguageHandler {
   }
 
   findBlockAtLine(args: FindBlockAtLineArgs): BlockRange | null {
-    const resources = this.parseResources(args.content);
+    const blocks = this.parseBlocks(args.content);
     const line = Math.max(1, args.line);
 
-    const hit = resources.find(
-      resource => line >= resource.startLine && line <= resource.endLine,
+    const hit = blocks.find(
+      block => line >= block.startLine && line <= block.endLine,
     );
 
     return hit || null;
   }
 
   findNearestBlock(args: FindNearestBlockArgs): BlockRange | null {
-    const resources = this.parseResources(args.content);
-    if (resources.length === 0) {
+    const blocks = this.parseBlocks(args.content);
+    if (blocks.length === 0) {
       return null;
     }
 
     const line = Math.max(1, args.line);
-    const containing = resources.find(
-      resource => line >= resource.startLine && line <= resource.endLine,
+    const containing = blocks.find(
+      block => line >= block.startLine && line <= block.endLine,
     );
     if (containing) {
       return containing;
     }
 
-    const previous = resources
-      .filter(resource => resource.startLine <= line)
+    const previous = blocks
+      .filter(block => block.startLine <= line)
       .sort((a, b) => b.startLine - a.startLine)[0];
     if (previous) {
       return previous;
     }
 
-    return resources[0];
-  }
-
-  findScopedEditRange(args: FindScopedEditRangeArgs): ScopedEditRange | null {
-    const resource = this.findBlockAtLine(args) || this.findNearestBlock(args);
-    if (!resource) {
-      return null;
-    }
-    return { startLine: resource.startLine, endLine: resource.endLine };
+    return blocks[0];
   }
 
   listBlocks(args: ListBlocksArgs): BlockRange[] {
-    return this.parseResources(args.content);
+    return this.parseBlocks(args.content);
   }
 
-  buildDiagnosticContext(args: BuildDiagnosticContextArgs): DiagnosticContext {
-    const resource = this.findBlockAtLine({
-      filePath: args.filePath,
-      content: args.content,
-      line: args.hint.line,
-    });
-    const nearestResource =
-      resource ||
-      this.findNearestBlock({
-        filePath: args.filePath,
-        content: args.content,
-        line: args.hint.line,
-      });
+  /**
+   * Terraform-specific rule matching: filters by block-type variants so that
+   * rules are attributed only to relevant resource types.
+   */
+  override matchRulesToDiff(args: MatchRulesToDiffArgs): string[] {
+    if (args.blockType === 'Resource' || !args.blockType) {
+      return [...args.allFileRules];
+    }
 
-    return {
-      languageId: 'terraform',
-      filePath: args.filePath,
-      block: resource || undefined,
-      nearestBlock: nearestResource || undefined,
-      diagnosticAnchorLine:
-        (resource || nearestResource)?.startLine || Math.max(1, args.hint.line),
-      blockHeader:
-        (resource || nearestResource)?.header || path.basename(args.filePath),
-      fallbackBlock: !(resource || nearestResource),
-      tags: [],
-    };
+    const normalized = args.blockType
+      .replace(/^hashicorp__/, '')
+      .replace(/^aws-resources-/, '')
+      .replace(/^google-resources-/, '')
+      .replace(/^azurerm-resources-/, '')
+      .replace(/\./g, '_')
+      .replace(/-/g, '_');
+
+    const core = normalized.replace(/^(aws_|google_|azurerm_)/, '');
+    const coreWithDashes = core.replace(/_/g, '-');
+    const normalizedWithDashes = normalized.replace(/_/g, '-');
+
+    const variants = [
+      normalized,
+      normalizedWithDashes,
+      `hashicorp__aws-resources-${normalized}`,
+      `hashicorp__aws-resources-aws_${normalized}`,
+      `hashicorp__google-resources-${normalized}`,
+      `hashicorp__google-resources-google_${normalized}`,
+      `aws-resources-${normalized}`,
+      `aws-resources-aws_${normalized}`,
+      `hashicorp__aws-resources-${normalizedWithDashes}`,
+      `aws-resources-${normalizedWithDashes}`,
+    ];
+
+    if (core.includes('_') || core.includes('-')) {
+      variants.splice(1, 0, core, coreWithDashes);
+    }
+
+    const matched: string[] = [];
+    for (const ruleName of args.allFileRules) {
+      const ruleLower = ruleName.toLowerCase();
+      if (variants.some(v => ruleLower.includes(v.toLowerCase()))) {
+        matched.push(ruleName);
+      }
+    }
+
+    return matched.length > 0 ? matched : [...args.allFileRules];
   }
 }

@@ -7,6 +7,152 @@ jest.mock('../logger', () => ({
   error: jest.fn(),
 }));
 
+describe('FileDiffAnalyzer diff classification', () => {
+  it('classifies terraform insert before closing brace as ADD', () => {
+    const original = [
+      'resource "aws_instance" "explicit_bad" {',
+      '  ami           = "ami-005e54dee72cc1d00"',
+      '  instance_type = "c5.large"',
+      '}',
+    ].join('\n');
+    const modified = [
+      'resource "aws_instance" "explicit_bad" {',
+      '  ami           = "ami-005e54dee72cc1d00"',
+      '  instance_type = "c5.large"',
+      '  ebs_optimized = false',
+      '}',
+    ].join('\n');
+
+    const diffs = FileDiffAnalyzer.findDifferences(original, modified);
+
+    expect(diffs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'ADD',
+          newLines: ['  ebs_optimized = false'],
+        }),
+      ]),
+    );
+  });
+
+  it('classifies insert before repeated closing brace as ADD', () => {
+    const original = [
+      'resource "aws_instance" "a" {',
+      '  ami = "ami-123"',
+      '}',
+      '',
+      'resource "aws_instance" "b" {',
+      '  ami = "ami-456"',
+      '}',
+    ].join('\n');
+    const modified = [
+      'resource "aws_instance" "a" {',
+      '  ami = "ami-123"',
+      '  metadata_options {',
+      '    http_tokens = "required"',
+      '  }',
+      '}',
+      '',
+      'resource "aws_instance" "b" {',
+      '  ami = "ami-456"',
+      '}',
+    ].join('\n');
+
+    const diffs = FileDiffAnalyzer.findDifferences(original, modified);
+    const inserted = diffs.find(diff =>
+      diff.newLines.some(line => line.includes('metadata_options')),
+    );
+
+    expect(inserted).toBeDefined();
+    expect(inserted?.type).toBe('ADD');
+  });
+
+  it('classifies yaml key insertion as ADD', () => {
+    const original = [
+      'apiVersion: v1',
+      'kind: ConfigMap',
+      'metadata:',
+      '  name: app-config',
+      'data:',
+      '  app_mode: "prod"',
+    ].join('\n');
+    const modified = [
+      'apiVersion: v1',
+      'kind: ConfigMap',
+      'metadata:',
+      '  name: app-config',
+      'data:',
+      '  app_mode: "prod"',
+      '  log_level: "info"',
+    ].join('\n');
+
+    const diffs = FileDiffAnalyzer.findDifferences(original, modified);
+
+    expect(diffs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'ADD',
+          newLines: ['  log_level: "info"'],
+        }),
+      ]),
+    );
+  });
+
+  it('classifies dockerfile line insertion as ADD', () => {
+    const original = [
+      'FROM node:20-alpine',
+      'WORKDIR /app',
+      'COPY package*.json ./',
+      'RUN npm ci',
+      'CMD ["npm", "start"]',
+    ].join('\n');
+    const modified = [
+      'FROM node:20-alpine',
+      'WORKDIR /app',
+      'COPY package*.json ./',
+      'RUN npm ci',
+      'ENV NODE_ENV=production',
+      'CMD ["npm", "start"]',
+    ].join('\n');
+
+    const diffs = FileDiffAnalyzer.findDifferences(original, modified);
+
+    expect(diffs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'ADD',
+          newLines: ['ENV NODE_ENV=production'],
+        }),
+      ]),
+    );
+  });
+
+  it('classifies gradle dependency insertion as ADD', () => {
+    const original = [
+      'dependencies {',
+      "  implementation 'org.springframework.boot:spring-boot-starter-web'",
+      '}',
+    ].join('\n');
+    const modified = [
+      'dependencies {',
+      "  implementation 'org.springframework.boot:spring-boot-starter-web'",
+      "  testImplementation 'org.junit.jupiter:junit-jupiter'",
+      '}',
+    ].join('\n');
+
+    const diffs = FileDiffAnalyzer.findDifferences(original, modified);
+
+    expect(diffs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'ADD',
+          newLines: ["  testImplementation 'org.junit.jupiter:junit-jupiter'"],
+        }),
+      ]),
+    );
+  });
+});
+
 describe('FileDiffAnalyzer - Improved Grouping', () => {
   describe('findDifferences', () => {
     it('should group related lines together to maintain syntax integrity', () => {

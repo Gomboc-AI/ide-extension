@@ -14,7 +14,6 @@ import {
   parseScanRemediationPayload,
 } from '../schemas/scanRemediation';
 import { DiagnosticCollectionManager } from '../diagnosticCollectionManager';
-import { getInfrastructureToolFromFileUri } from '../infrastructureTool';
 import { vsCodeIntegrationsService } from '../utils/integrationsService';
 import { createOrlClient } from '../orl/orlClient';
 import { extractRenderableOrlRuleNames } from '../orl/orlRuleNameResolver';
@@ -22,6 +21,7 @@ import {
   chooseLanguageImplementation,
   mapLanguageIdToOrlLanguage,
 } from '../generics/languageHandler';
+import type { ILanguageHandler } from '../generics/types';
 import logger from '../utils/logger';
 import { parseOrlReport } from '../utils/orlReportParser';
 import {
@@ -234,37 +234,197 @@ export class ScanResultsProvider {
     }
   }
 
+  /**
+   * Returns leading whitespace for a given 1-based line index.
+   * Used to keep ADD fixes aligned with the surrounding code.
+   */
+  private getLineIndentation(
+    content: string | undefined,
+    line1Based: number,
+  ): string {
+    if (!content) {
+      return '';
+    }
+    const lines = content.split('\n');
+    if (lines.length === 0) {
+      return '';
+    }
+    const safeIdx = Math.min(
+      Math.max(0, Math.floor(line1Based) - 1),
+      Math.max(0, lines.length - 1),
+    );
+    const line = lines[safeIdx] ?? '';
+    const match = line.match(/^(\s*)/);
+    return match?.[1] || '';
+  }
+
+  /**
+   * Build a compact diagnostic range delegating to the language handler.
+   */
+  private buildCompactDiagnosticRange(args: {
+    line1Based: number;
+    content?: string;
+    uniqueOffset?: number;
+    handler?: ILanguageHandler;
+  }): vscode.Range {
+    const line = Math.max(1, Math.floor(args.line1Based || 1));
+    const content = typeof args.content === 'string' ? args.content : '';
+
+    if (args.handler) {
+      const result = args.handler.buildDiagnosticRange({
+        line1Based: line,
+        content,
+        uniqueOffset: args.uniqueOffset,
+      });
+      return new vscode.Range(
+        new vscode.Position(line - 1, result.startChar),
+        new vscode.Position(line - 1, result.endChar),
+      );
+    }
+
+    // Inline fallback when no handler is available
+    const uniqueOffset =
+      Number.isFinite(args.uniqueOffset) && (args.uniqueOffset || 0) > 0
+        ? Math.floor(args.uniqueOffset || 0)
+        : 0;
+    const lines = content ? content.split('\n') : [];
+    const idx = Math.min(Math.max(0, line - 1), Math.max(0, lines.length - 1));
+    const lineText = lines[idx] || '';
+    const lineLength = lineText.length;
+
+    // Anchor near the first non-whitespace character when possible.
+    const firstNonWhitespace = lineText.search(/\S/);
+    const startChar =
+      firstNonWhitespace >= 0 ? firstNonWhitespace : lineLength > 0 ? 0 : 0;
+
+    // Keep highlight compact and predictable.
+    const trimmedLength = lineText.trim().length;
+    const compactWidth = Math.max(1, Math.min(24, trimmedLength || 1));
+    const maxEnd = Math.max(startChar + 1, lineLength || startChar + 1);
+    const rawEnd = startChar + compactWidth + uniqueOffset;
+    const endChar = Math.min(maxEnd, Math.max(startChar + 1, rawEnd));
+
+    return new vscode.Range(
+      new vscode.Position(line - 1, startChar),
+      new vscode.Position(line - 1, endChar),
+    );
+  }
+
+  private getFileTextForFix(
+    cache: Map<string, string | undefined>,
+    filepath: string,
+  ): string | undefined {
+    if (cache.has(filepath)) {
+      return cache.get(filepath);
+    }
+    const content = this.readFileTextForDiagnostics(filepath);
+    cache.set(filepath, content);
+    return content;
+  }
+
+  /**
+   * Apply inferred indentation to unindented lines only.
+   * If any non-empty line already has leading whitespace, keep incoming formatting.
+   */
+  private withInferredIndentation(
+    lines: string[],
+    indentation: string,
+  ): string[] {
+    if (!indentation || lines.length === 0) {
+      return lines;
+    }
+    const nonEmpty = lines.filter(line => line.trim().length > 0);
+    const hasExistingIndent = nonEmpty.some(line => /^\s/.test(line));
+    if (hasExistingIndent) {
+      return lines;
+    }
+    return lines.map(line =>
+      line.length > 0 ? `${indentation}${line}` : line,
+    );
+  }
+
   private resolveDiagnosticAnchorLine(args: {
     filePath: string;
     content?: string;
     suggestedLine: number;
+    useLanguageAnchor?: boolean;
+    handler?: ILanguageHandler;
   }): number {
     const suggested =
       Number.isFinite(args.suggestedLine) && args.suggestedLine > 0
         ? Math.floor(args.suggestedLine)
         : 1;
     if (!args.content) {
-      return suggested;
+      return Math.max(1, suggested);
     }
 
-    const handler = chooseLanguageImplementation({
-      filePath: args.filePath,
-      content: args.content,
-    });
-    const context = handler.buildDiagnosticContext({
-      filePath: args.filePath,
-      content: args.content,
-      hint: {
-        line: suggested,
+    const handler =
+      args.handler ||
+      chooseLanguageImplementation({
         filePath: args.filePath,
-      },
+        content: args.content,
+      });
+
+    return handler.resolveDiagnosticAnchorLine({
+      content: args.content,
+      suggestedLine: suggested,
+      fromFixOperation: args.useLanguageAnchor === false,
     });
-    const anchored =
-      context.diagnosticAnchorLine && context.diagnosticAnchorLine > 0
-        ? context.diagnosticAnchorLine
-        : suggested;
-    const maxLine = Math.max(1, args.content.split('\n').length);
-    return Math.min(maxLine, Math.max(1, Math.floor(anchored)));
+  }
+
+  private pickOperationDiagnosticAnchor(
+    remediation: IndividualFixesRemediation,
+  ): { line: number; fromFixOperation: boolean } {
+    const fixes = Array.isArray(remediation?.fixes) ? remediation.fixes : [];
+    const operationFix = fixes.find(
+      fix => fix.fixType === 'UPDATE' || fix.fixType === 'DELETE',
+    );
+    if (
+      operationFix &&
+      Number.isFinite(operationFix.codePosition.line) &&
+      operationFix.codePosition.line > 0
+    ) {
+      return {
+        line: Math.floor(operationFix.codePosition.line),
+        fromFixOperation: true,
+      };
+    }
+
+    const addFix = fixes.find(fix => fix.fixType === 'ADD');
+    if (
+      addFix &&
+      Number.isFinite(addFix.codePosition.line) &&
+      addFix.codePosition.line > 0
+    ) {
+      return {
+        line: Math.max(1, Math.floor(addFix.codePosition.line) - 1),
+        fromFixOperation: true,
+      };
+    }
+
+    const firstFix = fixes[0];
+    if (
+      firstFix &&
+      Number.isFinite(firstFix.codePosition.line) &&
+      firstFix.codePosition.line > 0
+    ) {
+      return {
+        line: Math.floor(firstFix.codePosition.line),
+        fromFixOperation: true,
+      };
+    }
+
+    const observationLine = Number(
+      remediation?.codeObservation?.codeResourceInstance?.line,
+    );
+    if (Number.isFinite(observationLine) && observationLine > 0) {
+      return {
+        line: Math.floor(observationLine),
+        fromFixOperation: false,
+      };
+    }
+
+    return { line: 1, fromFixOperation: false };
   }
 
   private extractCheckovIdsFromAnnotations(
@@ -851,23 +1011,6 @@ export class ScanResultsProvider {
     const existingGroupedFixes: Record<string, GroupedFixesRemediation> = {};
     let diagnosticTotal = 0;
 
-    const pickBestAnchorLine = (
-      remediation: IndividualFixesRemediation,
-    ): number => {
-      // Prefer anchoring to the resource header line for stability in the editor.
-      const obs = Number(
-        remediation?.codeObservation?.codeResourceInstance?.line,
-      );
-      if (Number.isFinite(obs) && obs > 0) {
-        return obs;
-      }
-      const fixLine = Number(remediation?.fixes?.[0]?.codePosition?.line);
-      if (Number.isFinite(fixLine) && fixLine > 0) {
-        return fixLine;
-      }
-      return 1;
-    };
-
     for (const remediation of this.individualRemediations) {
       const filepath =
         remediation.codeObservation.codeResourceInstance.filepath;
@@ -901,6 +1044,14 @@ export class ScanResultsProvider {
       > = [];
       const uniqueLines = new Set<number>();
 
+      // Resolve the language handler once per file for all diagnostic operations
+      const fileHandler = fileContent
+        ? chooseLanguageImplementation({
+            filePath: filepath,
+            content: fileContent,
+          })
+        : undefined;
+
       const isOrl = (r: IndividualFixesRemediation): boolean =>
         typeof r?.rule?.id === 'string' && r.rule.id.startsWith('orl-rule:');
 
@@ -926,8 +1077,12 @@ export class ScanResultsProvider {
           const rule = remediation.rule;
           const ruleNames = this.getRenderableOrlRuleNames(rule);
 
-          // Pick a reasonable anchor line for diagnostics.
-          let line: number = pickBestAnchorLine(remediation);
+          // Prefer operation-aware anchors (UPDATE/DELETE on target line,
+          // ADD on the previous line) so selection does not depend on
+          // resource headers.
+          const operationAnchor =
+            this.pickOperationDiagnosticAnchor(remediation);
+          let line: number = operationAnchor.line;
           if (!Number.isFinite(line) || line <= 0) {
             line = 1;
           }
@@ -935,6 +1090,8 @@ export class ScanResultsProvider {
             filePath: filepath,
             content: fileContent,
             suggestedLine: line,
+            useLanguageAnchor: !operationAnchor.fromFixOperation,
+            handler: fileHandler,
           });
 
           const resourceHeader: string | undefined =
@@ -961,12 +1118,14 @@ export class ScanResultsProvider {
         for (const [, meta] of ruleToMeta.entries()) {
           const ruleName = meta.ruleName;
           const line = meta.line;
-          const startPosition = new vscode.Position(line - 1, 0);
-          // Make each ORL diagnostic range slightly unique so selecting an item
-          // from Problems can produce a single-action lightbulb menu.
-          const baseLen = Math.max(1, (meta.resourceHeader || '').length);
-          const endChar = Math.min(999, baseLen + orlIdx);
-          const endPosition = new vscode.Position(line - 1, endChar);
+          // Keep each ORL range compact and slightly unique so Problems selection
+          // can still produce a single-action lightbulb menu.
+          const range = this.buildCompactDiagnosticRange({
+            line1Based: line,
+            content: fileContent,
+            uniqueOffset: orlIdx,
+            handler: fileHandler,
+          });
           const shortNameRaw = this.orlRuleShortNames?.[ruleName] || ruleName;
           const shortName = prettifyShortName(shortNameRaw);
           const description = this.orlRuleDescriptions?.[ruleName] || ruleName;
@@ -993,7 +1152,7 @@ export class ScanResultsProvider {
             ? `${shortName}: ${meta.resourceHeader}`
             : shortName;
           const diagnostic = new OrlRuleFixGombocDiagnostic(
-            new vscode.Range(startPosition, endPosition),
+            range,
             message,
             `Apply fix (${shortName})`,
             { ruleName, filePath: filepath },
@@ -1026,21 +1185,15 @@ export class ScanResultsProvider {
       } else {
         // API mode (or legacy): keep individual per-fix diagnostics + grouped apply-all.
         for (const remediation of currentRemediation) {
-          let startLine = remediation.codeObservation.codeResourceInstance.line;
-          let containsAddFixType = false;
-          for (const fix of remediation.fixes) {
-            if (fix.fixType === 'ADD') {
-              containsAddFixType = true;
-              break;
-            }
-          }
-          if (!containsAddFixType && remediation.fixes.length > 0) {
-            startLine = remediation.fixes[0].codePosition.line;
-          }
+          const operationAnchor =
+            this.pickOperationDiagnosticAnchor(remediation);
+          let startLine = operationAnchor.line;
           startLine = this.resolveDiagnosticAnchorLine({
             filePath: filepath,
             content: fileContent,
             suggestedLine: startLine,
+            useLanguageAnchor: !operationAnchor.fromFixOperation,
+            handler: fileHandler,
           });
           const startPosition = new vscode.Position(startLine - 1, 0);
           uniqueLines.add(startLine);
@@ -1094,6 +1247,7 @@ export class ScanResultsProvider {
   async applyIndividualRemediation(remediations: IndividualFixesRemediation[]) {
     const edit = new vscode.WorkspaceEdit();
     const updatedFiles = new Set<string>();
+    const fileContentsByPath = new Map<string, string | undefined>();
     const allFixes: IndividualFix[] = remediations.reduce((acc, curr) => {
       const currentFixes: IndividualFix[] = curr.fixes.map(fix => ({
         ...fix,
@@ -1112,20 +1266,42 @@ export class ScanResultsProvider {
 
       const range = new vscode.Range(startPosition, endPosition);
       const newValue = fix.newLine.join('\n');
+      const fileContent = this.getFileTextForFix(
+        fileContentsByPath,
+        fix.filepath,
+      );
+      const inferredIndent =
+        fix.codePosition.column <= 0
+          ? this.getLineIndentation(fileContent, fix.codePosition.line)
+          : '';
       if (fix.fixType === 'ADD') {
-        edit.insert(
-          file,
-          startPosition,
-          `${' '.repeat(fix.codePosition.column)}${newValue}` + '\n',
-        );
+        let addIndent = ' '.repeat(fix.codePosition.column);
+        if (fix.codePosition.column <= 0) {
+          const normalizedNewLines = this.withInferredIndentation(
+            fix.newLine,
+            inferredIndent,
+          );
+          const normalizedValue = normalizedNewLines.join('\n');
+          edit.insert(file, startPosition, `${normalizedValue}` + '\n');
+        } else {
+          edit.insert(file, startPosition, `${addIndent}${newValue}` + '\n');
+        }
       } else if (fix.fixType === 'UPDATE') {
-        edit.replace(file, range, `${newValue}`);
+        const normalizedLines =
+          fix.codePosition.column <= 0
+            ? this.withInferredIndentation(fix.newLine, inferredIndent)
+            : fix.newLine;
+        edit.replace(file, range, `${normalizedLines.join('\n')}`);
       } else {
         // delete but delete type doesn't exist yet for us
+        const deletePrefix =
+          fix.codePosition.column > 0
+            ? ' '.repeat(fix.codePosition.column)
+            : inferredIndent;
         edit.replace(
           file,
           range,
-          `Removed this line to fix ${fix.rule.name} with Gomboc`,
+          `${deletePrefix}Removed this line to fix ${fix.rule.name} with Gomboc`,
         );
       }
     }
@@ -1174,10 +1350,18 @@ export class ScanResultsProvider {
     // once we apply a remediation we have to dispose and clear everything and re-run
     for (const file of updatedFiles) {
       const uri = vscode.Uri.file(file);
-      const infrastructureTool = getInfrastructureToolFromFileUri(uri);
-      if (infrastructureTool) {
+      let content: string | undefined;
+      try {
+        content = fs.readFileSync(file, 'utf8');
+      } catch {
+        // ignore
+      }
+      const handler = content
+        ? chooseLanguageImplementation({ filePath: file, content })
+        : undefined;
+      if (handler) {
         this.diagnosticCollectionManager.clearDiagnosticCollection(
-          infrastructureTool,
+          handler.diagnosticClearScope,
           uri,
         );
       } else {
@@ -1201,8 +1385,11 @@ export class ScanResultsProvider {
     const fixEdit = new vscode.WorkspaceEdit();
     for (const remediation of remediations) {
       const file = vscode.Uri.file(remediation.path);
-      const iac = getInfrastructureToolFromFileUri(file);
       const document = await vscode.workspace.openTextDocument(file);
+      const groupedHandler = chooseLanguageImplementation({
+        filePath: remediation.path,
+        content: document.getText(),
+      });
       const decodedContent = Buffer.from(
         remediation.content,
         'base64',
@@ -1256,9 +1443,10 @@ export class ScanResultsProvider {
         await vscode.window.activeTextEditor?.document.save();
       }
       // once we apply a remediation we have to dispose and clear everything and re-run
-      if (iac) {
-        this.diagnosticCollectionManager.clearDiagnosticCollection(iac, file);
-      }
+      this.diagnosticCollectionManager.clearDiagnosticCollection(
+        groupedHandler.diagnosticClearScope,
+        file,
+      );
       if (ScanResultsProvider.codeActionDisposable) {
         ScanResultsProvider.codeActionDisposable.dispose();
       }

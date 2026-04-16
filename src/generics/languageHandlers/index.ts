@@ -1,3 +1,4 @@
+export { BaseLanguageHandler } from './base';
 export { TerraformLanguageHandler } from './terraform/handler';
 export { CloudFormationYAMLLanguageHandler } from './cloudformation-yaml/handler';
 export { CloudFormationJSONLanguageHandler } from './cloudformation-json/handler';
