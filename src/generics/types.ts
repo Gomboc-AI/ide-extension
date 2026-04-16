@@ -159,12 +159,65 @@ export interface DiagnosticContext {
   tags?: string[]; // optional hints for rule matching
 }
 
+export interface DescribeBlockArgs {
+  filePath: string;
+  content: string;
+  line: number;
+  block?: BlockRange;
+}
+
+export interface BlockDescription {
+  blockType: string;
+  blockName: string | null;
+  blockStartLine: number;
+  blockEndLine: number;
+}
+
+export interface BuildDiagnosticRangeArgs {
+  line1Based: number;
+  content: string;
+  uniqueOffset?: number;
+}
+
+export interface DiagnosticRangeResult {
+  startChar: number;
+  endChar: number;
+}
+
+export interface ResolveDiagnosticAnchorLineArgs {
+  content: string;
+  suggestedLine: number;
+  fromFixOperation: boolean;
+}
+
+export interface MatchRulesToDiffArgs {
+  blockType: string;
+  blockName: string | null;
+  allFileRules: string[];
+  diffLine: number;
+  diffContent: string;
+  properties: string[];
+}
+
 /**
  * This represents the implementation of a language and it's associated behavior and
  * properties.
  */
+export interface FormatBlockDisplayNameArgs {
+  blockType: string;
+  blockName: string | null;
+  filePath: string;
+}
+
 export interface ILanguageHandler {
   displayName: string;
+
+  /** Scope used when clearing diagnostics after a fix is applied. */
+  diagnosticClearScope: 'file' | 'directory';
+
+  /** Short token used for the codeResourceInstance.type field (e.g. "terraform", "docker"). */
+  codeResourceType: string;
+
   detectLanguage(args: DetectLanguageArgs): boolean;
   getDocumentInfo(args: GetDocumentInfoArgs): DocumentInfo;
   findBlockAtLine(args: FindBlockAtLineArgs): BlockRange | null;
@@ -172,4 +225,21 @@ export interface ILanguageHandler {
   findScopedEditRange(args: FindScopedEditRangeArgs): ScopedEditRange | null;
   listBlocks(args: ListBlocksArgs): BlockRange[];
   buildDiagnosticContext(args: BuildDiagnosticContextArgs): DiagnosticContext;
+
+  // --- Diff strategy ---
+  groupRelatedLines(lines: string[]): string[][];
+  isWeakAnchorLine(line: string): boolean;
+
+  // --- Diagnostic placement ---
+  buildDiagnosticRange(args: BuildDiagnosticRangeArgs): DiagnosticRangeResult;
+  resolveDiagnosticAnchorLine(args: ResolveDiagnosticAnchorLineArgs): number;
+
+  // --- Block context for converter ---
+  describeBlock(args: DescribeBlockArgs): BlockDescription;
+
+  /** Format block type + name for user-facing display in diagnostics. */
+  formatBlockDisplayName(args: FormatBlockDisplayNameArgs): string;
+
+  // --- Rule matching strategy ---
+  matchRulesToDiff(args: MatchRulesToDiffArgs): string[];
 }

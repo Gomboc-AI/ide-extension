@@ -59,4 +59,26 @@ describe('DockerfileLanguageHandler', () => {
     expect(fallback.block).toBeUndefined();
     expect(fallback.fallbackBlock).toBe(true);
   });
+
+  it('has docker codeResourceType', () => {
+    expect(handler.codeResourceType).toBe('docker');
+  });
+
+  it('formatBlockDisplayName uses Docker Stage format', () => {
+    expect(
+      handler.formatBlockDisplayName({
+        blockType: 'docker_stage',
+        blockName: 'build',
+        filePath: '/workspace/Dockerfile',
+      }),
+    ).toBe('Docker Stage: build');
+
+    expect(
+      handler.formatBlockDisplayName({
+        blockType: 'docker_stage',
+        blockName: null,
+        filePath: '/workspace/Dockerfile',
+      }),
+    ).toBe('Docker Stage');
+  });
 });

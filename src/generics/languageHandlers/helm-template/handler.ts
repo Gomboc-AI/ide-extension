@@ -1,21 +1,18 @@
 import path from 'path';
 import {
-  BuildDiagnosticContextArgs,
-  DiagnosticContext,
   DetectLanguageArgs,
   DocumentInfo,
   FindNearestBlockArgs,
   FindBlockAtLineArgs,
-  FindScopedEditRangeArgs,
   GetDocumentInfoArgs,
-  ILanguageHandler,
   ListBlocksArgs,
   BlockRange,
-  ScopedEditRange,
 } from '../../types';
+import { YamlBaseLanguageHandler } from '../yamlBase';
 
-export class HelmTemplateLanguageHandler implements ILanguageHandler {
+export class HelmTemplateLanguageHandler extends YamlBaseLanguageHandler {
   displayName = 'Helm Template';
+  codeResourceType = 'kubernetes';
   extensions = ['.tpl', '.yaml', '.yml'];
 
   private hasPatternAtLineStart(content: string, pattern: string): boolean {
@@ -65,9 +62,9 @@ export class HelmTemplateLanguageHandler implements ILanguageHandler {
   /**
    * Parses Helm `define` blocks and YAML-like documents from template files.
    */
-  private parseResources(content: string): BlockRange[] {
+  private parseBlocks(content: string): BlockRange[] {
     const lines = content.split('\n');
-    const resources: BlockRange[] = [];
+    const blocks: BlockRange[] = [];
 
     const definePattern = /^\s*\{\{[-]?\s*define\s+"([^"]+)"\s*[-]?\}\}/;
     const endPattern = /^\s*\{\{[-]?\s*end\s*[-]?\}\}/;
@@ -84,7 +81,7 @@ export class HelmTemplateLanguageHandler implements ILanguageHandler {
           break;
         }
       }
-      resources.push({
+      blocks.push({
         type: 'helm_template',
         name,
         startLine: i + 1,
@@ -126,7 +123,7 @@ export class HelmTemplateLanguageHandler implements ILanguageHandler {
           name = nameMatch[1].trim().replace(/^["']|["']$/g, '');
         }
       }
-      resources.push({
+      blocks.push({
         type: `helm_${kind.toLowerCase()}`,
         name,
         startLine: i + 1,
@@ -135,8 +132,8 @@ export class HelmTemplateLanguageHandler implements ILanguageHandler {
       });
     }
 
-    resources.sort((a, b) => a.startLine - b.startLine);
-    return resources;
+    blocks.sort((a, b) => a.startLine - b.startLine);
+    return blocks;
   }
 
   getDocumentInfo(args: GetDocumentInfoArgs): DocumentInfo {
@@ -153,70 +150,34 @@ export class HelmTemplateLanguageHandler implements ILanguageHandler {
   }
 
   findBlockAtLine(args: FindBlockAtLineArgs): BlockRange | null {
-    const resources = this.parseResources(args.content);
+    const blocks = this.parseBlocks(args.content);
     const line = Math.max(1, args.line);
     return (
-      resources.find(
-        resource => line >= resource.startLine && line <= resource.endLine,
+      blocks.find(
+        block => line >= block.startLine && line <= block.endLine,
       ) || null
     );
   }
 
   findNearestBlock(args: FindNearestBlockArgs): BlockRange | null {
-    const resources = this.parseResources(args.content);
-    if (resources.length === 0) {
+    const blocks = this.parseBlocks(args.content);
+    if (blocks.length === 0) {
       return null;
     }
     const line = Math.max(1, args.line);
-    const containing = resources.find(
-      resource => line >= resource.startLine && line <= resource.endLine,
+    const containing = blocks.find(
+      block => line >= block.startLine && line <= block.endLine,
     );
     if (containing) {
       return containing;
     }
-    const previous = resources
-      .filter(resource => resource.startLine <= line)
+    const previous = blocks
+      .filter(block => block.startLine <= line)
       .sort((a, b) => b.startLine - a.startLine)[0];
-    return previous || resources[0];
-  }
-
-  findScopedEditRange(args: FindScopedEditRangeArgs): ScopedEditRange | null {
-    const resource = this.findBlockAtLine(args) || this.findNearestBlock(args);
-    if (!resource) {
-      return null;
-    }
-    return { startLine: resource.startLine, endLine: resource.endLine };
+    return previous || blocks[0];
   }
 
   listBlocks(args: ListBlocksArgs): BlockRange[] {
-    return this.parseResources(args.content);
-  }
-
-  buildDiagnosticContext(args: BuildDiagnosticContextArgs): DiagnosticContext {
-    const resource = this.findBlockAtLine({
-      filePath: args.filePath,
-      content: args.content,
-      line: args.hint.line,
-    });
-    const nearestResource =
-      resource ||
-      this.findNearestBlock({
-        filePath: args.filePath,
-        content: args.content,
-        line: args.hint.line,
-      });
-
-    return {
-      languageId: 'helm-template',
-      filePath: args.filePath,
-      block: resource || undefined,
-      nearestBlock: nearestResource || undefined,
-      diagnosticAnchorLine:
-        (resource || nearestResource)?.startLine || Math.max(1, args.hint.line),
-      blockHeader:
-        (resource || nearestResource)?.header || path.basename(args.filePath),
-      fallbackBlock: !(resource || nearestResource),
-      tags: [],
-    };
+    return this.parseBlocks(args.content);
   }
 }

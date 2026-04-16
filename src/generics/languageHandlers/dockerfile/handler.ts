@@ -1,21 +1,19 @@
 import path from 'path';
 import {
-  BuildDiagnosticContextArgs,
-  DiagnosticContext,
   DetectLanguageArgs,
   DocumentInfo,
   FindNearestBlockArgs,
   FindBlockAtLineArgs,
-  FindScopedEditRangeArgs,
+  FormatBlockDisplayNameArgs,
   GetDocumentInfoArgs,
-  ILanguageHandler,
   ListBlocksArgs,
   BlockRange,
-  ScopedEditRange,
 } from '../../types';
+import { BaseLanguageHandler } from '../base';
 
-export class DockerfileLanguageHandler implements ILanguageHandler {
+export class DockerfileLanguageHandler extends BaseLanguageHandler {
   displayName = 'Dockerfile';
+  codeResourceType = 'docker';
   extensions = ['Dockerfile', '.dockerfile'];
 
   detectLanguage(args: DetectLanguageArgs): boolean {
@@ -24,12 +22,19 @@ export class DockerfileLanguageHandler implements ILanguageHandler {
     return fileName.startsWith('dockerfile') || ext === '.dockerfile';
   }
 
+  override formatBlockDisplayName(args: FormatBlockDisplayNameArgs): string {
+    if (args.blockName?.trim()) {
+      return `Docker Stage: ${args.blockName}`;
+    }
+    return 'Docker Stage';
+  }
+
   /**
    * Parses Docker build stages (`FROM ... [AS name]`) into line ranges.
    */
-  private parseResources(content: string): BlockRange[] {
+  private parseBlocks(content: string): BlockRange[] {
     const lines = content.split('\n');
-    const resources: BlockRange[] = [];
+    const blocks: BlockRange[] = [];
     const fromPattern =
       /^FROM\s+(?:--[^\s]+\s+)?([^\s]+(?::[^\s]+)?)(?:\s+AS\s+(\S+))?/i;
 
@@ -58,7 +63,7 @@ export class DockerfileLanguageHandler implements ILanguageHandler {
         }
       }
 
-      resources.push({
+      blocks.push({
         type: 'docker_stage',
         name: display,
         startLine: i + 1,
@@ -67,7 +72,7 @@ export class DockerfileLanguageHandler implements ILanguageHandler {
       });
     }
 
-    return resources;
+    return blocks;
   }
 
   getDocumentInfo(args: GetDocumentInfoArgs): DocumentInfo {
@@ -84,70 +89,34 @@ export class DockerfileLanguageHandler implements ILanguageHandler {
   }
 
   findBlockAtLine(args: FindBlockAtLineArgs): BlockRange | null {
-    const resources = this.parseResources(args.content);
+    const blocks = this.parseBlocks(args.content);
     const line = Math.max(1, args.line);
     return (
-      resources.find(
-        resource => line >= resource.startLine && line <= resource.endLine,
+      blocks.find(
+        block => line >= block.startLine && line <= block.endLine,
       ) || null
     );
   }
 
   findNearestBlock(args: FindNearestBlockArgs): BlockRange | null {
-    const resources = this.parseResources(args.content);
-    if (resources.length === 0) {
+    const blocks = this.parseBlocks(args.content);
+    if (blocks.length === 0) {
       return null;
     }
     const line = Math.max(1, args.line);
-    const containing = resources.find(
-      resource => line >= resource.startLine && line <= resource.endLine,
+    const containing = blocks.find(
+      block => line >= block.startLine && line <= block.endLine,
     );
     if (containing) {
       return containing;
     }
-    const previous = resources
-      .filter(resource => resource.startLine <= line)
+    const previous = blocks
+      .filter(block => block.startLine <= line)
       .sort((a, b) => b.startLine - a.startLine)[0];
-    return previous || resources[0];
-  }
-
-  findScopedEditRange(args: FindScopedEditRangeArgs): ScopedEditRange | null {
-    const resource = this.findBlockAtLine(args) || this.findNearestBlock(args);
-    if (!resource) {
-      return null;
-    }
-    return { startLine: resource.startLine, endLine: resource.endLine };
+    return previous || blocks[0];
   }
 
   listBlocks(args: ListBlocksArgs): BlockRange[] {
-    return this.parseResources(args.content);
-  }
-
-  buildDiagnosticContext(args: BuildDiagnosticContextArgs): DiagnosticContext {
-    const resource = this.findBlockAtLine({
-      filePath: args.filePath,
-      content: args.content,
-      line: args.hint.line,
-    });
-    const nearestResource =
-      resource ||
-      this.findNearestBlock({
-        filePath: args.filePath,
-        content: args.content,
-        line: args.hint.line,
-      });
-
-    return {
-      languageId: 'dockerfile',
-      filePath: args.filePath,
-      block: resource || undefined,
-      nearestBlock: nearestResource || undefined,
-      diagnosticAnchorLine:
-        (resource || nearestResource)?.startLine || Math.max(1, args.hint.line),
-      blockHeader:
-        (resource || nearestResource)?.header || path.basename(args.filePath),
-      fallbackBlock: !(resource || nearestResource),
-      tags: [],
-    };
+    return this.parseBlocks(args.content);
   }
 }

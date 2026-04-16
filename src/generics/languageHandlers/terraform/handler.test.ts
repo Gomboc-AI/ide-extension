@@ -89,4 +89,74 @@ describe('TerraformLanguageHandler', () => {
     expect(fallback.blockHeader).toBe('empty.tf');
     expect(fallback.fallbackBlock).toBe(true);
   });
+
+  it('has directory-scoped diagnosticClearScope', () => {
+    expect(handler.diagnosticClearScope).toBe('directory');
+  });
+
+  it('has terraform codeResourceType', () => {
+    expect(handler.codeResourceType).toBe('terraform');
+  });
+
+  it('matchRulesToDiff filters by resource type variants', () => {
+    const rules = [
+      'gomboc-ai/ensure_encryption_for_hashicorp__aws-resources-aws_s3_bucket',
+      'gomboc-ai/ensure_logging_for_hashicorp__aws-resources-aws_db_instance',
+      'gomboc-ai/unrelated_rule',
+    ];
+
+    const matched = handler.matchRulesToDiff({
+      blockType: 'aws_s3_bucket',
+      blockName: 'logs',
+      allFileRules: rules,
+      diffLine: 2,
+      diffContent: 'bucket = "logs-bucket"',
+      properties: ['bucket'],
+    });
+
+    expect(matched).toContain(rules[0]);
+    expect(matched).not.toContain(rules[1]);
+  });
+
+  it('matchRulesToDiff returns all rules for unknown block type', () => {
+    const rules = ['rule-a', 'rule-b'];
+    const matched = handler.matchRulesToDiff({
+      blockType: 'Resource',
+      blockName: null,
+      allFileRules: rules,
+      diffLine: 1,
+      diffContent: '',
+      properties: [],
+    });
+    expect(matched).toEqual(rules);
+  });
+
+  it('formatBlockDisplayName uses type.name for terraform', () => {
+    expect(
+      handler.formatBlockDisplayName({
+        blockType: 'aws_s3_bucket',
+        blockName: 'logs',
+        filePath: '/workspace/main.tf',
+      }),
+    ).toBe('aws_s3_bucket.logs');
+  });
+
+  it('buildDiagnosticRange returns compact range', () => {
+    const result = handler.buildDiagnosticRange({
+      line1Based: 1,
+      content: '  resource "aws_s3_bucket" "logs" {',
+    });
+    expect(result.startChar).toBe(2);
+    expect(result.endChar).toBeGreaterThan(result.startChar);
+  });
+
+  it('resolveDiagnosticAnchorLine clamps to valid range', () => {
+    const result = handler.resolveDiagnosticAnchorLine({
+      content: terraformContent,
+      suggestedLine: 999,
+      fromFixOperation: false,
+    });
+    expect(result).toBeLessThanOrEqual(terraformContent.split('\n').length);
+    expect(result).toBeGreaterThanOrEqual(1);
+  });
 });

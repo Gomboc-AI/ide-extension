@@ -1,20 +1,5 @@
 import * as vscode from 'vscode';
 import path from 'path';
-import { LocalInfrastructureTool } from './infrastructureTool';
-
-enum COLLECTION_SCOPE_LEVEL {
-  DIRECTORY = 'DIRECTORY',
-  FILE = 'FILE',
-}
-
-const INFRASTRUCTURE_TOOL_COLLECTION_SCOPE: Record<
-  LocalInfrastructureTool,
-  COLLECTION_SCOPE_LEVEL
-> = {
-  Cloudformation: COLLECTION_SCOPE_LEVEL.FILE,
-  Docker: COLLECTION_SCOPE_LEVEL.FILE,
-  Terraform: COLLECTION_SCOPE_LEVEL.DIRECTORY,
-};
 
 export class DiagnosticCollectionManager {
   static diagnosticCollectionManager: DiagnosticCollectionManager;
@@ -50,16 +35,18 @@ export class DiagnosticCollectionManager {
     this.diagnosticCollection.set(updatedFileUri, []);
   }
 
+  /**
+   * Clears diagnostics using the scope provided by the language handler.
+   */
   clearDiagnosticCollection(
-    iac: LocalInfrastructureTool,
+    scope: 'file' | 'directory',
     updatedFileUri: vscode.Uri,
   ): void {
-    const scope = INFRASTRUCTURE_TOOL_COLLECTION_SCOPE[iac];
     switch (scope) {
-      case COLLECTION_SCOPE_LEVEL.DIRECTORY:
+      case 'directory':
         this.clearDirectoryCollection(updatedFileUri);
         break;
-      case COLLECTION_SCOPE_LEVEL.FILE:
+      case 'file':
         this.clearFileCollection(updatedFileUri);
         break;
     }

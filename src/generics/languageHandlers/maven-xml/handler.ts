@@ -1,21 +1,20 @@
 import path from 'path';
 import {
-  BuildDiagnosticContextArgs,
-  DiagnosticContext,
   DetectLanguageArgs,
   DocumentInfo,
   FindNearestBlockArgs,
   FindBlockAtLineArgs,
-  FindScopedEditRangeArgs,
   GetDocumentInfoArgs,
-  ILanguageHandler,
   ListBlocksArgs,
   BlockRange,
-  ScopedEditRange,
+  DescribeBlockArgs,
+  BlockDescription,
 } from '../../types';
+import { BaseLanguageHandler } from '../base';
 
-export class MavenXMLLanguageHandler implements ILanguageHandler {
+export class MavenXMLLanguageHandler extends BaseLanguageHandler {
   displayName = 'Maven XML';
+  codeResourceType = 'xml';
   extensions = ['.xml'];
 
   detectLanguage(args: DetectLanguageArgs): boolean {
@@ -26,12 +25,12 @@ export class MavenXMLLanguageHandler implements ILanguageHandler {
   /**
    * Parses Maven project and dependency blocks from XML content.
    */
-  private parseResources(args: {
+  private parseBlocks(args: {
     filePath: string;
     content: string;
   }): BlockRange[] {
     const lines = args.content.split('\n');
-    const resources: BlockRange[] = [];
+    const blocks: BlockRange[] = [];
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -61,7 +60,7 @@ export class MavenXMLLanguageHandler implements ILanguageHandler {
         groupId && artifactId
           ? `${groupId}:${artifactId}`
           : artifactId || groupId || `dependency@${i + 1}`;
-      resources.push({
+      blocks.push({
         type: 'maven_dependency',
         name: depName,
         startLine: i + 1,
@@ -78,7 +77,7 @@ export class MavenXMLLanguageHandler implements ILanguageHandler {
       groupMatch && artifactMatch
         ? `${groupMatch[1].trim()}:${artifactMatch[1].trim()}`
         : artifactMatch?.[1]?.trim() || path.basename(args.filePath);
-    resources.push({
+    blocks.push({
       type: 'maven_project',
       name: projectName,
       startLine: 1,
@@ -86,14 +85,14 @@ export class MavenXMLLanguageHandler implements ILanguageHandler {
       header: `Maven ${projectName}`,
     });
 
-    resources.sort((a, b) => {
+    blocks.sort((a, b) => {
       if (a.startLine !== b.startLine) {
         return a.startLine - b.startLine;
       }
       // Keep narrower ranges first so dependency blocks win over project fallback.
       return a.endLine - b.endLine;
     });
-    return resources;
+    return blocks;
   }
 
   getDocumentInfo(args: GetDocumentInfoArgs): DocumentInfo {
@@ -110,79 +109,60 @@ export class MavenXMLLanguageHandler implements ILanguageHandler {
   }
 
   findBlockAtLine(args: FindBlockAtLineArgs): BlockRange | null {
-    const resources = this.parseResources({
+    const blocks = this.parseBlocks({
       filePath: args.filePath,
       content: args.content,
     });
     const line = Math.max(1, args.line);
     return (
-      resources.find(
-        resource => line >= resource.startLine && line <= resource.endLine,
+      blocks.find(
+        block => line >= block.startLine && line <= block.endLine,
       ) || null
     );
   }
 
   findNearestBlock(args: FindNearestBlockArgs): BlockRange | null {
-    const resources = this.parseResources({
+    const blocks = this.parseBlocks({
       filePath: args.filePath,
       content: args.content,
     });
-    if (resources.length === 0) {
+    if (blocks.length === 0) {
       return null;
     }
     const line = Math.max(1, args.line);
-    const containing = resources.find(
-      resource => line >= resource.startLine && line <= resource.endLine,
+    const containing = blocks.find(
+      block => line >= block.startLine && line <= block.endLine,
     );
     if (containing) {
       return containing;
     }
-    const previous = resources
-      .filter(resource => resource.startLine <= line)
+    const previous = blocks
+      .filter(block => block.startLine <= line)
       .sort((a, b) => b.startLine - a.startLine)[0];
-    return previous || resources[0];
-  }
-
-  findScopedEditRange(args: FindScopedEditRangeArgs): ScopedEditRange | null {
-    const resource = this.findBlockAtLine(args) || this.findNearestBlock(args);
-    if (!resource) {
-      return null;
-    }
-    return { startLine: resource.startLine, endLine: resource.endLine };
+    return previous || blocks[0];
   }
 
   listBlocks(args: ListBlocksArgs): BlockRange[] {
-    return this.parseResources({
+    return this.parseBlocks({
       filePath: args.filePath,
       content: args.content,
     });
   }
 
-  buildDiagnosticContext(args: BuildDiagnosticContextArgs): DiagnosticContext {
-    const resource = this.findBlockAtLine({
-      filePath: args.filePath,
-      content: args.content,
-      line: args.hint.line,
-    });
-    const nearestResource =
-      resource ||
-      this.findNearestBlock({
-        filePath: args.filePath,
-        content: args.content,
-        line: args.hint.line,
-      });
+  /**
+   * Returns full-file block span when no specific block is found.
+   */
+  override describeBlock(args: DescribeBlockArgs): BlockDescription {
+    const result = super.describeBlock(args);
+    if (result.blockType !== 'Resource') {
+      return result;
+    }
 
     return {
-      languageId: 'maven-xml',
-      filePath: args.filePath,
-      block: resource || undefined,
-      nearestBlock: nearestResource || undefined,
-      diagnosticAnchorLine:
-        (resource || nearestResource)?.startLine || Math.max(1, args.hint.line),
-      blockHeader:
-        (resource || nearestResource)?.header || path.basename(args.filePath),
-      fallbackBlock: !(resource || nearestResource),
-      tags: [],
+      blockType: 'maven_project',
+      blockName: null,
+      blockStartLine: 0,
+      blockEndLine: args.content.split('\n').length - 1,
     };
   }
 }

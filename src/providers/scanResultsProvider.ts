@@ -14,7 +14,6 @@ import {
   parseScanRemediationPayload,
 } from '../schemas/scanRemediation';
 import { DiagnosticCollectionManager } from '../diagnosticCollectionManager';
-import { getInfrastructureToolFromFileUri } from '../infrastructureTool';
 import { vsCodeIntegrationsService } from '../utils/integrationsService';
 import { createOrlClient } from '../orl/orlClient';
 import { extractRenderableOrlRuleNames } from '../orl/orlRuleNameResolver';
@@ -22,6 +21,7 @@ import {
   chooseLanguageImplementation,
   mapLanguageIdToOrlLanguage,
 } from '../generics/languageHandler';
+import type { ILanguageHandler } from '../generics/types';
 import logger from '../utils/logger';
 import { parseOrlReport } from '../utils/orlReportParser';
 import {
@@ -259,25 +259,35 @@ export class ScanResultsProvider {
   }
 
   /**
-   * Build a compact diagnostic range for a single line.
-   * This avoids painting an entire short line when range end comes from
-   * unrelated metadata (e.g., resource header length).
+   * Build a compact diagnostic range delegating to the language handler.
    */
   private buildCompactDiagnosticRange(args: {
     line1Based: number;
     content?: string;
     uniqueOffset?: number;
+    handler?: ILanguageHandler;
   }): vscode.Range {
     const line = Math.max(1, Math.floor(args.line1Based || 1));
+    const content = typeof args.content === 'string' ? args.content : '';
+
+    if (args.handler) {
+      const result = args.handler.buildDiagnosticRange({
+        line1Based: line,
+        content,
+        uniqueOffset: args.uniqueOffset,
+      });
+      return new vscode.Range(
+        new vscode.Position(line - 1, result.startChar),
+        new vscode.Position(line - 1, result.endChar),
+      );
+    }
+
+    // Inline fallback when no handler is available
     const uniqueOffset =
       Number.isFinite(args.uniqueOffset) && (args.uniqueOffset || 0) > 0
         ? Math.floor(args.uniqueOffset || 0)
         : 0;
-    const text =
-      typeof args.content === 'string' && args.content.length > 0
-        ? args.content
-        : '';
-    const lines = text ? text.split('\n') : [];
+    const lines = content ? content.split('\n') : [];
     const idx = Math.min(Math.max(0, line - 1), Math.max(0, lines.length - 1));
     const lineText = lines[idx] || '';
     const lineLength = lineText.length;
@@ -338,45 +348,28 @@ export class ScanResultsProvider {
     content?: string;
     suggestedLine: number;
     useLanguageAnchor?: boolean;
+    handler?: ILanguageHandler;
   }): number {
     const suggested =
       Number.isFinite(args.suggestedLine) && args.suggestedLine > 0
         ? Math.floor(args.suggestedLine)
         : 1;
-    const maxLine = args.content
-      ? Math.max(1, args.content.split('\n').length)
-      : undefined;
-    const clampLine = (line: number): number => {
-      const floored = Number.isFinite(line) && line > 0 ? Math.floor(line) : 1;
-      if (!maxLine) {
-        return floored;
-      }
-      return Math.min(maxLine, Math.max(1, floored));
-    };
     if (!args.content) {
-      return clampLine(suggested);
-    }
-    if (args.useLanguageAnchor === false) {
-      return clampLine(suggested);
+      return Math.max(1, suggested);
     }
 
-    const handler = chooseLanguageImplementation({
-      filePath: args.filePath,
-      content: args.content,
-    });
-    const context = handler.buildDiagnosticContext({
-      filePath: args.filePath,
-      content: args.content,
-      hint: {
-        line: suggested,
+    const handler =
+      args.handler ||
+      chooseLanguageImplementation({
         filePath: args.filePath,
-      },
+        content: args.content,
+      });
+
+    return handler.resolveDiagnosticAnchorLine({
+      content: args.content,
+      suggestedLine: suggested,
+      fromFixOperation: args.useLanguageAnchor === false,
     });
-    const anchored =
-      context.diagnosticAnchorLine && context.diagnosticAnchorLine > 0
-        ? context.diagnosticAnchorLine
-        : suggested;
-    return clampLine(anchored);
   }
 
   private pickOperationDiagnosticAnchor(
@@ -1051,6 +1044,11 @@ export class ScanResultsProvider {
       > = [];
       const uniqueLines = new Set<number>();
 
+      // Resolve the language handler once per file for all diagnostic operations
+      const fileHandler = fileContent
+        ? chooseLanguageImplementation({ filePath: filepath, content: fileContent })
+        : undefined;
+
       const isOrl = (r: IndividualFixesRemediation): boolean =>
         typeof r?.rule?.id === 'string' && r.rule.id.startsWith('orl-rule:');
 
@@ -1090,6 +1088,7 @@ export class ScanResultsProvider {
             content: fileContent,
             suggestedLine: line,
             useLanguageAnchor: !operationAnchor.fromFixOperation,
+            handler: fileHandler,
           });
 
           const resourceHeader: string | undefined =
@@ -1122,6 +1121,7 @@ export class ScanResultsProvider {
             line1Based: line,
             content: fileContent,
             uniqueOffset: orlIdx,
+            handler: fileHandler,
           });
           const shortNameRaw = this.orlRuleShortNames?.[ruleName] || ruleName;
           const shortName = prettifyShortName(shortNameRaw);
@@ -1190,6 +1190,7 @@ export class ScanResultsProvider {
             content: fileContent,
             suggestedLine: startLine,
             useLanguageAnchor: !operationAnchor.fromFixOperation,
+            handler: fileHandler,
           });
           const startPosition = new vscode.Position(startLine - 1, 0);
           uniqueLines.add(startLine);
@@ -1346,10 +1347,18 @@ export class ScanResultsProvider {
     // once we apply a remediation we have to dispose and clear everything and re-run
     for (const file of updatedFiles) {
       const uri = vscode.Uri.file(file);
-      const infrastructureTool = getInfrastructureToolFromFileUri(uri);
-      if (infrastructureTool) {
+      let content: string | undefined;
+      try {
+        content = fs.readFileSync(file, 'utf8');
+      } catch {
+        // ignore
+      }
+      const handler = content
+        ? chooseLanguageImplementation({ filePath: file, content })
+        : undefined;
+      if (handler) {
         this.diagnosticCollectionManager.clearDiagnosticCollection(
-          infrastructureTool,
+          handler.diagnosticClearScope,
           uri,
         );
       } else {
@@ -1373,8 +1382,11 @@ export class ScanResultsProvider {
     const fixEdit = new vscode.WorkspaceEdit();
     for (const remediation of remediations) {
       const file = vscode.Uri.file(remediation.path);
-      const iac = getInfrastructureToolFromFileUri(file);
       const document = await vscode.workspace.openTextDocument(file);
+      const groupedHandler = chooseLanguageImplementation({
+        filePath: remediation.path,
+        content: document.getText(),
+      });
       const decodedContent = Buffer.from(
         remediation.content,
         'base64',
@@ -1428,9 +1440,10 @@ export class ScanResultsProvider {
         await vscode.window.activeTextEditor?.document.save();
       }
       // once we apply a remediation we have to dispose and clear everything and re-run
-      if (iac) {
-        this.diagnosticCollectionManager.clearDiagnosticCollection(iac, file);
-      }
+      this.diagnosticCollectionManager.clearDiagnosticCollection(
+        groupedHandler.diagnosticClearScope,
+        file,
+      );
       if (ScanResultsProvider.codeActionDisposable) {
         ScanResultsProvider.codeActionDisposable.dispose();
       }

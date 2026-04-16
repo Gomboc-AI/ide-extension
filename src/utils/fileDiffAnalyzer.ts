@@ -1,4 +1,5 @@
 import logger from './logger';
+import type { ILanguageHandler } from '../generics/types';
 
 export interface Difference {
   originalLine: number;
@@ -53,6 +54,7 @@ export class FileDiffAnalyzer {
     modifiedLines: string[],
     originalIndex: number,
     modifiedIndex: number,
+    handler?: ILanguageHandler,
   ): { originalIdx: number; modifiedIdx: number } {
     let bestMatch = { originalIdx: -1, modifiedIdx: -1 };
     let bestScore = Number.POSITIVE_INFINITY;
@@ -65,7 +67,10 @@ export class FileDiffAnalyzer {
 
         const value = originalLines[i];
         const distanceScore = i - originalIndex + (j - modifiedIndex);
-        const weakAnchorPenalty = this.isWeakAnchorLine(value) ? 500 : 0;
+        const isWeak = handler
+          ? handler.isWeakAnchorLine(value)
+          : this.isWeakAnchorLine(value);
+        const weakAnchorPenalty = isWeak ? 500 : 0;
         const repeatedPenalty =
           this.countLineOccurrences(originalLines, value) > 1 ||
           this.countLineOccurrences(modifiedLines, value) > 1
@@ -136,6 +141,7 @@ export class FileDiffAnalyzer {
   static findDifferences(
     originalContent: string,
     modifiedContent: string,
+    handler?: ILanguageHandler,
   ): Difference[] {
     const originalNormalized = this.normalizeLineEndings(originalContent);
     const modifiedNormalized = this.normalizeLineEndings(modifiedContent);
@@ -170,6 +176,7 @@ export class FileDiffAnalyzer {
           modifiedLines,
           originalIndex,
           modifiedIndex,
+          handler,
         );
 
         if (nextMatch.originalIdx !== -1) {
@@ -188,6 +195,7 @@ export class FileDiffAnalyzer {
             originalDiffLines,
             modifiedDiffLines,
             originalIndex + 1,
+            handler,
           );
           differences.push(...groupedChanges);
 
@@ -204,6 +212,7 @@ export class FileDiffAnalyzer {
                 remainingOriginal,
                 remainingModified,
                 originalIndex + 1,
+                handler,
               ),
             );
           }
@@ -233,6 +242,7 @@ export class FileDiffAnalyzer {
     originalLines: string[],
     modifiedLines: string[],
     baseLine: number,
+    handler?: ILanguageHandler,
   ): Difference[] {
     const changes: Difference[] = [];
 
@@ -262,7 +272,9 @@ export class FileDiffAnalyzer {
 
     if (originalMiddle.length === 0 && modifiedMiddle.length > 0) {
       // Pure addition - group related lines together
-      const groupedAdditions = this.groupRelatedLines(modifiedMiddle);
+      const groupedAdditions = handler
+        ? handler.groupRelatedLines(modifiedMiddle)
+        : this.groupRelatedLines(modifiedMiddle);
 
       for (const group of groupedAdditions) {
         changes.push({

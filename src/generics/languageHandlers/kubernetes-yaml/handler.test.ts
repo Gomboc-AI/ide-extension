@@ -54,4 +54,65 @@ describe('KubernetesYAMLLanguageHandler', () => {
     });
     expect(nearest?.name).toBe('web-svc');
   });
+
+  it('has file-scoped diagnosticClearScope', () => {
+    expect(handler.diagnosticClearScope).toBe('file');
+  });
+
+  it('has kubernetes codeResourceType', () => {
+    expect(handler.codeResourceType).toBe('kubernetes');
+  });
+
+  it('formatBlockDisplayName uses kind/name format', () => {
+    expect(
+      handler.formatBlockDisplayName({
+        blockType: 'Deployment',
+        blockName: 'web',
+        filePath: '/workspace/k8s/deployment.yaml',
+      }),
+    ).toBe('Deployment/web');
+  });
+
+  it('matchRulesToDiff returns all file rules (file-level matching)', () => {
+    const rules = ['rule-a', 'rule-b', 'rule-c'];
+    const matched = handler.matchRulesToDiff({
+      blockType: 'Deployment',
+      blockName: 'web',
+      allFileRules: rules,
+      diffLine: 5,
+      diffContent: 'replicas: 3',
+      properties: ['replicas'],
+    });
+    expect(matched).toEqual(rules);
+  });
+
+  it('isWeakAnchorLine recognizes YAML-specific weak anchors', () => {
+    expect(handler.isWeakAnchorLine('')).toBe(true);
+    expect(handler.isWeakAnchorLine('---')).toBe(true);
+    expect(handler.isWeakAnchorLine('  # comment')).toBe(true);
+    expect(handler.isWeakAnchorLine('  replicas: 2')).toBe(false);
+  });
+
+  it('groupRelatedLines uses indentation-based grouping', () => {
+    const lines = [
+      'spec:',
+      '  replicas: 2',
+      '  template:',
+      '    metadata:',
+      '      labels:',
+      '        app: web',
+    ];
+    const groups = handler.groupRelatedLines(lines);
+    expect(groups.length).toBeGreaterThanOrEqual(1);
+    expect(groups.flat()).toEqual(lines);
+  });
+
+  it('resolveDiagnosticAnchorLine keeps suggested line for YAML', () => {
+    const result = handler.resolveDiagnosticAnchorLine({
+      content: kubernetesYaml,
+      suggestedLine: 5,
+      fromFixOperation: false,
+    });
+    expect(result).toBe(5);
+  });
 });
