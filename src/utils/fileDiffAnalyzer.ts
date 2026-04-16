@@ -107,7 +107,8 @@ export class FileDiffAnalyzer {
     while (
       originalEnd - suffix >= prefixLength &&
       modifiedEnd - suffix >= prefixLength &&
-      originalLines[originalEnd - suffix] === modifiedLines[modifiedEnd - suffix]
+      originalLines[originalEnd - suffix] ===
+        modifiedLines[modifiedEnd - suffix]
     ) {
       suffix++;
     }
@@ -235,7 +236,10 @@ export class FileDiffAnalyzer {
   ): Difference[] {
     const changes: Difference[] = [];
 
-    const prefixLength = this.getCommonPrefixLength(originalLines, modifiedLines);
+    const prefixLength = this.getCommonPrefixLength(
+      originalLines,
+      modifiedLines,
+    );
     const suffixLength = this.getCommonSuffixLength(
       originalLines,
       modifiedLines,

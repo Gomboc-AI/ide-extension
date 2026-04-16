@@ -5,9 +5,19 @@ import {
   OrlRuleFixGombocDiagnostic,
 } from './gombocDiagnostic';
 export class CodeActionProvider implements vscode.CodeActionProvider {
-  public static readonly providedCodeActionKinds = [
-    vscode.CodeActionKind.QuickFix,
-  ];
+
+  private _isRangeOnDiagnosticLine(
+    range: vscode.Range | vscode.Selection,
+    diagnostic: vscode.Diagnostic,
+  ): boolean {
+    const targetStartLine = range.start.line;
+    const targetEndLine = range.end.line;
+    return (
+      diagnostic.range.start.line <= targetEndLine &&
+      diagnostic.range.end.line >= targetStartLine
+    );
+  }
+
   // required function fo the codeActionProvider. This is what does the action
   provideCodeActions(
     document: vscode.TextDocument,
@@ -15,11 +25,18 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
     context: vscode.CodeActionContext,
     token: vscode.CancellationToken,
   ): vscode.CodeAction[] {
-    if (context.diagnostics.length === 0) {
+    const docDiagnostics = vscode.languages.getDiagnostics(document.uri) || [];
+    const contextDiagnostics =
+      context.diagnostics.length > 0
+        ? context.diagnostics
+        : docDiagnostics.filter(d =>
+            this._isRangeOnDiagnosticLine(range, d),
+          );
+    if (contextDiagnostics.length === 0) {
       return [];
     }
 
-    const diagnostics = context.diagnostics.filter(
+    const diagnostics = contextDiagnostics.filter(
       diagnostic =>
         this._isGombocGroupedFixDiagnostic(diagnostic) ||
         this._isGombocIndividualFixDiagnostic(diagnostic) ||
@@ -33,7 +50,6 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
     const scoped = exactMatches.length > 0 ? exactMatches : diagnostics;
     // Always keep grouped apply-all diagnostics available, even when exact-match scoping
     // narrows to a single ORL diagnostic from the Problems panel.
-    const docDiagnostics = vscode.languages.getDiagnostics(document.uri) || [];
     const groupedDiagnostics = docDiagnostics.filter(d =>
       this._isGombocGroupedFixDiagnostic(d),
     );
@@ -182,12 +198,4 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
     return action;
   }
 
-  async getFileFromPath(
-    filePath: string,
-  ): Promise<{ file: string; editor: vscode.TextEditor }> {
-    const uri = vscode.Uri.file(filePath);
-    const document = await vscode.workspace.openTextDocument(uri);
-    const editor = await vscode.window.showTextDocument(document);
-    return { file: document.fileName, editor };
-  }
 }
