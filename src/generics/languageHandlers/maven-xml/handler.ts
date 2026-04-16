@@ -115,9 +115,8 @@ export class MavenXMLLanguageHandler extends BaseLanguageHandler {
     });
     const line = Math.max(1, args.line);
     return (
-      blocks.find(
-        block => line >= block.startLine && line <= block.endLine,
-      ) || null
+      blocks.find(block => line >= block.startLine && line <= block.endLine) ||
+      null
     );
   }
 

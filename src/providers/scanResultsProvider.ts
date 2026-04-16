@@ -1046,7 +1046,10 @@ export class ScanResultsProvider {
 
       // Resolve the language handler once per file for all diagnostic operations
       const fileHandler = fileContent
-        ? chooseLanguageImplementation({ filePath: filepath, content: fileContent })
+        ? chooseLanguageImplementation({
+            filePath: filepath,
+            content: fileContent,
+          })
         : undefined;
 
       const isOrl = (r: IndividualFixesRemediation): boolean =>

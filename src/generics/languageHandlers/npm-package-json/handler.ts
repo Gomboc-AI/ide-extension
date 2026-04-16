@@ -29,7 +29,9 @@ export class NpmPackageJSONLanguageHandler extends BaseLanguageHandler {
   }
 
   override formatBlockDisplayName(args: FormatBlockDisplayNameArgs): string {
-    return args.blockName ? `npm: ${args.blockName}` : path.basename(args.filePath);
+    return args.blockName
+      ? `npm: ${args.blockName}`
+      : path.basename(args.filePath);
   }
 
   /**
@@ -127,9 +129,8 @@ export class NpmPackageJSONLanguageHandler extends BaseLanguageHandler {
     });
     const line = Math.max(1, args.line);
     return (
-      blocks.find(
-        block => line >= block.startLine && line <= block.endLine,
-      ) || null
+      blocks.find(block => line >= block.startLine && line <= block.endLine) ||
+      null
     );
   }
 

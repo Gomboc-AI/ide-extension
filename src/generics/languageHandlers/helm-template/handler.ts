@@ -153,9 +153,8 @@ export class HelmTemplateLanguageHandler extends YamlBaseLanguageHandler {
     const blocks = this.parseBlocks(args.content);
     const line = Math.max(1, args.line);
     return (
-      blocks.find(
-        block => line >= block.startLine && line <= block.endLine,
-      ) || null
+      blocks.find(block => line >= block.startLine && line <= block.endLine) ||
+      null
     );
   }
 

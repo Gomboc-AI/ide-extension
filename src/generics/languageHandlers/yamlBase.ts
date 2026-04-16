@@ -1,6 +1,4 @@
-import {
-  ResolveDiagnosticAnchorLineArgs,
-} from '../types';
+import { ResolveDiagnosticAnchorLineArgs } from '../types';
 import { BaseLanguageHandler } from './base';
 
 /**

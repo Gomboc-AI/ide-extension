@@ -179,9 +179,7 @@ export abstract class BaseLanguageHandler implements ILanguageHandler {
   /**
    * Resolve a diagnostic anchor line, optionally snapping to block start.
    */
-  resolveDiagnosticAnchorLine(
-    args: ResolveDiagnosticAnchorLineArgs,
-  ): number {
+  resolveDiagnosticAnchorLine(args: ResolveDiagnosticAnchorLineArgs): number {
     const suggested =
       Number.isFinite(args.suggestedLine) && args.suggestedLine > 0
         ? Math.floor(args.suggestedLine)
