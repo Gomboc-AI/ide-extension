@@ -285,11 +285,7 @@ export class ScanResultsProvider {
     // Anchor near the first non-whitespace character when possible.
     const firstNonWhitespace = lineText.search(/\S/);
     const startChar =
-      firstNonWhitespace >= 0
-        ? firstNonWhitespace
-        : lineLength > 0
-          ? 0
-          : 0;
+      firstNonWhitespace >= 0 ? firstNonWhitespace : lineLength > 0 ? 0 : 0;
 
     // Keep highlight compact and predictable.
     const trimmedLength = lineText.trim().length;
@@ -332,7 +328,9 @@ export class ScanResultsProvider {
     if (hasExistingIndent) {
       return lines;
     }
-    return lines.map(line => (line.length > 0 ? `${indentation}${line}` : line));
+    return lines.map(line =>
+      line.length > 0 ? `${indentation}${line}` : line,
+    );
   }
 
   private resolveDiagnosticAnchorLine(args: {
@@ -1081,7 +1079,8 @@ export class ScanResultsProvider {
           // Prefer operation-aware anchors (UPDATE/DELETE on target line,
           // ADD on the previous line) so selection does not depend on
           // resource headers.
-          const operationAnchor = this.pickOperationDiagnosticAnchor(remediation);
+          const operationAnchor =
+            this.pickOperationDiagnosticAnchor(remediation);
           let line: number = operationAnchor.line;
           if (!Number.isFinite(line) || line <= 0) {
             line = 1;
@@ -1183,7 +1182,8 @@ export class ScanResultsProvider {
       } else {
         // API mode (or legacy): keep individual per-fix diagnostics + grouped apply-all.
         for (const remediation of currentRemediation) {
-          const operationAnchor = this.pickOperationDiagnosticAnchor(remediation);
+          const operationAnchor =
+            this.pickOperationDiagnosticAnchor(remediation);
           let startLine = operationAnchor.line;
           startLine = this.resolveDiagnosticAnchorLine({
             filePath: filepath,
@@ -1262,7 +1262,10 @@ export class ScanResultsProvider {
 
       const range = new vscode.Range(startPosition, endPosition);
       const newValue = fix.newLine.join('\n');
-      const fileContent = this.getFileTextForFix(fileContentsByPath, fix.filepath);
+      const fileContent = this.getFileTextForFix(
+        fileContentsByPath,
+        fix.filepath,
+      );
       const inferredIndent =
         fix.codePosition.column <= 0
           ? this.getLineIndentation(fileContent, fix.codePosition.line)

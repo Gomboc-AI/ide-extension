@@ -78,7 +78,9 @@ describe('ScanResultsProvider branch deltas', () => {
     ).individualRemediations = [remediation];
     (
       provider as unknown as { groupedRemediations: unknown[] }
-    ).groupedRemediations = [{ path: '/repo/main.tf', content: '', comments: [] }];
+    ).groupedRemediations = [
+      { path: '/repo/main.tf', content: '', comments: [] },
+    ];
   };
 
   const getFirstDiagnosticStartLine = (
@@ -96,11 +98,15 @@ describe('ScanResultsProvider branch deltas', () => {
   afterEach(() => {
     (
       vscode.workspace as unknown as {
-        textDocuments: Array<{ uri: { fsPath: string }; getText: () => string }>;
+        textDocuments: Array<{
+          uri: { fsPath: string };
+          getText: () => string;
+        }>;
       }
     ).textDocuments = [];
-    (vscode.window as unknown as { activeTextEditor?: unknown }).activeTextEditor =
-      undefined;
+    (
+      vscode.window as unknown as { activeTextEditor?: unknown }
+    ).activeTextEditor = undefined;
     jest.clearAllMocks();
   });
 
@@ -282,7 +288,10 @@ describe('ScanResultsProvider branch deltas', () => {
     const { provider } = createProviderHarness();
     (
       vscode.workspace as unknown as {
-        textDocuments: Array<{ uri: { fsPath: string }; getText: () => string }>;
+        textDocuments: Array<{
+          uri: { fsPath: string };
+          getText: () => string;
+        }>;
       }
     ).textDocuments = [
       {
@@ -340,7 +349,10 @@ describe('ScanResultsProvider branch deltas', () => {
     const { provider } = createProviderHarness();
     (
       vscode.workspace as unknown as {
-        textDocuments: Array<{ uri: { fsPath: string }; getText: () => string }>;
+        textDocuments: Array<{
+          uri: { fsPath: string };
+          getText: () => string;
+        }>;
       }
     ).textDocuments = [
       {
@@ -398,7 +410,10 @@ describe('ScanResultsProvider branch deltas', () => {
     const { provider } = createProviderHarness();
     (
       vscode.workspace as unknown as {
-        textDocuments: Array<{ uri: { fsPath: string }; getText: () => string }>;
+        textDocuments: Array<{
+          uri: { fsPath: string };
+          getText: () => string;
+        }>;
       }
     ).textDocuments = [
       {

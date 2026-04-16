@@ -5,7 +5,6 @@ import {
   OrlRuleFixGombocDiagnostic,
 } from './gombocDiagnostic';
 export class CodeActionProvider implements vscode.CodeActionProvider {
-
   private _isRangeOnDiagnosticLine(
     range: vscode.Range | vscode.Selection,
     diagnostic: vscode.Diagnostic,
@@ -29,9 +28,7 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
     const contextDiagnostics =
       context.diagnostics.length > 0
         ? context.diagnostics
-        : docDiagnostics.filter(d =>
-            this._isRangeOnDiagnosticLine(range, d),
-          );
+        : docDiagnostics.filter(d => this._isRangeOnDiagnosticLine(range, d));
     if (contextDiagnostics.length === 0) {
       return [];
     }
@@ -197,5 +194,4 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
     action.diagnostics = [diagnostic];
     return action;
   }
-
 }
