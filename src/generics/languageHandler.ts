@@ -14,6 +14,9 @@ import {
   MavenXMLLanguageHandler,
   GradleLanguageHandler,
   NpmPackageJSONLanguageHandler,
+  JavaLanguageHandler,
+  BicepLanguageHandler,
+  PythonLanguageHandler,
 } from './languageHandlers';
 
 export interface LanguageSelectionArgs {
@@ -31,6 +34,9 @@ const languageHandlerFactories: Array<() => ILanguageHandler> = [
   () => new CloudFormationYAMLLanguageHandler(),
   () => new MavenXMLLanguageHandler(),
   () => new GradleLanguageHandler(),
+  () => new JavaLanguageHandler(),
+  () => new BicepLanguageHandler(),
+  () => new PythonLanguageHandler(),
 ];
 
 function findMatchingLanguageHandler(
@@ -55,7 +61,7 @@ function findMatchingLanguageHandler(
  * specific handlers must run before broader fallbacks.
  *
  * Order: dockerfile → terraform → helm-template → npm-package-json → cloudformation-json →
- * kubernetes-yaml → cloudformation-yaml → maven-xml → gradle.
+ * kubernetes-yaml → cloudformation-yaml → maven-xml → gradle → java → bicep → python.
  */
 export const detectLanguageId = (
   args: LanguageSelectionArgs,
@@ -103,6 +109,12 @@ export const mapLanguageIdToOrlLanguage = (args: {
       return ext === '.kts' ? 'kotlin' : 'groovy';
     case 'npm-package-json':
       return 'json';
+    case 'java':
+      return 'java';
+    case 'bicep':
+      return 'bicep';
+    case 'python':
+      return 'python';
     default:
       return null;
   }

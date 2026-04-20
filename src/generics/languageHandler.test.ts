@@ -65,4 +65,70 @@ describe('languageHandler selector', () => {
     });
     expect(handler.displayName).toBe('Maven XML');
   });
+
+  it('detects java files and maps to ORL java', () => {
+    const languageId = detectLanguageId({
+      filePath: '/workspace/src/App.java',
+      content: 'public class App {}',
+    });
+    expect(languageId).toBe('java');
+    expect(
+      mapLanguageIdToOrlLanguage({
+        languageId: languageId || '',
+        filePath: '/workspace/src/App.java',
+      }),
+    ).toBe('java');
+  });
+
+  it('detects bicep files and maps to ORL bicep', () => {
+    const languageId = detectLanguageId({
+      filePath: '/workspace/main.bicep',
+      content:
+        "resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {}",
+    });
+    expect(languageId).toBe('bicep');
+    expect(
+      mapLanguageIdToOrlLanguage({
+        languageId: languageId || '',
+        filePath: '/workspace/main.bicep',
+      }),
+    ).toBe('bicep');
+  });
+
+  it('detects python files and maps to ORL python', () => {
+    const languageId = detectLanguageId({
+      filePath: '/workspace/service.py',
+      content: ['def handler():', '    return True'].join('\n'),
+    });
+    expect(languageId).toBe('python');
+    expect(
+      mapLanguageIdToOrlLanguage({
+        languageId: languageId || '',
+        filePath: '/workspace/service.py',
+      }),
+    ).toBe('python');
+  });
+
+  it('returns concrete handler implementation for java, bicep, and python', () => {
+    expect(
+      chooseLanguageImplementation({
+        filePath: '/workspace/src/App.java',
+        content: 'public class App {}',
+      }).displayName,
+    ).toBe('Java');
+
+    expect(
+      chooseLanguageImplementation({
+        filePath: '/workspace/main.bicep',
+        content: 'param location string = resourceGroup().location',
+      }).displayName,
+    ).toBe('Bicep');
+
+    expect(
+      chooseLanguageImplementation({
+        filePath: '/workspace/service.py',
+        content: ['def handler():', '    return True'].join('\n'),
+      }).displayName,
+    ).toBe('Python');
+  });
 });
