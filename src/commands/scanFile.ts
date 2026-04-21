@@ -208,10 +208,10 @@ async function scanWithOrl(
       const start = chunkIndex * chunkSize;
       const end = Math.min(rawOrlReport.length, start + chunkSize);
       const chunk = rawOrlReport.slice(start, end);
-      // logger.info(
-      //   `GOMBOC_ORL::REPORT CHUNK ${chunkIndex + 1}/${totalChunks}\n${chunk}`,
-      //   { ...baseLogFields, chunkIndex, chunkStart: start, chunkEnd: end },
-      // );
+      logger.debug(
+        `GOMBOC_ORL::REPORT CHUNK ${chunkIndex + 1}/${totalChunks}\n${chunk}`,
+        { ...baseLogFields, chunkIndex, chunkStart: start, chunkEnd: end },
+      );
     }
 
     if (result.success && result.exitCode === 2) {
