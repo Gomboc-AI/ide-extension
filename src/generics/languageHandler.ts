@@ -3,6 +3,7 @@
  */
 
 import path from 'path';
+import type { ResourceContextExtractKind } from './types';
 import { ILanguageHandler } from './types';
 import {
   TerraformLanguageHandler,
@@ -119,3 +120,38 @@ export const mapLanguageIdToOrlLanguage = (args: {
       return null;
   }
 };
+
+/**
+ * True when language handlers recognize the file and it maps to an ORL CLI language.
+ * Used for workspace staging (copy/list) when content may be omitted (empty string).
+ */
+export function isOrlScannableLanguageFile(args: {
+  filePath: string;
+  content?: string;
+}): boolean {
+  const filePath = (args.filePath || '').trim();
+  if (!filePath) {
+    return false;
+  }
+  const content = args.content ?? '';
+  const languageId = detectLanguageId({ filePath, content });
+  if (!languageId) {
+    return false;
+  }
+  return mapLanguageIdToOrlLanguage({ languageId, filePath }) !== null;
+}
+
+/**
+ * Fix-preview context extractor kind for the matched language handler.
+ */
+export function getResourceContextExtractKind(
+  args: LanguageSelectionArgs,
+): ResourceContextExtractKind {
+  const handler = findMatchingLanguageHandler(args);
+  if (!handler) {
+    return 'unknown';
+  }
+  return handler.getResourceContextExtractKind();
+}
+
+export type { ResourceContextExtractKind } from './types';

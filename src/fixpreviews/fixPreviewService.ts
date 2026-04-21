@@ -4,6 +4,7 @@ import * as fs from 'fs/promises';
 import { createOrlClient } from '../orl/orlClient';
 import { diffToHunks, DiffHunk, DiffLine } from './diffRender';
 import { extractResourceContexts, ResourceContext } from './resourceContext';
+import { isOrlScannableLanguageFile } from '../generics/languageHandler';
 
 export type FixPreviewPayload = {
   scannedAt?: string;
@@ -197,7 +198,6 @@ export class FixPreviewService {
         const diff = diffToHunks(beforeText, afterText);
         const contexts = extractResourceContexts({
           filePath,
-          languageHint: scanLanguage,
           text: afterText,
           hunks: diff.hunks,
         });
@@ -258,7 +258,8 @@ async function copyScanScopeDirectory(args: {
       continue;
     }
     const name = e.name;
-    if (shouldSkip(name)) {
+    const skip = shouldSkipPreviewCopy(args.sourceDir, name);
+    if (skip) {
       continue;
     }
     const src = path.join(args.sourceDir, name);
@@ -267,7 +268,8 @@ async function copyScanScopeDirectory(args: {
   }
 }
 
-function shouldSkip(name: string): boolean {
+/** Mirrors ORL scan scope: only files language handlers treat as ORL-scannable. */
+function shouldSkipPreviewCopy(sourceDir: string, name: string): boolean {
   const lower = name.toLowerCase();
   if (lower.startsWith('.')) {
     return true;
@@ -275,21 +277,6 @@ function shouldSkip(name: string): boolean {
   if (lower === 'node_modules') {
     return true;
   }
-  if (lower.startsWith('dockerfile')) {
-    return false;
-  }
-  // Common IaC / build file types we care about in scan scope directories.
-  const exts = [
-    '.tf',
-    '.hcl',
-    '.tfvars',
-    '.yaml',
-    '.yml',
-    '.json',
-    '.tpl',
-    '.xml',
-    '.gradle',
-    '.kts',
-  ];
-  return !exts.some(ext => lower.endsWith(ext));
+  const fullPath = path.join(sourceDir, name);
+  return !isOrlScannableLanguageFile({ filePath: fullPath, content: '' });
 }

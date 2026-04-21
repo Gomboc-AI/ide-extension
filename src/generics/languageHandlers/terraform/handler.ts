@@ -8,6 +8,7 @@ import {
   ListBlocksArgs,
   BlockRange,
   MatchRulesToDiffArgs,
+  ResourceContextExtractKind,
 } from '../../types';
 import { BaseLanguageHandler } from '../base';
 
@@ -83,6 +84,10 @@ export class TerraformLanguageHandler extends BaseLanguageHandler {
       isConfigLike: true,
       supportsBlocks: true,
     };
+  }
+
+  override getResourceContextExtractKind(): ResourceContextExtractKind {
+    return 'terraform';
   }
 
   findBlockAtLine(args: FindBlockAtLineArgs): BlockRange | null {

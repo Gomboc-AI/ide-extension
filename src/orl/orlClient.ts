@@ -17,6 +17,7 @@ import { createProfiler } from '../utils/profiler';
 import { ChannelResolver } from '../utils/channelResolver';
 import { IStorage } from '../generics/types';
 import { FileSystemHandler } from '../generics/fileSystemHandler';
+import { isOrlScannableLanguageFile } from '../generics/languageHandler';
 
 type SpawnResult = {
   stdout: string;
@@ -188,7 +189,7 @@ export interface OrlConfig {
 // to ensure consistent behavior across environments and easier support/debugging.
 // For local dev with XML/Gradle support, switch to 'orl-dev:local'
 // (rebuild via: /path/to/orl/reload-dev-image.sh)
-const ORL_CONTAINER_IMAGE = 'gombocai/orl:v1.1.1';
+const ORL_CONTAINER_IMAGE = 'gombocai/orl:v1.3.0';
 
 export interface OrlResult {
   success: boolean;
@@ -220,19 +221,16 @@ export class OrlClient {
   }
 
   private getRulesCacheDir(): string {
-    // Prefer VS Code's global storage so it persists across restarts.
-    const base =
-      (this.config.storagePath && this.config.storagePath.trim()) ||
-      // Fallback: best-effort persistent-ish temp. (Not guaranteed on Windows.)
-      path.join(os.tmpdir(), 'gomboc-vscode-extension');
-
     const key = `${this.config.containerImage}::${this.config.rulesServiceUrl}::${this.config.channel}`;
     const hash = crypto
       .createHash('sha256')
       .update(key)
       .digest('hex')
       .slice(0, 12);
-    return path.join(base, 'orl-rules-cache', `rules-${hash}`);
+    return path.join(
+      getOrlRulesCacheRoot(this.config.storagePath),
+      `rules-${hash}`,
+    );
   }
 
   /** Create a unique temp directory using storage-backed mkdtemp when available, otherwise fall back to a random mkdir path. */
@@ -811,6 +809,7 @@ export class OrlClient {
         if (!customRulesOnlyEnabled) {
           try {
             cached = await this.ensureRulesCached();
+            console.log('CACHED - ', cached)
             mountedRulesDir = cached.rulesDir;
           } catch (pullError) {
             if (injectedDevRulesHostDir) {
@@ -839,6 +838,7 @@ export class OrlClient {
         //
         // NOTE: default off; gated by config.
         if (twoPassEnabled) {
+          console.log('two pass',)
           const tryTwoPass = async (): Promise<OrlResult | undefined> => {
             const discoveryDir = await this.createTempDir(
               path.join(os.tmpdir(), 'orl-discovery-'),
@@ -1112,6 +1112,7 @@ export class OrlClient {
 
         // Default single-pass flow:
         // Copy workspace files to temp directory
+        console.log('HERE ')
         await this.copyWorkspaceFiles(workspacePath, tempDir);
         prof.mark('copyWorkspaceFiles');
 
@@ -1120,6 +1121,7 @@ export class OrlClient {
         prof.mark('writeHooksToTempWorkspace');
 
         const rulesDir = path.join(tempDir, 'rules');
+        console.log('rulesDIr - ', rulesDir)
         await this.storageClient.mkdir({
           path: rulesDir,
           opts: { recursive: true },
@@ -1262,6 +1264,7 @@ export class OrlClient {
       }
     } catch (error) {
       logger.error('ORL remediation failed', { error });
+      console.log('error - ', error)
       return {
         success: false,
         modifiedFiles: {},
@@ -1287,7 +1290,8 @@ export class OrlClient {
       if (fileType !== vscode.FileType.File) {
         continue;
       }
-      if (!this.isIacFile(fileName)) {
+      const fullPath = path.join(sourcePath, fileName);
+      if (!isOrlScannableLanguageFile({ filePath: fullPath, content: '' })) {
         continue;
       }
       iacFiles.push(fileName);
@@ -1331,8 +1335,8 @@ export class OrlClient {
       ? filePath
       : path.join(sourceDir, filePath);
     const base = path.basename(abs);
-    if (!this.isIacFile(base)) {
-      throw new Error(`Not an IaC file: ${base}`);
+    if (!isOrlScannableLanguageFile({ filePath: abs, content: '' })) {
+      throw new Error(`Not an ORL-scannable file: ${base}`);
     }
     // Only support copying files within the scan directory (matches our scan scoping).
     const rel = path.relative(sourceDir, abs);
@@ -1527,6 +1531,7 @@ export class OrlClient {
 
     // Always write the report to a file so we can read/persist it reliably (stdout may be empty/truncated).
     dockerArgs.push('--out', '/workspace/.orl/report.yaml');
+    console.log('DOCKER ARGS - ', dockerArgs)
     return dockerArgs;
   }
 
@@ -1893,7 +1898,7 @@ export class OrlClient {
   }
 
   /**
-   * Recursively get all IaC files from a directory
+   * Recursively collect files recognized by language handlers for ORL staging.
    */
   private async getAllIacFiles(dir: string): Promise<string[]> {
     const files: string[] = [];
@@ -1913,7 +1918,10 @@ export class OrlClient {
           // Recursively search subdirectories
           const subFiles = await this.getAllIacFiles(fullPath);
           files.push(...subFiles);
-        } else if (entry.type === 'file' && this.isIacFile(entry.name)) {
+        } else if (
+          entry.type === 'file' &&
+          isOrlScannableLanguageFile({ filePath: fullPath, content: '' })
+        ) {
           files.push(fullPath);
         }
       }
@@ -1973,14 +1981,6 @@ export class OrlClient {
           continue;
         }
 
-        // Accept file paths that look like IaC files
-        // Can be absolute (/workspace/file.tf) or relative (file.tf, ./file.tf)
-        const isIacExt =
-          trimmedLine.endsWith('.tf') ||
-          trimmedLine.endsWith('.yaml') ||
-          trimmedLine.endsWith('.yml') ||
-          trimmedLine.endsWith('.json');
-
         // Skip lines with colons that look like YAML key:value pairs
         // But allow paths that might contain colons in certain contexts
         const hasColon = trimmedLine.includes(':');
@@ -1989,14 +1989,20 @@ export class OrlClient {
           !trimmedLine.startsWith('/') &&
           !trimmedLine.startsWith('./');
 
-        // Accept if it's an IaC file and doesn't look like a YAML key
-        if (isIacExt && !looksLikeYamlKey) {
-          // Normalize to container workspace path if relative
-          currentFile = trimmedLine.startsWith('/workspace/')
-            ? trimmedLine
-            : trimmedLine.startsWith('./')
-              ? `/workspace/${trimmedLine.slice(2)}`
-              : `/workspace/${trimmedLine}`;
+        const normalizedPath = trimmedLine.startsWith('/workspace/')
+          ? trimmedLine
+          : trimmedLine.startsWith('./')
+            ? `/workspace/${trimmedLine.slice(2)}`
+            : `/workspace/${trimmedLine}`;
+
+        if (
+          !looksLikeYamlKey &&
+          isOrlScannableLanguageFile({
+            filePath: normalizedPath,
+            content: '',
+          })
+        ) {
+          currentFile = normalizedPath;
           inFileContent = true;
           logger.info('Found file path', {
             file: currentFile,
@@ -2030,64 +2036,6 @@ export class OrlClient {
     [filePath: string]: string;
   } {
     return this.parseOrlOutput(output);
-  }
-
-  /**
-   * Check if file is an IaC file that ORL can process
-   */
-  private isIacFile(fileName: string): boolean {
-    const fileNameLower = fileName.toLowerCase();
-    const ext = path.extname(fileName).toLowerCase();
-    const baseName = path.basename(fileName, ext).toLowerCase();
-
-    // Docker: Dockerfile* (no extension or any extension) or *.dockerfile
-    if (baseName.startsWith('dockerfile') || ext === '.dockerfile') {
-      return true;
-    }
-
-    // Terraform: .tf, .hcl, .tfvars
-    if (['.tf', '.hcl', '.tfvars'].includes(ext)) {
-      return true;
-    }
-
-    // Helm: .yaml, .yml, .tpl
-    if (['.yaml', '.yml', '.tpl'].includes(ext)) {
-      return true;
-    }
-
-    // Kubernetes: .yaml, .yml
-    if (['.yaml', '.yml'].includes(ext)) {
-      return true;
-    }
-
-    // npm package files
-    if (
-      fileNameLower === 'package.json' ||
-      fileNameLower === 'package-lock.json'
-    ) {
-      return true;
-    }
-
-    // CloudFormation: .json (with specific naming patterns)
-    if (ext === '.json') {
-      return (
-        baseName.includes('template') ||
-        baseName.includes('cloudformation') ||
-        baseName.includes('cfn') ||
-        baseName.includes('stack')
-      );
-    }
-
-    // Maven XML, Gradle Groovy, Gradle Kotlin DSL
-    if (['.xml', '.gradle', '.kts'].includes(ext)) {
-      return true;
-    }
-
-    return false;
-  }
-
-  public isIacFileForTests(fileName: string): boolean {
-    return this.isIacFile(fileName);
   }
 
   /**
@@ -2497,15 +2445,31 @@ export async function createOrlClient(args: {
 }
 
 /**
+ * Host base directory for ORL persisted data: VS Code global storage when provided,
+ * otherwise the same temp fallback as {@link OrlClient} uses when `storagePath` is unset.
+ */
+export function resolveOrlStorageBase(storagePath?: string): string {
+  return (
+    (storagePath && storagePath.trim()) ||
+    path.join(os.tmpdir(), 'gomboc-vscode-extension')
+  );
+}
+
+/**
+ * Directory that holds all `rules-<hash>/` channel caches. Must match
+ * {@link OrlClient} rule cache layout so clear and pull use the same tree.
+ */
+export function getOrlRulesCacheRoot(storagePath?: string): string {
+  return path.join(resolveOrlStorageBase(storagePath), 'orl-rules-cache');
+}
+
+/**
  * Remove all cached ORL rules so the next scan triggers a fresh pull.
  * Wipes the entire `orl-rules-cache` directory under the given storagePath
  * (or the OS temp fallback), covering all channel/image variants.
  */
 export async function clearOrlRulesCache(storagePath?: string): Promise<void> {
-  const base =
-    (storagePath && storagePath.trim()) ||
-    path.join(os.tmpdir(), 'gomboc-vscode-extension');
-  const cacheRoot = path.join(base, 'orl-rules-cache');
+  const cacheRoot = getOrlRulesCacheRoot(storagePath);
   const storageClient = new FileSystemHandler();
 
   try {

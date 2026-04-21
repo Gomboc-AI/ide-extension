@@ -7,6 +7,7 @@ import {
   GetDocumentInfoArgs,
   ListBlocksArgs,
   BlockRange,
+  ResourceContextExtractKind,
 } from '../../types';
 import { YamlBaseLanguageHandler } from '../yamlBase';
 
@@ -57,6 +58,10 @@ export class HelmTemplateLanguageHandler extends YamlBaseLanguageHandler {
       fileName.includes('chart') ||
       isHelmDir
     );
+  }
+
+  override getResourceContextExtractKind(): ResourceContextExtractKind {
+    return 'yaml';
   }
 
   /**

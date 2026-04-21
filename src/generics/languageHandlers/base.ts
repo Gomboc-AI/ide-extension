@@ -17,6 +17,7 @@ import {
   ILanguageHandler,
   ListBlocksArgs,
   MatchRulesToDiffArgs,
+  ResourceContextExtractKind,
   ResolveDiagnosticAnchorLineArgs,
   ScopedEditRange,
 } from '../types';
@@ -34,6 +35,10 @@ export abstract class BaseLanguageHandler implements ILanguageHandler {
 
   abstract detectLanguage(args: DetectLanguageArgs): boolean;
   abstract getDocumentInfo(args: GetDocumentInfoArgs): DocumentInfo;
+
+  getResourceContextExtractKind(): ResourceContextExtractKind {
+    return 'unknown';
+  }
 
   // --- Block discovery (subclasses must implement) ---
 

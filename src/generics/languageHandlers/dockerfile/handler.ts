@@ -8,6 +8,7 @@ import {
   GetDocumentInfoArgs,
   ListBlocksArgs,
   BlockRange,
+  ResourceContextExtractKind,
 } from '../../types';
 import { BaseLanguageHandler } from '../base';
 
@@ -20,6 +21,10 @@ export class DockerfileLanguageHandler extends BaseLanguageHandler {
     const fileName = path.basename(args.filePath || '').toLowerCase();
     const ext = path.extname(args.filePath || '').toLowerCase();
     return fileName.startsWith('dockerfile') || ext === '.dockerfile';
+  }
+
+  override getResourceContextExtractKind(): ResourceContextExtractKind {
+    return 'dockerfile';
   }
 
   override formatBlockDisplayName(args: FormatBlockDisplayNameArgs): string {

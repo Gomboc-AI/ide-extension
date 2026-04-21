@@ -1,6 +1,9 @@
-import * as path from 'path';
 import * as crypto from 'crypto';
 import { DiffHunk } from './diffRender';
+import {
+  getResourceContextExtractKind,
+  type ResourceContextExtractKind,
+} from '../generics/languageHandler';
 
 export type ResourceContext = {
   id: string;
@@ -14,7 +17,6 @@ export type ResourceContext = {
 
 export function extractResourceContexts(args: {
   filePath: string;
-  languageHint?: string;
   text: string;
   hunks: DiffHunk[];
   maxContexts?: number;
@@ -27,9 +29,9 @@ export function extractResourceContexts(args: {
   const lines = text.split('\n');
   const hunks = Array.isArray(args.hunks) ? args.hunks : [];
 
-  const kind = detectKind({
+  const kind = resolveContextExtractKind({
     filePath: args.filePath,
-    languageHint: args.languageHint,
+    content: text,
   });
 
   const contextsByKey = new Map<
@@ -92,42 +94,18 @@ export function extractResourceContexts(args: {
   return out;
 }
 
-type Kind = 'terraform' | 'yaml' | 'dockerfile' | 'json' | 'unknown';
-
-function detectKind(args: { filePath: string; languageHint?: string }): Kind {
-  const lh = (args.languageHint || '').toLowerCase();
-  if (lh.includes('terraform') || lh === 'hcl') {
-    return 'terraform';
-  }
-  if (lh.includes('yaml') || lh.includes('kubernetes') || lh === 'yml') {
-    return 'yaml';
-  }
-  if (lh.includes('docker')) {
-    return 'dockerfile';
-  }
-  if (lh.includes('json')) {
-    return 'json';
-  }
-
-  const base = path.basename(args.filePath || '').toLowerCase();
-  if (base.startsWith('dockerfile')) {
-    return 'dockerfile';
-  }
-  const ext = path.extname(base);
-  if (ext === '.tf' || ext === '.hcl' || ext === '.tfvars') {
-    return 'terraform';
-  }
-  if (ext === '.yaml' || ext === '.yml') {
-    return 'yaml';
-  }
-  if (ext === '.json') {
-    return 'json';
-  }
-  return 'unknown';
+function resolveContextExtractKind(args: {
+  filePath: string;
+  content: string;
+}): ResourceContextExtractKind {
+  return getResourceContextExtractKind({
+    filePath: args.filePath,
+    content: args.content,
+  });
 }
 
 function extractSingleContext(args: {
-  kind: Kind;
+  kind: ResourceContextExtractKind;
   lines: string[];
   line: number;
 }): { title: string; startLine: number; endLine: number } | undefined {

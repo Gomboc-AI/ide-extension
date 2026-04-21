@@ -1,8 +1,95 @@
 import {
   chooseLanguageImplementation,
   detectLanguageId,
+  getResourceContextExtractKind,
+  isOrlScannableLanguageFile,
   mapLanguageIdToOrlLanguage,
 } from './languageHandler';
+
+describe('isOrlScannableLanguageFile', () => {
+  it('matches ORL staging expectations for common basenames (no content)', () => {
+    expect(isOrlScannableLanguageFile({ filePath: 'main.tf', content: '' })).toBe(
+      true,
+    );
+    expect(
+      isOrlScannableLanguageFile({ filePath: 'template.yaml', content: '' }),
+    ).toBe(true);
+    expect(
+      isOrlScannableLanguageFile({ filePath: 'config.yml', content: '' }),
+    ).toBe(true);
+    expect(
+      isOrlScannableLanguageFile({ filePath: 'template.json', content: '' }),
+    ).toBe(true);
+    expect(
+      isOrlScannableLanguageFile({
+        filePath: 'cloudformation.json',
+        content: '',
+      }),
+    ).toBe(true);
+    expect(isOrlScannableLanguageFile({ filePath: 'stack.json', content: '' })).toBe(
+      true,
+    );
+    expect(isOrlScannableLanguageFile({ filePath: 'app.py', content: '' })).toBe(
+      true,
+    );
+    expect(
+      isOrlScannableLanguageFile({ filePath: 'Main.java', content: '' }),
+    ).toBe(true);
+    expect(
+      isOrlScannableLanguageFile({ filePath: 'main.bicep', content: '' }),
+    ).toBe(true);
+  });
+
+  it('treats npm package manifests as scannable', () => {
+    expect(
+      isOrlScannableLanguageFile({ filePath: 'package.json', content: '' }),
+    ).toBe(true);
+    expect(
+      isOrlScannableLanguageFile({ filePath: 'package-lock.json', content: '' }),
+    ).toBe(true);
+  });
+
+  it('rejects non-ORL files', () => {
+    expect(
+      isOrlScannableLanguageFile({ filePath: 'README.md', content: '' }),
+    ).toBe(false);
+    expect(
+      isOrlScannableLanguageFile({ filePath: 'script.sh', content: '' }),
+    ).toBe(false);
+    expect(
+      isOrlScannableLanguageFile({ filePath: 'data.json', content: '' }),
+    ).toBe(false);
+    expect(
+      isOrlScannableLanguageFile({ filePath: 'config.json', content: '' }),
+    ).toBe(false);
+    expect(
+      isOrlScannableLanguageFile({ filePath: 'tsconfig.json', content: '' }),
+    ).toBe(false);
+  });
+});
+
+describe('getResourceContextExtractKind', () => {
+  it('delegates to the matched handler', () => {
+    expect(
+      getResourceContextExtractKind({
+        filePath: '/workspace/main.tf',
+        content: 'resource "x" "y" {}',
+      }),
+    ).toBe('terraform');
+    expect(
+      getResourceContextExtractKind({
+        filePath: '/workspace/Dockerfile',
+        content: 'FROM scratch',
+      }),
+    ).toBe('dockerfile');
+    expect(
+      getResourceContextExtractKind({
+        filePath: '/workspace/service.py',
+        content: 'def f():\n  pass',
+      }),
+    ).toBe('unknown');
+  });
+});
 
 describe('languageHandler selector', () => {
   it('detects dockerfile and maps to ORL docker', () => {
