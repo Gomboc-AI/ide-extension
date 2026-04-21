@@ -39,11 +39,11 @@ const logger = winston.createLogger({
   //   const { level: _, message: __, ...meta } = info;
   //   return `[${level}] ${message} ${JSON.stringify(meta)}`;
   // }),
-  // transports: [
-  //   new winston.transports.Console({
-  //     stderrLevels: ['error'],
-  //   }),
-  // ],
+  transports: [
+    new winston.transports.Console({
+      stderrLevels: ['error'],
+    }),
+  ],
 });
 
 export function setLoggerLevel(level: unknown): void {

@@ -369,6 +369,8 @@ describe('clearOrlRulesCache', () => {
     const rulesDir = (
       client as unknown as { getRulesCacheDir: () => string }
     ).getRulesCacheDir();
-    expect(rulesDir.startsWith(`${getOrlRulesCacheRoot(storagePath)}${path.sep}`));
+    expect(
+      rulesDir.startsWith(`${getOrlRulesCacheRoot(storagePath)}${path.sep}`),
+    );
   });
 });

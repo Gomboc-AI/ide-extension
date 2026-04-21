@@ -220,6 +220,29 @@ export type ResourceContextExtractKind =
   | 'json'
   | 'unknown';
 
+export interface PreviewContextHunk {
+  fingerprint: string;
+  newStart: number;
+}
+
+export interface PreviewResourceContext {
+  id: string;
+  title: string;
+  startLine: number;
+  endLine: number;
+  text: string;
+  truncated?: boolean;
+  relatedHunkFingerprints: string[];
+}
+
+export interface BuildPreviewResourceContextsArgs {
+  filePath: string;
+  content: string;
+  hunks: PreviewContextHunk[];
+  maxContexts?: number;
+  maxLinesPerContext?: number;
+}
+
 export interface ILanguageHandler {
   displayName: string;
 
@@ -234,6 +257,9 @@ export interface ILanguageHandler {
 
   /** How fix previews scope context around hunks; see {@link ResourceContextExtractKind}. */
   getResourceContextExtractKind(): ResourceContextExtractKind;
+  buildPreviewResourceContexts(
+    args: BuildPreviewResourceContextsArgs,
+  ): PreviewResourceContext[];
 
   findBlockAtLine(args: FindBlockAtLineArgs): BlockRange | null;
   findNearestBlock(args: FindNearestBlockArgs): BlockRange | null;

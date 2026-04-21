@@ -8,9 +8,9 @@ import {
 
 describe('isOrlScannableLanguageFile', () => {
   it('matches ORL staging expectations for common basenames (no content)', () => {
-    expect(isOrlScannableLanguageFile({ filePath: 'main.tf', content: '' })).toBe(
-      true,
-    );
+    expect(
+      isOrlScannableLanguageFile({ filePath: 'main.tf', content: '' }),
+    ).toBe(true);
     expect(
       isOrlScannableLanguageFile({ filePath: 'template.yaml', content: '' }),
     ).toBe(true);
@@ -26,12 +26,12 @@ describe('isOrlScannableLanguageFile', () => {
         content: '',
       }),
     ).toBe(true);
-    expect(isOrlScannableLanguageFile({ filePath: 'stack.json', content: '' })).toBe(
-      true,
-    );
-    expect(isOrlScannableLanguageFile({ filePath: 'app.py', content: '' })).toBe(
-      true,
-    );
+    expect(
+      isOrlScannableLanguageFile({ filePath: 'stack.json', content: '' }),
+    ).toBe(true);
+    expect(
+      isOrlScannableLanguageFile({ filePath: 'app.py', content: '' }),
+    ).toBe(true);
     expect(
       isOrlScannableLanguageFile({ filePath: 'Main.java', content: '' }),
     ).toBe(true);
@@ -45,7 +45,10 @@ describe('isOrlScannableLanguageFile', () => {
       isOrlScannableLanguageFile({ filePath: 'package.json', content: '' }),
     ).toBe(true);
     expect(
-      isOrlScannableLanguageFile({ filePath: 'package-lock.json', content: '' }),
+      isOrlScannableLanguageFile({
+        filePath: 'package-lock.json',
+        content: '',
+      }),
     ).toBe(true);
   });
 

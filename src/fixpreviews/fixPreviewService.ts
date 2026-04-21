@@ -3,8 +3,9 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import { createOrlClient } from '../orl/orlClient';
 import { diffToHunks, DiffHunk, DiffLine } from './diffRender';
-import { extractResourceContexts, ResourceContext } from './resourceContext';
+import { ResourceContext } from './resourceContext';
 import { isOrlScannableLanguageFile } from '../generics/languageHandler';
+import { buildLanguagePreviewResourceContexts } from '../generics/languagePreviewContextOrchestrator';
 
 export type FixPreviewPayload = {
   scannedAt?: string;
@@ -196,9 +197,9 @@ export class FixPreviewService {
             .catch(() => beforeText);
         }
         const diff = diffToHunks(beforeText, afterText);
-        const contexts = extractResourceContexts({
+        const contexts = buildLanguagePreviewResourceContexts({
           filePath,
-          text: afterText,
+          content: afterText,
           hunks: diff.hunks,
         });
         files.push({

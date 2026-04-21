@@ -53,6 +53,12 @@ function findMatchingLanguageHandler(
   return null;
 }
 
+export const findMatchingLanguageImplementation = (
+  args: LanguageSelectionArgs,
+): ILanguageHandler | null => {
+  return findMatchingLanguageHandler(args);
+};
+
 /**
  * Detects the most likely language id for a file path + content pair.
  *
@@ -78,7 +84,7 @@ export const detectLanguageId = (
 export const chooseLanguageImplementation = (
   args: LanguageSelectionArgs,
 ): ILanguageHandler => {
-  const handler = findMatchingLanguageHandler(args);
+  const handler = findMatchingLanguageImplementation(args);
   return handler || new TerraformLanguageHandler();
 };
 
@@ -147,7 +153,7 @@ export function isOrlScannableLanguageFile(args: {
 export function getResourceContextExtractKind(
   args: LanguageSelectionArgs,
 ): ResourceContextExtractKind {
-  const handler = findMatchingLanguageHandler(args);
+  const handler = findMatchingLanguageImplementation(args);
   if (!handler) {
     return 'unknown';
   }

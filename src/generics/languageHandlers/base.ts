@@ -2,6 +2,7 @@ import path from 'path';
 import {
   BlockDescription,
   BlockRange,
+  BuildPreviewResourceContextsArgs,
   BuildDiagnosticContextArgs,
   BuildDiagnosticRangeArgs,
   DescribeBlockArgs,
@@ -17,10 +18,15 @@ import {
   ILanguageHandler,
   ListBlocksArgs,
   MatchRulesToDiffArgs,
+  PreviewResourceContext,
   ResourceContextExtractKind,
   ResolveDiagnosticAnchorLineArgs,
   ScopedEditRange,
 } from '../types';
+import {
+  buildPreviewResourceContexts,
+  PreviewContextRange,
+} from '../previewResourceContextBuilder';
 
 /**
  * Shared base class for all language handlers. Provides sensible default
@@ -40,11 +46,37 @@ export abstract class BaseLanguageHandler implements ILanguageHandler {
     return 'unknown';
   }
 
+  buildPreviewResourceContexts(
+    args: BuildPreviewResourceContextsArgs,
+  ): PreviewResourceContext[] {
+    return buildPreviewResourceContexts({
+      ...args,
+      kind: this.getResourceContextExtractKind(),
+      resolveContextRange: ({ kind, lines, line }) =>
+        this.resolvePreviewContextRange({
+          kind,
+          lines,
+          line,
+        }),
+    });
+  }
+
   // --- Block discovery (subclasses must implement) ---
 
   abstract findBlockAtLine(args: FindBlockAtLineArgs): BlockRange | null;
   abstract findNearestBlock(args: FindNearestBlockArgs): BlockRange | null;
   abstract listBlocks(args: ListBlocksArgs): BlockRange[];
+
+  /**
+   * Optional override hook for language handlers that need custom preview context boundaries.
+   */
+  protected resolvePreviewContextRange(args: {
+    kind: ResourceContextExtractKind;
+    lines: string[];
+    line: number;
+  }): PreviewContextRange | undefined {
+    return undefined;
+  }
 
   findScopedEditRange(args: FindScopedEditRangeArgs): ScopedEditRange | null {
     const block = this.findBlockAtLine(args) || this.findNearestBlock(args);
