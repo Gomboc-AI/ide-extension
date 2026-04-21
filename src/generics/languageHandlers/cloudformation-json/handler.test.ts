@@ -22,6 +22,24 @@ const cloudFormationJson = JSON.stringify(
 describe('CloudFormationJSONLanguageHandler', () => {
   const handler = new CloudFormationJSONLanguageHandler();
 
+  it('detectLanguage matches template-like basenames only', () => {
+    expect(
+      handler.detectLanguage({
+        filePath: '/workspace/template.json',
+        content: '',
+      }),
+    ).toBe(true);
+    expect(
+      handler.detectLanguage({ filePath: '/workspace/data.json', content: '' }),
+    ).toBe(false);
+    expect(
+      handler.detectLanguage({
+        filePath: '/workspace/package.json',
+        content: '{}',
+      }),
+    ).toBe(false);
+  });
+
   it('returns cloudformation json document info metadata', () => {
     expect(
       handler.getDocumentInfo({

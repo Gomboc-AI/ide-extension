@@ -208,7 +208,7 @@ async function scanWithOrl(
       const start = chunkIndex * chunkSize;
       const end = Math.min(rawOrlReport.length, start + chunkSize);
       const chunk = rawOrlReport.slice(start, end);
-      logger.info(
+      logger.debug(
         `GOMBOC_ORL::REPORT CHUNK ${chunkIndex + 1}/${totalChunks}\n${chunk}`,
         { ...baseLogFields, chunkIndex, chunkStart: start, chunkEnd: end },
       );

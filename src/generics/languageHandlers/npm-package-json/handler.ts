@@ -10,6 +10,7 @@ import {
   BlockRange,
   DescribeBlockArgs,
   BlockDescription,
+  ResourceContextExtractKind,
 } from '../../types';
 import { BaseLanguageHandler } from '../base';
 
@@ -26,6 +27,10 @@ export class NpmPackageJSONLanguageHandler extends BaseLanguageHandler {
       ext === '.json' &&
       (fileName === 'package.json' || fileName === 'package-lock.json')
     );
+  }
+
+  override getResourceContextExtractKind(): ResourceContextExtractKind {
+    return 'json';
   }
 
   override formatBlockDisplayName(args: FormatBlockDisplayNameArgs): string {

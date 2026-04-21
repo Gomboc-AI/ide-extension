@@ -209,6 +209,40 @@ export interface FormatBlockDisplayNameArgs {
   filePath: string;
 }
 
+/**
+ * Strategy for grouping fix-preview resource snippets around diff hunks
+ * (see fixpreviews/resourceContext.ts).
+ */
+export type ResourceContextExtractKind =
+  | 'terraform'
+  | 'yaml'
+  | 'dockerfile'
+  | 'json'
+  | 'unknown';
+
+export interface PreviewContextHunk {
+  fingerprint: string;
+  newStart: number;
+}
+
+export interface PreviewResourceContext {
+  id: string;
+  title: string;
+  startLine: number;
+  endLine: number;
+  text: string;
+  truncated?: boolean;
+  relatedHunkFingerprints: string[];
+}
+
+export interface BuildPreviewResourceContextsArgs {
+  filePath: string;
+  content: string;
+  hunks: PreviewContextHunk[];
+  maxContexts?: number;
+  maxLinesPerContext?: number;
+}
+
 export interface ILanguageHandler {
   displayName: string;
 
@@ -220,6 +254,13 @@ export interface ILanguageHandler {
 
   detectLanguage(args: DetectLanguageArgs): boolean;
   getDocumentInfo(args: GetDocumentInfoArgs): DocumentInfo;
+
+  /** How fix previews scope context around hunks; see {@link ResourceContextExtractKind}. */
+  getResourceContextExtractKind(): ResourceContextExtractKind;
+  buildPreviewResourceContexts(
+    args: BuildPreviewResourceContextsArgs,
+  ): PreviewResourceContext[];
+
   findBlockAtLine(args: FindBlockAtLineArgs): BlockRange | null;
   findNearestBlock(args: FindNearestBlockArgs): BlockRange | null;
   findScopedEditRange(args: FindScopedEditRangeArgs): ScopedEditRange | null;

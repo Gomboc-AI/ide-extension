@@ -1,94 +1,86 @@
 import path from 'path';
 import {
+  BlockRange,
   DetectLanguageArgs,
   DocumentInfo,
-  FindNearestBlockArgs,
   FindBlockAtLineArgs,
-  FormatBlockDisplayNameArgs,
+  FindNearestBlockArgs,
   GetDocumentInfoArgs,
   ListBlocksArgs,
-  BlockRange,
-  ResourceContextExtractKind,
 } from '../../types';
 import { BaseLanguageHandler } from '../base';
 
-export class DockerfileLanguageHandler extends BaseLanguageHandler {
-  displayName = 'Dockerfile';
-  codeResourceType = 'docker';
-  extensions = ['Dockerfile', '.dockerfile'];
+export class PythonLanguageHandler extends BaseLanguageHandler {
+  displayName = 'Python';
+  codeResourceType = 'python';
+  extensions = ['.py'];
 
   detectLanguage(args: DetectLanguageArgs): boolean {
-    const fileName = path.basename(args.filePath || '').toLowerCase();
     const ext = path.extname(args.filePath || '').toLowerCase();
-    return fileName.startsWith('dockerfile') || ext === '.dockerfile';
-  }
-
-  override getResourceContextExtractKind(): ResourceContextExtractKind {
-    return 'dockerfile';
-  }
-
-  override formatBlockDisplayName(args: FormatBlockDisplayNameArgs): string {
-    if (args.blockName?.trim()) {
-      return `Docker Stage: ${args.blockName}`;
-    }
-    return 'Docker Stage';
+    return ext === '.py';
   }
 
   /**
-   * Parses Docker build stages (`FROM ... [AS name]`) into line ranges.
+   * Parses Python class/def blocks and computes their indentation-based ranges.
    */
   private parseBlocks(content: string): BlockRange[] {
     const lines = content.split('\n');
     const blocks: BlockRange[] = [];
-    const fromPattern =
-      /^FROM\s+(?:--[^\s]+\s+)?([^\s]+(?::[^\s]+)?)(?:\s+AS\s+(\S+))?/i;
+    const blockPattern = /^\s*(class|def)\s+([A-Za-z_][A-Za-z0-9_]*)\b.*:\s*$/;
 
     for (let i = 0; i < lines.length; i++) {
-      const trimmed = lines[i].trim();
-      if (!trimmed || trimmed.startsWith('#')) {
-        continue;
-      }
-      const fromMatch = trimmed.match(fromPattern);
-      if (!fromMatch) {
+      const line = lines[i];
+      const match = line.match(blockPattern);
+      if (!match) {
         continue;
       }
 
-      const image = fromMatch[1];
-      const alias = fromMatch[2];
-      const display = alias || image;
-      let endLine = lines.length;
+      const blockKind = match[1];
+      const blockName = match[2];
+      const baseIndent = this.getIndent(line);
+      let endLine = i + 1;
+
       for (let j = i + 1; j < lines.length; j++) {
-        const next = lines[j].trim();
-        if (!next || next.startsWith('#')) {
+        const next = lines[j];
+        const trimmed = next.trim();
+        if (!trimmed) {
+          endLine = j + 1;
           continue;
         }
-        if (fromPattern.test(next)) {
-          endLine = j;
+
+        const indent = this.getIndent(next);
+        if (indent <= baseIndent) {
           break;
         }
+        endLine = j + 1;
       }
 
       blocks.push({
-        type: 'docker_stage',
-        name: display,
+        type: blockKind === 'class' ? 'python_class' : 'python_function',
+        name: blockName,
         startLine: i + 1,
         endLine,
-        header: `FROM ${display}`,
+        header: `${blockKind} ${blockName}`,
       });
     }
 
     return blocks;
   }
 
+  private getIndent(line: string): number {
+    const leading = line.match(/^\s*/)?.[0] || '';
+    return leading.replace(/\t/g, '    ').length;
+  }
+
   getDocumentInfo(args: GetDocumentInfoArgs): DocumentInfo {
     const ext = path.extname(args.filePath).toLowerCase();
     const fileName = path.basename(args.filePath);
     return {
-      languageId: 'dockerfile',
+      languageId: 'python',
       filePath: args.filePath,
       fileName,
       extension: ext,
-      isConfigLike: true,
+      isConfigLike: false,
       supportsBlocks: true,
     };
   }

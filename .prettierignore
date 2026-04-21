@@ -1,4 +1,5 @@
 node_modules/
+.mypy_cache/
 *.yaml
 *.yml
 README_DEV.md

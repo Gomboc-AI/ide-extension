@@ -11,6 +11,7 @@ import {
   BuildDiagnosticContextArgs,
   DiagnosticContext,
   MatchRulesToDiffArgs,
+  ResourceContextExtractKind,
 } from '../../types';
 import { YamlBaseLanguageHandler } from '../yamlBase';
 
@@ -68,6 +69,10 @@ export class CloudFormationYAMLLanguageHandler extends YamlBaseLanguageHandler {
       isK8sDir;
 
     return !isHelm && !isKubernetes;
+  }
+
+  override getResourceContextExtractKind(): ResourceContextExtractKind {
+    return 'yaml';
   }
 
   override formatBlockDisplayName(args: FormatBlockDisplayNameArgs): string {

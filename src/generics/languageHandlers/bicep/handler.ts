@@ -1,90 +1,110 @@
 import path from 'path';
 import {
+  BlockRange,
   DetectLanguageArgs,
   DocumentInfo,
-  FindNearestBlockArgs,
   FindBlockAtLineArgs,
-  FormatBlockDisplayNameArgs,
+  FindNearestBlockArgs,
   GetDocumentInfoArgs,
   ListBlocksArgs,
-  BlockRange,
-  ResourceContextExtractKind,
 } from '../../types';
 import { BaseLanguageHandler } from '../base';
 
-export class DockerfileLanguageHandler extends BaseLanguageHandler {
-  displayName = 'Dockerfile';
-  codeResourceType = 'docker';
-  extensions = ['Dockerfile', '.dockerfile'];
+export class BicepLanguageHandler extends BaseLanguageHandler {
+  displayName = 'Bicep';
+  codeResourceType = 'bicep';
+  extensions = ['.bicep'];
 
   detectLanguage(args: DetectLanguageArgs): boolean {
-    const fileName = path.basename(args.filePath || '').toLowerCase();
     const ext = path.extname(args.filePath || '').toLowerCase();
-    return fileName.startsWith('dockerfile') || ext === '.dockerfile';
-  }
-
-  override getResourceContextExtractKind(): ResourceContextExtractKind {
-    return 'dockerfile';
-  }
-
-  override formatBlockDisplayName(args: FormatBlockDisplayNameArgs): string {
-    if (args.blockName?.trim()) {
-      return `Docker Stage: ${args.blockName}`;
-    }
-    return 'Docker Stage';
+    return ext === '.bicep';
   }
 
   /**
-   * Parses Docker build stages (`FROM ... [AS name]`) into line ranges.
+   * Parses top-level Bicep declarations and expands multiline value spans.
    */
   private parseBlocks(content: string): BlockRange[] {
     const lines = content.split('\n');
     const blocks: BlockRange[] = [];
-    const fromPattern =
-      /^FROM\s+(?:--[^\s]+\s+)?([^\s]+(?::[^\s]+)?)(?:\s+AS\s+(\S+))?/i;
+    const declarationPattern =
+      /^\s*(resource|module|param|var|output)\s+([A-Za-z_][A-Za-z0-9_]*)\b/;
 
     for (let i = 0; i < lines.length; i++) {
-      const trimmed = lines[i].trim();
-      if (!trimmed || trimmed.startsWith('#')) {
-        continue;
-      }
-      const fromMatch = trimmed.match(fromPattern);
-      if (!fromMatch) {
+      const line = lines[i];
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('//')) {
         continue;
       }
 
-      const image = fromMatch[1];
-      const alias = fromMatch[2];
-      const display = alias || image;
-      let endLine = lines.length;
+      const match = line.match(declarationPattern);
+      if (!match) {
+        continue;
+      }
+
+      const blockKind = match[1];
+      const blockName = match[2];
+      const type = `bicep_${blockKind}`;
+      let endLine = i + 1;
+
+      const startValue = line.includes('=')
+        ? line.slice(line.indexOf('=') + 1)
+        : '';
+      let depth = this.countDepth(startValue);
+      const consumedValueOnLine = startValue.trim().length > 0;
+
+      if (
+        !consumedValueOnLine &&
+        (blockKind === 'resource' || blockKind === 'module')
+      ) {
+        depth = 1;
+      }
+
       for (let j = i + 1; j < lines.length; j++) {
-        const next = lines[j].trim();
-        if (!next || next.startsWith('#')) {
+        const next = lines[j];
+        const nextTrimmed = next.trim();
+        if (!nextTrimmed || nextTrimmed.startsWith('//')) {
+          endLine = j + 1;
           continue;
         }
-        if (fromPattern.test(next)) {
-          endLine = j;
+        if (next.match(declarationPattern) && depth <= 0) {
+          break;
+        }
+        depth += this.countDepth(next);
+        endLine = j + 1;
+        if (depth <= 0 && /[}\])]/.test(next)) {
           break;
         }
       }
 
       blocks.push({
-        type: 'docker_stage',
-        name: display,
+        type,
+        name: blockName,
         startLine: i + 1,
         endLine,
-        header: `FROM ${display}`,
+        header: `${blockKind} ${blockName}`,
       });
     }
 
     return blocks;
   }
 
+  private countDepth(line: string): number {
+    const opens =
+      (line.match(/{/g) || []).length +
+      (line.match(/\[/g) || []).length +
+      (line.match(/\(/g) || []).length;
+    const closes =
+      (line.match(/}/g) || []).length +
+      (line.match(/]/g) || []).length +
+      (line.match(/\)/g) || []).length;
+    return opens - closes;
+  }
+
   getDocumentInfo(args: GetDocumentInfoArgs): DocumentInfo {
     const ext = path.extname(args.filePath).toLowerCase();
     const fileName = path.basename(args.filePath);
     return {
-      languageId: 'dockerfile',
+      languageId: 'bicep',
       filePath: args.filePath,
       fileName,
       extension: ext,

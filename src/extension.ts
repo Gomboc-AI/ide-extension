@@ -130,6 +130,22 @@ export async function activate(context: vscode.ExtensionContext) {
     new GombocInfoViewProvider(context),
   );
 
+  const languageList = [
+    { language: 'terraform', scheme: 'file' },
+    { language: 'tf', scheme: 'file' },
+    { language: 'hcl', scheme: 'file' },
+    { language: 'json', scheme: 'file' },
+    { language: 'yaml', scheme: 'file' },
+    { language: 'plaintext', scheme: 'file' },
+    { language: 'dockerfile', scheme: 'file' },
+    { language: 'xml', scheme: 'file' },
+    { language: 'groovy', scheme: 'file' },
+    { language: 'kotlin', scheme: 'file' },
+    { language: 'python', scheme: 'file' },
+    { language: 'java', scheme: 'file' },
+    { language: 'bicep', scheme: 'file' },
+  ];
+
   context.subscriptions.push(
     ...disposables,
     diagnosticCollection,
@@ -138,33 +154,11 @@ export async function activate(context: vscode.ExtensionContext) {
     onEdit,
     onConfigChange(disposables, commands),
     vscode.languages.registerCodeActionsProvider(
-      [
-        { language: 'terraform', scheme: 'file' },
-        { language: 'tf', scheme: 'file' },
-        { language: 'hcl', scheme: 'file' },
-        { language: 'json', scheme: 'file' },
-        { language: 'yaml', scheme: 'file' },
-        { language: 'plaintext', scheme: 'file' },
-        { language: 'dockerfile', scheme: 'file' },
-        { language: 'xml', scheme: 'file' },
-        { language: 'groovy', scheme: 'file' },
-        { language: 'kotlin', scheme: 'file' },
-      ],
+      languageList,
       new CodeActionProvider(),
     ),
     vscode.languages.registerHoverProvider(
-      [
-        { language: 'terraform', scheme: 'file' },
-        { language: 'tf', scheme: 'file' },
-        { language: 'hcl', scheme: 'file' },
-        { language: 'json', scheme: 'file' },
-        { language: 'yaml', scheme: 'file' },
-        { language: 'plaintext', scheme: 'file' },
-        { language: 'dockerfile', scheme: 'file' },
-        { language: 'xml', scheme: 'file' },
-        { language: 'groovy', scheme: 'file' },
-        { language: 'kotlin', scheme: 'file' },
-      ],
+      languageList,
       new OrlHoverProvider(),
     ),
   );

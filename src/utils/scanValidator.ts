@@ -47,7 +47,7 @@ export class ScanValidator {
 
     if (!language) {
       throw new Error(
-        'Current file is not a supported file (Terraform, CloudFormation, Docker, Helm, Kubernetes, Maven XML, Gradle, or npm package.json)',
+        'Current file is not a supported file (Terraform, CloudFormation, Docker, Helm, Kubernetes, Maven XML, Gradle, Java, Bicep, Python, or npm package.json)',
       );
     }
 

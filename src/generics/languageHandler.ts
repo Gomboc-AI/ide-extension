@@ -3,6 +3,7 @@
  */
 
 import path from 'path';
+import type { ResourceContextExtractKind } from './types';
 import { ILanguageHandler } from './types';
 import {
   TerraformLanguageHandler,
@@ -14,6 +15,9 @@ import {
   MavenXMLLanguageHandler,
   GradleLanguageHandler,
   NpmPackageJSONLanguageHandler,
+  JavaLanguageHandler,
+  BicepLanguageHandler,
+  PythonLanguageHandler,
 } from './languageHandlers';
 
 export interface LanguageSelectionArgs {
@@ -31,6 +35,9 @@ const languageHandlerFactories: Array<() => ILanguageHandler> = [
   () => new CloudFormationYAMLLanguageHandler(),
   () => new MavenXMLLanguageHandler(),
   () => new GradleLanguageHandler(),
+  () => new JavaLanguageHandler(),
+  () => new BicepLanguageHandler(),
+  () => new PythonLanguageHandler(),
 ];
 
 function findMatchingLanguageHandler(
@@ -46,6 +53,12 @@ function findMatchingLanguageHandler(
   return null;
 }
 
+export const findMatchingLanguageImplementation = (
+  args: LanguageSelectionArgs,
+): ILanguageHandler | null => {
+  return findMatchingLanguageHandler(args);
+};
+
 /**
  * Detects the most likely language id for a file path + content pair.
  *
@@ -55,7 +68,7 @@ function findMatchingLanguageHandler(
  * specific handlers must run before broader fallbacks.
  *
  * Order: dockerfile → terraform → helm-template → npm-package-json → cloudformation-json →
- * kubernetes-yaml → cloudformation-yaml → maven-xml → gradle.
+ * kubernetes-yaml → cloudformation-yaml → maven-xml → gradle → java → bicep → python.
  */
 export const detectLanguageId = (
   args: LanguageSelectionArgs,
@@ -71,7 +84,7 @@ export const detectLanguageId = (
 export const chooseLanguageImplementation = (
   args: LanguageSelectionArgs,
 ): ILanguageHandler => {
-  const handler = findMatchingLanguageHandler(args);
+  const handler = findMatchingLanguageImplementation(args);
   return handler || new TerraformLanguageHandler();
 };
 
@@ -103,7 +116,48 @@ export const mapLanguageIdToOrlLanguage = (args: {
       return ext === '.kts' ? 'kotlin' : 'groovy';
     case 'npm-package-json':
       return 'json';
+    case 'java':
+      return 'java';
+    case 'bicep':
+      return 'bicep';
+    case 'python':
+      return 'python';
     default:
       return null;
   }
 };
+
+/**
+ * True when language handlers recognize the file and it maps to an ORL CLI language.
+ * Used for workspace staging (copy/list) when content may be omitted (empty string).
+ */
+export function isOrlScannableLanguageFile(args: {
+  filePath: string;
+  content?: string;
+}): boolean {
+  const filePath = (args.filePath || '').trim();
+  if (!filePath) {
+    return false;
+  }
+  const content = args.content ?? '';
+  const languageId = detectLanguageId({ filePath, content });
+  if (!languageId) {
+    return false;
+  }
+  return mapLanguageIdToOrlLanguage({ languageId, filePath }) !== null;
+}
+
+/**
+ * Fix-preview context extractor kind for the matched language handler.
+ */
+export function getResourceContextExtractKind(
+  args: LanguageSelectionArgs,
+): ResourceContextExtractKind {
+  const handler = findMatchingLanguageImplementation(args);
+  if (!handler) {
+    return 'unknown';
+  }
+  return handler.getResourceContextExtractKind();
+}
+
+export type { ResourceContextExtractKind } from './types';

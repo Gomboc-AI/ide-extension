@@ -10,6 +10,7 @@ import {
   BlockRange,
   BuildDiagnosticContextArgs,
   DiagnosticContext,
+  ResourceContextExtractKind,
 } from '../../types';
 import { BaseLanguageHandler } from '../base';
 
@@ -26,7 +27,22 @@ export class CloudFormationJSONLanguageHandler extends BaseLanguageHandler {
       return false;
     }
 
-    return fileName !== 'package.json' && fileName !== 'package-lock.json';
+    if (fileName === 'package.json' || fileName === 'package-lock.json') {
+      return false;
+    }
+
+    // Avoid treating arbitrary JSON (e.g. tsconfig) as CloudFormation; align with ORL staging.
+    const baseName = path.basename(filePath, ext).toLowerCase();
+    return (
+      baseName.includes('template') ||
+      baseName.includes('cloudformation') ||
+      baseName.includes('cfn') ||
+      baseName.includes('stack')
+    );
+  }
+
+  override getResourceContextExtractKind(): ResourceContextExtractKind {
+    return 'json';
   }
 
   override formatBlockDisplayName(args: FormatBlockDisplayNameArgs): string {

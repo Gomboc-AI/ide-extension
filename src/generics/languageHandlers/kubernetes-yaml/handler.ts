@@ -8,6 +8,7 @@ import {
   GetDocumentInfoArgs,
   ListBlocksArgs,
   BlockRange,
+  ResourceContextExtractKind,
 } from '../../types';
 import { YamlBaseLanguageHandler } from '../yamlBase';
 
@@ -49,6 +50,10 @@ export class KubernetesYAMLLanguageHandler extends YamlBaseLanguageHandler {
         this.hasPatternAtLineStart(firstLines, 'apiVersion:')) ||
       isK8sDir
     );
+  }
+
+  override getResourceContextExtractKind(): ResourceContextExtractKind {
+    return 'yaml';
   }
 
   override formatBlockDisplayName(args: FormatBlockDisplayNameArgs): string {

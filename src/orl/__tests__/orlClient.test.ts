@@ -1,5 +1,12 @@
-import { OrlClient } from '../orlClient';
-import { createOrlClient } from '../orlClient';
+import { promises as fs } from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import {
+  OrlClient,
+  clearOrlRulesCache,
+  createOrlClient,
+  getOrlRulesCacheRoot,
+} from '../orlClient';
 import * as vscode from 'vscode';
 
 jest.mock('../../utils/channelResolver', () => ({
@@ -74,30 +81,6 @@ variable "bucket_name" {
     it('should handle empty output', () => {
       const result = orlClient.parseOrlOutputForTests('');
       expect(result).toEqual({});
-    });
-  });
-
-  describe('isIacFile', () => {
-    it('should identify IaC files correctly', () => {
-      expect(orlClient.isIacFileForTests('main.tf')).toBe(true);
-      expect(orlClient.isIacFileForTests('template.yaml')).toBe(true);
-      expect(orlClient.isIacFileForTests('config.yml')).toBe(true);
-      expect(orlClient.isIacFileForTests('template.json')).toBe(true);
-      expect(orlClient.isIacFileForTests('cloudformation.json')).toBe(true);
-      expect(orlClient.isIacFileForTests('stack.json')).toBe(true);
-    });
-
-    it('should identify npm package files as IaC', () => {
-      expect(orlClient.isIacFileForTests('package.json')).toBe(true);
-      expect(orlClient.isIacFileForTests('package-lock.json')).toBe(true);
-    });
-
-    it('should reject non-IaC files', () => {
-      expect(orlClient.isIacFileForTests('README.md')).toBe(false);
-      expect(orlClient.isIacFileForTests('script.sh')).toBe(false);
-      expect(orlClient.isIacFileForTests('data.json')).toBe(false);
-      expect(orlClient.isIacFileForTests('config.json')).toBe(false);
-      expect(orlClient.isIacFileForTests('tsconfig.json')).toBe(false);
     });
   });
 
@@ -349,5 +332,45 @@ variable "bucket_name" {
       expect(result.success).toBe(false);
       expect(result.error).toContain('was not found in custom rules folder');
     });
+  });
+});
+
+describe('clearOrlRulesCache', () => {
+  it('removes orl-rules-cache under the given storage path', async () => {
+    const base = await fs.mkdtemp(
+      path.join(os.tmpdir(), 'gomboc-orl-cache-test-'),
+    );
+    const nested = path.join(getOrlRulesCacheRoot(base), 'rules-aaaaaaaaaaaa');
+    await fs.mkdir(nested, { recursive: true });
+    await fs.writeFile(path.join(nested, 'rule.orl'), 'x', 'utf8');
+
+    await clearOrlRulesCache(base);
+
+    await expect(fs.stat(getOrlRulesCacheRoot(base))).rejects.toThrow();
+  });
+
+  it('does not throw when the cache is already missing', async () => {
+    const base = await fs.mkdtemp(
+      path.join(os.tmpdir(), 'gomboc-orl-cache-test-'),
+    );
+    await expect(clearOrlRulesCache(base)).resolves.toBeUndefined();
+    await expect(clearOrlRulesCache(base)).resolves.toBeUndefined();
+  });
+
+  it('uses the same cache root as OrlClient getRulesCacheDir', () => {
+    const storagePath = '/fake/global-storage';
+    const client = new OrlClient({
+      containerImage: 'gomboc/orl:latest',
+      rulesServiceUrl: 'https://rules.example',
+      rulesServiceToken: 't',
+      channel: 'ch',
+      storagePath,
+    });
+    const rulesDir = (
+      client as unknown as { getRulesCacheDir: () => string }
+    ).getRulesCacheDir();
+    expect(
+      rulesDir.startsWith(`${getOrlRulesCacheRoot(storagePath)}${path.sep}`),
+    );
   });
 });

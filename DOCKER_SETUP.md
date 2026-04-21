@@ -8,7 +8,7 @@ The ORL Docker image is now available publicly at [Docker Hub](https://hub.docke
 
 ```bash
 # Pull the official ORL Docker image
-docker pull gombocai/orl:v1.0.9-latest
+docker pull gombocai/orl:v1.3.0-latest
 
 # Verify the image
 docker images | grep gombocai/orl
@@ -18,13 +18,13 @@ docker images | grep gombocai/orl
 
 ```bash
 # Test basic functionality
-docker run --rm gombocai/orl:v1.0.9-latest --help
+docker run --rm gombocai/orl:v1.3.0-latest --help
 
 # Test remediation command
-docker run --rm gombocai/orl:v1.0.9-latest remediate --help
+docker run --rm gombocai/orl:v1.3.0-latest remediate --help
 
 # Test rules pull command
-docker run --rm gombocai/orl:v1.0.9-latest rules pull --help
+docker run --rm gombocai/orl:v1.3.0-latest rules pull --help
 ```
 
 ## Testing with Sample Files
@@ -45,7 +45,7 @@ EOF
 docker run --rm \
   -v $(pwd):/workspace \
   -e RULE_SERVICE_TOKEN="your-token" \
-  gombocai/orl:v1.0.9-latest remediate /workspace --dry-run
+  gombocai/orl:v1.3.0-latest remediate /workspace --dry-run
 ```
 
 ## Pulling Rules
@@ -58,7 +58,7 @@ mkdir rules
 docker run --rm \
   -v $(pwd)/rules:/output \
   -e RULE_SERVICE_TOKEN="your-token" \
-  gombocai/orl:v1.0.9-latest rules pull \
+  gombocai/orl:v1.3.0-latest rules pull \
   --url="https://rules.dev.gcp.gomboc.ai" \
   --out=/output \
   --channel="orl-test-channel"
@@ -76,7 +76,7 @@ ls -la rules/
 docker system prune -a
 
 # Pull specific version
-docker pull gombocai/orl:v1.0.9-latest
+docker pull gombocai/orl:v1.3.0-latest
 ```
 
 ### Permission Issues
@@ -86,14 +86,14 @@ docker pull gombocai/orl:v1.0.9-latest
 sudo chown -R $USER:$USER /path/to/workspace
 
 # Or run with user mapping
-docker run --rm -u $(id -u):$(id -g) -v $(pwd):/workspace gombocai/orl:v1.0.9-latest --help
+docker run --rm -u $(id -u):$(id -g) -v $(pwd):/workspace gombocai/orl:v1.3.0-latest --help
 ```
 
 ### Network Issues
 
 ```bash
 # Test network connectivity
-docker run --rm gombocai/orl:v1.0.9-latest ping -c 3 google.com
+docker run --rm gombocai/orl:v1.3.0-latest ping -c 3 google.com
 
 # Test rules service connectivity
 curl -H "Authorization: Bearer your-token" \
@@ -108,7 +108,7 @@ Create `docker-compose.yml` for easier management:
 version: '3.8'
 services:
   orl:
-    image: gombocai/orl:v1.0.9-latest
+    image: gombocai/orl:v1.3.0-latest
     volumes:
       - ./workspace:/workspace
       - ./rules:/rules
