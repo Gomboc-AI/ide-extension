@@ -5,12 +5,26 @@ import {
   ResourceContextExtractKind,
 } from './types';
 
+/** Human-readable label and 1-based inclusive line range for a preview slice. */
 export interface PreviewContextRange {
   title: string;
   startLine: number;
   endLine: number;
 }
 
+/**
+ * Builds bounded preview snippets for fix/scan UI from file text and diff hunks.
+ *
+ * Flow:
+ * 1. For each hunk, anchor on that hunk's `newStart` and
+ *    resolve a context range via `args.resolveContextRange` or {@link extractSingleContext}.
+ * 2. Merge hunks that share the same range key (`startLine:endLine:title`) and collect
+ *    fingerprints on {@link PreviewResourceContext.relatedHunkFingerprints}.
+ * 3. Sort by `startLine`, keep at most `maxContexts` (clamped), slice text, and truncate
+ *    vertically when a range exceeds `maxLinesPerContext`.
+ *
+ * Line numbers in the returned contexts are 1-based and inclusive.
+ */
 export function buildPreviewResourceContexts(
   args: BuildPreviewResourceContextsArgs & {
     kind: ResourceContextExtractKind;
@@ -21,8 +35,16 @@ export function buildPreviewResourceContexts(
     }) => PreviewContextRange | undefined;
   },
 ): PreviewResourceContext[] {
-  const maxContexts = clampInt(args.maxContexts ?? 6, 1, 25);
-  const maxLines = clampInt(args.maxLinesPerContext ?? 700, 50, 5000);
+  const maxContexts = clampInt({
+    value: args.maxContexts ?? 6,
+    min: 1,
+    max: 25,
+  });
+  const maxLines = clampInt({
+    value: args.maxLinesPerContext ?? 700,
+    min: 50,
+    max: 5000,
+  });
   const text = args.content ?? '';
   const lines = text.split('\n');
   const hunks = Array.isArray(args.hunks) ? args.hunks : [];
@@ -65,16 +87,31 @@ export function buildPreviewResourceContexts(
     .sort((a, b) => a.startLine - b.startLine)
     .slice(0, maxContexts)
     .map(ctx => {
-      const startIdx = clampInt(ctx.startLine, 1, lines.length) - 1;
-      const endIdx = clampInt(ctx.endLine, 1, lines.length) - 1;
+      const startIdx =
+        clampInt({
+          value: ctx.startLine,
+          min: 1,
+          max: lines.length,
+        }) - 1;
+      const endIdx =
+        clampInt({
+          value: ctx.endLine,
+          min: 1,
+          max: lines.length,
+        }) - 1;
       const full = lines.slice(startIdx, endIdx + 1);
-      const { snippet, truncated } = truncateLines(full, maxLines);
+      const { snippet, truncated } = truncateLines({
+        lines: full,
+        maxLines,
+      });
       return {
         id: hashId({
-          filePath: args.filePath,
-          startLine: ctx.startLine,
-          endLine: ctx.endLine,
-          title: ctx.title,
+          value: {
+            filePath: args.filePath,
+            startLine: ctx.startLine,
+            endLine: ctx.endLine,
+            title: ctx.title,
+          },
         }),
         title: ctx.title,
         startLine: ctx.startLine,
@@ -86,6 +123,11 @@ export function buildPreviewResourceContexts(
     });
 }
 
+/**
+ * Dispatches to a language-specific range extractor, or a generic line window fallback.
+ *
+ * `args.line` is clamped to `[1, lines.length]` before extraction.
+ */
 function extractSingleContext(args: {
   kind: ResourceContextExtractKind;
   lines: string[];
@@ -94,31 +136,46 @@ function extractSingleContext(args: {
   if (!args.lines.length) {
     return undefined;
   }
-  const line = clampInt(args.line, 1, args.lines.length);
+  const line = clampInt({
+    value: args.line,
+    min: 1,
+    max: args.lines.length,
+  });
   if (args.kind === 'terraform') {
-    return extractTerraformBlock(args.lines, line);
+    return extractTerraformBlock({ lines: args.lines, line });
   }
   if (args.kind === 'yaml') {
-    return extractYamlDocument(args.lines, line);
+    return extractYamlDocument({ lines: args.lines, line });
   }
   if (args.kind === 'dockerfile') {
-    return extractDockerStage(args.lines, line);
+    return extractDockerStage({ lines: args.lines, line });
   }
   if (args.kind === 'json') {
-    return extractJsonContainer(args.lines, line);
+    return extractJsonContainer({ lines: args.lines, line });
   }
-  return extractFallbackWindow(args.lines, line);
+  return extractFallbackWindow({ lines: args.lines, line });
 }
 
-function extractTerraformBlock(
-  lines: string[],
-  line: number,
-): PreviewContextRange | undefined {
-  const startIdx = findTerraformBlockStart(lines, line - 1);
+/**
+ * Finds the enclosing Terraform block (resource/module/data/…) around `line`.
+ *
+ * Walks upward for a block header line matching HCL top-level constructs, then scans
+ * forward with {@link findBraceBalancedEnd} so nested `{` inside strings does not break
+ * the closing brace. If no header is found, falls back to {@link extractFallbackWindow}.
+ */
+function extractTerraformBlock(args: {
+  lines: string[];
+  line: number;
+}): PreviewContextRange | undefined {
+  const { lines, line } = args;
+  const startIdx = findTerraformBlockStart({
+    lines,
+    fromIdx: line - 1,
+  });
   if (startIdx === undefined) {
-    return extractFallbackWindow(lines, line);
+    return extractFallbackWindow({ lines, line });
   }
-  const endIdx = findBraceBalancedEnd(lines, startIdx);
+  const endIdx = findBraceBalancedEnd({ lines, startIdx });
   const header = lines[startIdx].trim();
   return {
     title: header.length > 140 ? `${header.slice(0, 140)}…` : header,
@@ -127,13 +184,28 @@ function extractTerraformBlock(
   };
 }
 
-function findTerraformBlockStart(
-  lines: string[],
-  fromIdx: number,
-): number | undefined {
+/**
+ * Returns the 0-based index of the nearest Terraform block header at or above `fromIdx`.
+ *
+ * Skips empty lines and `#` / `//` comments. The header regex requires an opening `{` on
+ * the same line (possibly followed only by an end-of-line `#` comment).
+ */
+function findTerraformBlockStart(args: {
+  lines: string[];
+  fromIdx: number;
+}): number | undefined {
+  const { lines, fromIdx } = args;
   const re =
     /^\s*(resource|module|data|provider|locals|variable|output)\b[\s\S]*\{\s*(#.*)?$/;
-  for (let i = clampInt(fromIdx, 0, lines.length - 1); i >= 0; i--) {
+  for (
+    let i = clampInt({
+      value: fromIdx,
+      min: 0,
+      max: lines.length - 1,
+    });
+    i >= 0;
+    i--
+  ) {
     const s = lines[i];
     if (!s) {
       continue;
@@ -149,10 +221,22 @@ function findTerraformBlockStart(
   return undefined;
 }
 
-function findBraceBalancedEnd(lines: string[], startIdx: number): number {
+/**
+ * Finds the 0-based line index where cumulative `{` / `}` balance from `startIdx` first
+ * returns to non-positive after the opening line.
+ *
+ * Uses {@link countBracesOutsideStrings} per line so braces inside `'...'` or `"..."`
+ * (with basic escape handling) do not affect balance. If the block never closes, returns
+ * the last line index.
+ */
+function findBraceBalancedEnd(args: {
+  lines: string[];
+  startIdx: number;
+}): number {
+  const { lines, startIdx } = args;
   let balance = 0;
   for (let i = startIdx; i < lines.length; i++) {
-    balance += countBracesOutsideStrings(lines[i]);
+    balance += countBracesOutsideStrings({ line: lines[i] });
     if (i > startIdx && balance <= 0) {
       return i;
     }
@@ -160,7 +244,15 @@ function findBraceBalancedEnd(lines: string[], startIdx: number): number {
   return lines.length - 1;
 }
 
-function countBracesOutsideStrings(line: string): number {
+/**
+ * Net change in `{` / `}` count on `line` when ignoring braces inside quoted strings.
+ *
+ * Tracks single- and double-quoted spans (toggles on `'` / `"`), respects `\` escapes,
+ * and does not treat `{`/`}` inside a string as structural. This is a lightweight lexer,
+ * not a full HCL parser (e.g. heredocs and template strings are not modeled).
+ */
+function countBracesOutsideStrings(args: { line: string }): number {
+  const { line } = args;
   let delta = 0;
   let inSingle = false;
   let inDouble = false;
@@ -195,10 +287,18 @@ function countBracesOutsideStrings(line: string): number {
   return delta;
 }
 
-function extractYamlDocument(
-  lines: string[],
-  line: number,
-): PreviewContextRange | undefined {
+/**
+ * Treats `---` as a multi-document separator and returns the document containing `line`.
+ *
+ * Scans upward from `line` for a `---` line to mark the document start (default `0` if
+ * none). Scans forward from just after the anchor for the next `---` to cap the end
+ * (default last line). Document boundaries use trimmed line equality to `---`.
+ */
+function extractYamlDocument(args: {
+  lines: string[];
+  line: number;
+}): PreviewContextRange | undefined {
+  const { lines, line } = args;
   const idx = line - 1;
   let startIdx = 0;
   for (let i = idx; i >= 0; i--) {
@@ -214,11 +314,20 @@ function extractYamlDocument(
       break;
     }
   }
-  const title = deriveYamlTitle(lines.slice(startIdx, endIdx + 1));
+  const title = deriveYamlTitle({
+    docLines: lines.slice(startIdx, endIdx + 1),
+  });
   return { title, startLine: startIdx + 1, endLine: endIdx + 1 };
 }
 
-function deriveYamlTitle(docLines: string[]): string {
+/**
+ * Builds a short title from the first `kind:` and first `name:` keys in document order.
+ *
+ * Stops once both are found. `name:` is intentionally naive (first match may be nested
+ * metadata, not the resource name).
+ */
+function deriveYamlTitle(args: { docLines: string[] }): string {
+  const { docLines } = args;
   let kind = '';
   let name = '';
   for (const l of docLines) {
@@ -240,10 +349,17 @@ function deriveYamlTitle(docLines: string[]): string {
   return base ? `YAML document: ${base}` : 'YAML document';
 }
 
-function extractDockerStage(
-  lines: string[],
-  line: number,
-): PreviewContextRange | undefined {
+/**
+ * Returns the Dockerfile stage (lines between `FROM` directives) that contains `line`.
+ *
+ * The stage starts at the nearest `FROM` at or above the anchor and ends before the next
+ * `FROM`, or EOF. Matching is case-insensitive with optional leading whitespace.
+ */
+function extractDockerStage(args: {
+  lines: string[];
+  line: number;
+}): PreviewContextRange | undefined {
+  const { lines, line } = args;
   const idx = line - 1;
   let startIdx = 0;
   for (let i = idx; i >= 0; i--) {
@@ -267,17 +383,26 @@ function extractDockerStage(
   };
 }
 
-function extractJsonContainer(
-  lines: string[],
-  line: number,
-): PreviewContextRange | undefined {
+/**
+ * Best-effort JSON / JSONC-ish container around `line` for preview framing only.
+ *
+ * {@link findJsonStart} picks the nearest prior line containing `{` or `[`. {@link findJsonEnd}
+ * walks forward and decrements a shared balance for both `{}` and `[]` on every character
+ * in each line (not string-aware). If no opener is found, uses {@link extractFallbackWindow}.
+ * This can mis-ranges on strings or when `{`/`[` appear inside comments.
+ */
+function extractJsonContainer(args: {
+  lines: string[];
+  line: number;
+}): PreviewContextRange | undefined {
+  const { lines, line } = args;
   // Very best-effort: balance {} and [] around the line, but fall back if we can't find a clean container.
   const idx = line - 1;
-  const startIdx = findJsonStart(lines, idx);
+  const startIdx = findJsonStart({ lines, fromIdx: idx });
   if (startIdx === undefined) {
-    return extractFallbackWindow(lines, line);
+    return extractFallbackWindow({ lines, line });
   }
-  const endIdx = findJsonEnd(lines, startIdx);
+  const endIdx = findJsonEnd({ lines, startIdx });
   return {
     title: 'JSON container',
     startLine: startIdx + 1,
@@ -285,8 +410,21 @@ function extractJsonContainer(
   };
 }
 
-function findJsonStart(lines: string[], fromIdx: number): number | undefined {
-  for (let i = clampInt(fromIdx, 0, lines.length - 1); i >= 0; i--) {
+/** Walks upward from `fromIdx` and returns the first line index whose text matches `[{\[]`. */
+function findJsonStart(args: {
+  lines: string[];
+  fromIdx: number;
+}): number | undefined {
+  const { lines, fromIdx } = args;
+  for (
+    let i = clampInt({
+      value: fromIdx,
+      min: 0,
+      max: lines.length - 1,
+    });
+    i >= 0;
+    i--
+  ) {
     if (/[{\[]/.test(lines[i])) {
       return i;
     }
@@ -294,7 +432,14 @@ function findJsonStart(lines: string[], fromIdx: number): number | undefined {
   return undefined;
 }
 
-function findJsonEnd(lines: string[], startIdx: number): number {
+/**
+ * Forward scan from `startIdx` until combined `{`,`[`,`}`,`]` balance is non-positive.
+ *
+ * Unlike Terraform handling, this does not skip braces inside strings; see
+ * {@link extractJsonContainer}.
+ */
+function findJsonEnd(args: { lines: string[]; startIdx: number }): number {
+  const { lines, startIdx } = args;
   let balance = 0;
   for (let i = startIdx; i < lines.length; i++) {
     const s = lines[i];
@@ -312,10 +457,16 @@ function findJsonEnd(lines: string[], startIdx: number): number {
   return lines.length - 1;
 }
 
-function extractFallbackWindow(
-  lines: string[],
-  line: number,
-): PreviewContextRange {
+/**
+ * Symmetric fixed window (±220 lines) around `line` when no smarter extractor applies.
+ *
+ * `line` is treated as 1-based; indices are clamped to file bounds.
+ */
+function extractFallbackWindow(args: {
+  lines: string[];
+  line: number;
+}): PreviewContextRange {
+  const { lines, line } = args;
   const window = 220;
   const startIdx = Math.max(0, line - 1 - window);
   const endIdx = Math.min(lines.length - 1, line - 1 + window);
@@ -326,10 +477,16 @@ function extractFallbackWindow(
   };
 }
 
-function truncateLines(
-  lines: string[],
-  maxLines: number,
-): { snippet: string[]; truncated: boolean } {
+/**
+ * Returns the first `maxLines` lines plus a sentinel row when the input exceeds the cap.
+ *
+ * Used to keep preview payloads bounded without silently dropping the truncation signal.
+ */
+function truncateLines(args: { lines: string[]; maxLines: number }): {
+  snippet: string[];
+  truncated: boolean;
+} {
+  const { lines, maxLines } = args;
   if (lines.length <= maxLines) {
     return { snippet: lines, truncated: false };
   }
@@ -338,8 +495,9 @@ function truncateLines(
   return { snippet: head, truncated: true };
 }
 
-function hashId(obj: unknown): string {
-  const raw = JSON.stringify(obj);
+/** Stable short id from a JSON-serialized payload (SHA-1 hex prefix). */
+function hashId(args: { value: unknown }): string {
+  const raw = JSON.stringify(args.value);
   return crypto
     .createHash('sha1')
     .update(raw, 'utf8')
@@ -347,10 +505,15 @@ function hashId(obj: unknown): string {
     .slice(0, 10);
 }
 
-function clampInt(v: number, min: number, max: number): number {
-  const n = Math.floor(Number(v));
+/**
+ * Floors `value` to an integer and clamps to `[min, max]`.
+ *
+ * Non-finite inputs yield `min`.
+ */
+function clampInt(args: { value: number; min: number; max: number }): number {
+  const n = Math.floor(Number(args.value));
   if (!Number.isFinite(n)) {
-    return min;
+    return args.min;
   }
-  return Math.max(min, Math.min(max, n));
+  return Math.max(args.min, Math.min(args.max, n));
 }
