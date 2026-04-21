@@ -178,7 +178,6 @@ async function scanWithOrl(
       extensionPath: context.extensionPath,
       storagePath: context.globalStorageUri.fsPath,
     });
-    console.log('LANGUAGE - ', language)
     const result = await orlClient.remediate(workspacePath, language);
     prof.mark('orlClient.remediate', {
       success: result.success,
@@ -201,12 +200,6 @@ async function scanWithOrl(
     };
 
     logger.info('GOMBOC_ORL::REPORT META', baseLogFields);
-
-    // Print full report to the Extension Host Debug Console when running under a debugger.
-    // (Structured logger.info below may be quiet unless GOMBOC_LOG_LEVEL is set.)
-    console.log(
-      `[ORL report] ${rawOrlReport.length} chars\n${rawOrlReport}`,
-    );
 
     // Keep chunks reasonably small so they reliably show up in "Log (Extension Host)" / output.
     const chunkSize = 8_000;

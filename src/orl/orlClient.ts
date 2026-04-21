@@ -809,7 +809,6 @@ export class OrlClient {
         if (!customRulesOnlyEnabled) {
           try {
             cached = await this.ensureRulesCached();
-            console.log('CACHED - ', cached)
             mountedRulesDir = cached.rulesDir;
           } catch (pullError) {
             if (injectedDevRulesHostDir) {
@@ -838,7 +837,6 @@ export class OrlClient {
         //
         // NOTE: default off; gated by config.
         if (twoPassEnabled) {
-          console.log('two pass',)
           const tryTwoPass = async (): Promise<OrlResult | undefined> => {
             const discoveryDir = await this.createTempDir(
               path.join(os.tmpdir(), 'orl-discovery-'),
@@ -1112,7 +1110,6 @@ export class OrlClient {
 
         // Default single-pass flow:
         // Copy workspace files to temp directory
-        console.log('HERE ')
         await this.copyWorkspaceFiles(workspacePath, tempDir);
         prof.mark('copyWorkspaceFiles');
 
@@ -1121,7 +1118,6 @@ export class OrlClient {
         prof.mark('writeHooksToTempWorkspace');
 
         const rulesDir = path.join(tempDir, 'rules');
-        console.log('rulesDIr - ', rulesDir)
         await this.storageClient.mkdir({
           path: rulesDir,
           opts: { recursive: true },
@@ -1264,7 +1260,6 @@ export class OrlClient {
       }
     } catch (error) {
       logger.error('ORL remediation failed', { error });
-      console.log('error - ', error)
       return {
         success: false,
         modifiedFiles: {},
@@ -1531,7 +1526,6 @@ export class OrlClient {
 
     // Always write the report to a file so we can read/persist it reliably (stdout may be empty/truncated).
     dockerArgs.push('--out', '/workspace/.orl/report.yaml');
-    console.log('DOCKER ARGS - ', dockerArgs)
     return dockerArgs;
   }
 
