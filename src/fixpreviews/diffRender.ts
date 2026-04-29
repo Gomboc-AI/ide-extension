@@ -74,9 +74,11 @@ export function diffToHunks(
 }
 
 function splitLines(s: string): string[] {
+  if (!s) {
+    return [];
+  }
   // Preserve empty last line behavior.
-  const parts = (s ?? '').split('\n');
-  return parts;
+  return s.split('\n');
 }
 
 function buildHunks(lines: DiffLine[], contextLines: number): DiffHunk[] {
@@ -166,7 +168,7 @@ function lastDefined(
   return undefined;
 }
 
-function hashFingerprint(obj: any): string {
+function hashFingerprint(obj: unknown): string {
   const raw = JSON.stringify(obj);
   return crypto
     .createHash('sha1')
