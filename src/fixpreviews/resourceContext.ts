@@ -1,12 +1,12 @@
-import { buildLanguagePreviewResourceContexts } from '../generics/languagePreviewContextOrchestrator';
+import {
+  buildLanguagePreviewResourceContexts,
+  PreviewResourceContext,
+} from '@gomboc-ai/gomboc-node-sdk';
 import { DiffHunk } from './diffRender';
-import { PreviewResourceContext } from '../generics/types';
 
 export type ResourceContext = PreviewResourceContext;
 
-/**
- * Back-compat wrapper while fix preview call-sites migrate to generics orchestrators.
- */
+/** Back-compat wrapper around SDK language preview orchestrators. */
 export function extractResourceContexts(args: {
   filePath: string;
   text: string;

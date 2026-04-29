@@ -20,8 +20,8 @@ import { extractRenderableOrlRuleNames } from '../orl/orlRuleNameResolver';
 import {
   chooseLanguageImplementation,
   mapLanguageIdToOrlLanguage,
-} from '../generics/languageHandler';
-import type { ILanguageHandler } from '../generics/types';
+  ILanguage,
+} from '@gomboc-ai/gomboc-node-sdk';
 import logger from '../utils/logger';
 import { parseOrlReport } from '../utils/orlReportParser';
 import {
@@ -265,7 +265,8 @@ export class ScanResultsProvider {
     line1Based: number;
     content?: string;
     uniqueOffset?: number;
-    handler?: ILanguageHandler;
+    handler?: ILanguage;
+    anchorCharacter?: number;
   }): vscode.Range {
     const line = Math.max(1, Math.floor(args.line1Based || 1));
     const content = typeof args.content === 'string' ? args.content : '';
@@ -276,9 +277,17 @@ export class ScanResultsProvider {
         content,
         uniqueOffset: args.uniqueOffset,
       });
+      const anchorStart =
+        Number.isFinite(args.anchorCharacter) &&
+        (args.anchorCharacter || 0) >= 0
+          ? Math.floor(args.anchorCharacter || 0)
+          : result.startChar;
+      const startChar = Math.max(result.startChar, anchorStart);
+      // Large column so VS Code clamps to the line end (same idea as API-mode fixes).
+      const endChar = 999;
       return new vscode.Range(
-        new vscode.Position(line - 1, result.startChar),
-        new vscode.Position(line - 1, result.endChar),
+        new vscode.Position(line - 1, startChar),
+        new vscode.Position(line - 1, endChar),
       );
     }
 
@@ -302,10 +311,18 @@ export class ScanResultsProvider {
     const compactWidth = Math.max(1, Math.min(24, trimmedLength || 1));
     const maxEnd = Math.max(startChar + 1, lineLength || startChar + 1);
     const rawEnd = startChar + compactWidth + uniqueOffset;
-    const endChar = Math.min(maxEnd, Math.max(startChar + 1, rawEnd));
+    const anchorStart =
+      Number.isFinite(args.anchorCharacter) && (args.anchorCharacter || 0) >= 0
+        ? Math.floor(args.anchorCharacter || 0)
+        : startChar;
+    const anchoredStartChar = Math.min(
+      maxEnd - 1,
+      Math.max(startChar, anchorStart),
+    );
+    const endChar = Math.min(maxEnd, Math.max(anchoredStartChar + 1, rawEnd));
 
     return new vscode.Range(
-      new vscode.Position(line - 1, startChar),
+      new vscode.Position(line - 1, anchoredStartChar),
       new vscode.Position(line - 1, endChar),
     );
   }
@@ -341,35 +358,6 @@ export class ScanResultsProvider {
     return lines.map(line =>
       line.length > 0 ? `${indentation}${line}` : line,
     );
-  }
-
-  private resolveDiagnosticAnchorLine(args: {
-    filePath: string;
-    content?: string;
-    suggestedLine: number;
-    useLanguageAnchor?: boolean;
-    handler?: ILanguageHandler;
-  }): number {
-    const suggested =
-      Number.isFinite(args.suggestedLine) && args.suggestedLine > 0
-        ? Math.floor(args.suggestedLine)
-        : 1;
-    if (!args.content) {
-      return Math.max(1, suggested);
-    }
-
-    const handler =
-      args.handler ||
-      chooseLanguageImplementation({
-        filePath: args.filePath,
-        content: args.content,
-      });
-
-    return handler.resolveDiagnosticAnchorLine({
-      content: args.content,
-      suggestedLine: suggested,
-      fromFixOperation: args.useLanguageAnchor === false,
-    });
   }
 
   private pickOperationDiagnosticAnchor(
@@ -997,7 +985,7 @@ export class ScanResultsProvider {
   }
 
   // uses the scan response to generate a diagnostic for the diagnostic collection
-  createDiagnostic() {
+  public createDiagnostic() {
     this.diagnosticCollectionManager.getDiagnosticCollection().clear();
 
     const issues: OrlIssuesSnapshot['issues'] = [];
@@ -1045,12 +1033,10 @@ export class ScanResultsProvider {
       const uniqueLines = new Set<number>();
 
       // Resolve the language handler once per file for all diagnostic operations
-      const fileHandler = fileContent
-        ? chooseLanguageImplementation({
-            filePath: filepath,
-            content: fileContent,
-          })
-        : undefined;
+      const fileHandler = chooseLanguageImplementation({
+        filePath: filepath,
+        content: fileContent ?? '',
+      });
 
       const isOrl = (r: IndividualFixesRemediation): boolean =>
         typeof r?.rule?.id === 'string' && r.rule.id.startsWith('orl-rule:');
@@ -1071,7 +1057,12 @@ export class ScanResultsProvider {
         // ORL mode: show per-rule diagnostics (robust apply = rerun ORL with single rule).
         const ruleToMeta = new Map<
           string,
-          { ruleName: string; line: number; resourceHeader?: string }
+          {
+            ruleName: string;
+            line: number;
+            character: number;
+            resourceHeader?: string;
+          }
         >();
         for (const remediation of currentRemediation) {
           const rule = remediation.rule;
@@ -1086,13 +1077,12 @@ export class ScanResultsProvider {
           if (!Number.isFinite(line) || line <= 0) {
             line = 1;
           }
-          line = this.resolveDiagnosticAnchorLine({
-            filePath: filepath,
-            content: fileContent,
+          const resolvedAnchor = fileHandler.resolveDiagnosticAnchorLine({
+            content: fileContent ?? '',
             suggestedLine: line,
-            useLanguageAnchor: !operationAnchor.fromFixOperation,
-            handler: fileHandler,
+            fromFixOperation: operationAnchor.fromFixOperation,
           });
+          line = resolvedAnchor.line;
 
           const resourceHeader: string | undefined =
             typeof remediation?.codeObservation?.codeResourceInstance?.name ===
@@ -1107,6 +1097,7 @@ export class ScanResultsProvider {
               ruleToMeta.set(ruleLineKey, {
                 ruleName: rn,
                 line,
+                character: resolvedAnchor.character,
                 resourceHeader,
               });
             }
@@ -1125,6 +1116,7 @@ export class ScanResultsProvider {
             content: fileContent,
             uniqueOffset: orlIdx,
             handler: fileHandler,
+            anchorCharacter: meta.character,
           });
           const shortNameRaw = this.orlRuleShortNames?.[ruleName] || ruleName;
           const shortName = prettifyShortName(shortNameRaw);
@@ -1171,8 +1163,21 @@ export class ScanResultsProvider {
         // Keep "Apply all fixes" but only once (at the first diagnostic line).
         const firstLine =
           uniqueLines.size > 0 ? Math.min(...Array.from(uniqueLines)) : 1;
-        const startPosition = new vscode.Position(firstLine - 1, 0);
-        const endPosition = new vscode.Position(firstLine - 1, 999);
+        const lineIdx = firstLine - 1;
+        const contentLines = (fileContent ?? '').split('\n');
+        const firstLineText =
+          contentLines[
+            Math.min(Math.max(0, lineIdx), Math.max(0, contentLines.length - 1))
+          ] ?? '';
+        const firstNonWs = firstLineText.search(/\S/);
+        const gCol =
+          firstNonWs >= 0 ? firstNonWs : firstLineText.length > 0 ? 0 : 0;
+        const gEndCol =
+          firstLineText.length > 0
+            ? Math.min(gCol + 1, firstLineText.length)
+            : 1;
+        const startPosition = new vscode.Position(lineIdx, gCol);
+        const endPosition = new vscode.Position(lineIdx, gEndCol);
         const groupedDiagnostic = new GroupedFixGombocDiagnostic(
           new vscode.Range(startPosition, endPosition),
           'Apply all fixes',
@@ -1188,16 +1193,21 @@ export class ScanResultsProvider {
           const operationAnchor =
             this.pickOperationDiagnosticAnchor(remediation);
           let startLine = operationAnchor.line;
-          startLine = this.resolveDiagnosticAnchorLine({
-            filePath: filepath,
-            content: fileContent,
+          const startAnchor = fileHandler.resolveDiagnosticAnchorLine({
+            content: fileContent ?? '',
             suggestedLine: startLine,
-            useLanguageAnchor: !operationAnchor.fromFixOperation,
-            handler: fileHandler,
+            fromFixOperation: operationAnchor.fromFixOperation,
           });
-          const startPosition = new vscode.Position(startLine - 1, 0);
+          startLine = startAnchor.line;
+          const startPosition = new vscode.Position(
+            startLine - 1,
+            startAnchor.character,
+          );
           uniqueLines.add(startLine);
-          const endPosition = new vscode.Position(startLine - 1, 999);
+          const endPosition = new vscode.Position(
+            startLine - 1,
+            Math.max(startAnchor.character + 1, 999),
+          );
 
           diagnosticTotal++;
           curDiag.push({

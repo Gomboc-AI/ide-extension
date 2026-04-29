@@ -15,6 +15,40 @@ jest.mock('../../utils/integrationsService', () => ({
   },
 }));
 
+/**
+ * Without file content on disk, the real SDK anchor can collapse to line 1 and break
+ * line-keyed ORL dedupe and API anchor tests. Use a Proxy so prototype methods stay intact.
+ */
+jest.mock('@gomboc-ai/gomboc-node-sdk', () => {
+  const actual = jest.requireActual(
+    '@gomboc-ai/gomboc-node-sdk',
+  ) as typeof import('@gomboc-ai/gomboc-node-sdk');
+  return {
+    ...actual,
+    chooseLanguageImplementation: (args: {
+      filePath: string;
+      content: string;
+    }) => {
+      const handler = actual.chooseLanguageImplementation(args);
+      return new Proxy(handler, {
+        get(target, prop, receiver) {
+          if (prop === 'resolveDiagnosticAnchorLine') {
+            return (a: {
+              content: string;
+              suggestedLine: number;
+              fromFixOperation: boolean;
+            }) => ({
+              line: a.suggestedLine,
+              character: 0,
+            });
+          }
+          return Reflect.get(target, prop, receiver);
+        },
+      });
+    },
+  };
+});
+
 import { createOrlClient } from '../../orl/orlClient';
 
 type FakeDoc = {

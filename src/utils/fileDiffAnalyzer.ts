@@ -1,5 +1,5 @@
 import logger from './logger';
-import type { ILanguageHandler } from '../generics/types';
+import type { ILanguage } from '@gomboc-ai/gomboc-node-sdk';
 
 export interface Difference {
   originalLine: number;
@@ -54,7 +54,7 @@ export class FileDiffAnalyzer {
     modifiedLines: string[],
     originalIndex: number,
     modifiedIndex: number,
-    handler?: ILanguageHandler,
+    handler?: ILanguage,
   ): { originalIdx: number; modifiedIdx: number } {
     let bestMatch = { originalIdx: -1, modifiedIdx: -1 };
     let bestScore = Number.POSITIVE_INFINITY;
@@ -141,7 +141,7 @@ export class FileDiffAnalyzer {
   static findDifferences(
     originalContent: string,
     modifiedContent: string,
-    handler?: ILanguageHandler,
+    handler?: ILanguage,
   ): Difference[] {
     const originalNormalized = this.normalizeLineEndings(originalContent);
     const modifiedNormalized = this.normalizeLineEndings(modifiedContent);
@@ -242,7 +242,7 @@ export class FileDiffAnalyzer {
     originalLines: string[],
     modifiedLines: string[],
     baseLine: number,
-    handler?: ILanguageHandler,
+    handler?: ILanguage,
   ): Difference[] {
     const changes: Difference[] = [];
 

@@ -15,9 +15,11 @@ import {
 } from '../utils/configDefaults';
 import { createProfiler } from '../utils/profiler';
 import { ChannelResolver } from '../utils/channelResolver';
-import { IStorage } from '../generics/types';
-import { FileSystemHandler } from '../generics/fileSystemHandler';
-import { isOrlScannableLanguageFile } from '../generics/languageHandler';
+import {
+  IStorage,
+  FileSystemHandler,
+  isOrlScannableLanguageFile,
+} from '@gomboc-ai/gomboc-node-sdk';
 
 type SpawnResult = {
   stdout: string;
@@ -2282,7 +2284,7 @@ export class OrlClient {
 
       await this.storageClient
         .remove({ path: tempDir, opts: { recursive: true, force: true } })
-        .catch(err => {
+        .catch((err: unknown) => {
           logger.warn(
             'Failed to clean up single-rule temp directory; stale temp dir may remain',
             {

@@ -43,7 +43,13 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
     // If the current selection range exactly matches a diagnostic range (common when
     // invoked from the Problems panel), prefer only that diagnostic to avoid showing
     // multiple quick-fix actions for overlapping diagnostics on the same line.
-    const exactMatches = diagnostics.filter(d => d.range.isEqual(range));
+
+    // Never treat the grouped "Apply all" diagnostic as an exact-match anchor: its
+    // range is intentionally full-line (0..999) and overlaps ORL rule diagnostics, so
+    // Problems/lightbulb can pass that wide range and would otherwise hide per-rule fixes.
+    const exactMatches = diagnostics.filter(
+      d => !this._isGombocGroupedFixDiagnostic(d) && d.range.isEqual(range),
+    );
     const scoped = exactMatches.length > 0 ? exactMatches : diagnostics;
     // Always keep grouped apply-all diagnostics available, even when exact-match scoping
     // narrows to a single ORL diagnostic from the Problems panel.

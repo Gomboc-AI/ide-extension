@@ -240,7 +240,7 @@
     "typescript": "^5.7.3"
   },
   "dependencies": {
-    "@gomboc-ai/gomboc-node-sdk": "^1.0.2",
+    "@gomboc-ai/gomboc-node-sdk": "^2.0.2",
     "axios": "^1.12.2",
     "dotenv": "^16.4.7",
     "file-type": "^21.3.2",
