@@ -1,0 +1,154 @@
+type: Ruleset
+version: v1
+metadata:
+    name: gomboc-ai/ensure-dax-cluster-server-side-encryption-is-enabled
+    display_name: Ensure Dax Cluster server-side encryption is enabled
+    skip: false
+    priority: 1400300
+    description: |
+        ## Description
+
+        Ensures that AWS DAX clusters have server-side encryption enabled by setting the `enabled` attribute to `true` within the `server_side_encryption` block. This encrypts all cluster data at rest using AWS KMS, protecting sensitive cached data from unauthorized access. Encryption is transparent to applications with minimal performance impact.
+    annotations:
+        contributed-by: gomboc-ai
+        gomboc-ai/description-plain: Ensure that DAX clusters have server-side encryption enabled to protect cached data at rest using AWS-managed keys.
+        gomboc-ai/example: |
+            ```diff
+            resource "aws_dax_cluster" "example" {
+              # ...
+              server_side_encryption {
+            -   enabled = false
+            +   enabled = true
+              }
+              # ...
+            }
+
+            # Or when the block is missing:
+            resource "aws_dax_cluster" "example" {
+              # ...
+            + server_side_encryption {
+            +   enabled = true
+            + }
+              # ...
+            }
+
+            # Or when the attribute is missing:
+            resource "aws_dax_cluster" "example" {
+              # ...
+              server_side_encryption {
+            +   enabled = true
+              }
+              # ...
+            }
+            ```
+        gomboc-ai/impact/score: high
+        gomboc-ai/impact/statement: |
+            ## Impact
+
+            **Data Protection & Compliance**
+            Enabling server-side encryption provides critical security and compliance benefits:
+
+            * **Data Protection:** Encrypts all cluster data at rest using AWS KMS, protecting sensitive cached data from unauthorized access even if storage media is compromised.
+            * **Compliance:** Meets CIS AWS Foundations Benchmark 3.11 requirements for encrypting sensitive data at rest, supporting regulatory compliance and security best practices.
+            * **Transparent Operation:** Encryption is transparent to applications with minimal performance impact, using AWS-managed encryption keys that require no key management overhead.
+            * **Security Posture:** Essential for protecting sensitive cached data, database query results, and application data stored in DAX clusters.
+
+            This is a critical security control that should be enabled on all DAX clusters containing sensitive data.
+        gomboc-ai/impact/statement-plain: Enabling server-side encryption protects DAX cluster data at rest using AWS-managed keys, ensuring compliance with CIS AWS Foundations Benchmark requirements and protecting sensitive cached data from unauthorized access. Encryption is transparent to applications and provides essential data protection for all cluster data.
+        gomboc-ai/known_universe/date: "2025-11-24T00:00:00Z"
+        gomboc-ai/known_universe/id: "21"
+        gomboc-ai/known_universe/name: Ensure Dax Cluster server-side encryption is enabled
+        gomboc-ai/provider: AWS
+        gomboc-ai/public-rule-bodies: "true"
+        gomboc-ai/resource: aws_dax_cluster
+        gomboc-ai/reviewer/date: "2026-01-26T00:00:00Z"
+        gomboc-ai/reviewer/name: Zach Talarick
+        gomboc-ai/reviewer/status: valid
+        gomboc-ai/risk/score: low
+        gomboc-ai/risk/statement: |
+            ## Risk
+
+            **Existing Data Encryption Limitation**
+            Enabling server-side encryption introduces minimal operational risks:
+
+            * **Existing Data:** Enabling encryption on existing clusters only encrypts new data written after the change; existing unencrypted data remains unencrypted until it is rewritten or updated.
+            * **No Downtime:** The change can be applied in-place without cluster recreation or service interruption, making it a low-risk configuration change.
+            * **Transparent Operation:** Encryption is transparent to applications with minimal performance impact, using AWS-managed encryption keys.
+
+            While existing data remains unencrypted until rewritten, the operational risk is minimal for new and updated data.
+        gomboc-ai/risk/statement-plain: Enabling server-side encryption on DAX clusters can be applied in-place without downtime or cluster recreation. The change is transparent to applications and has minimal performance impact. However, enabling encryption on existing clusters only encrypts new data; existing unencrypted data remains unencrypted until rewritten.
+        gomboc-ai/source: known_universe_deterministic_generation
+        gomboc-ai/visibility: public
+        use-case-1: git@github.com:Gomboc-AI/orl-rules.git;main;/rules/terraform/aws/aws_dax_cluster/gomboc-ai/ensure-dax-cluster-server-side-encryption-is-enabled
+    classifications:
+        - gomboc-ai/cis/controls_8-1-2/3_data_protection/3-11_encrypt_sensitive_data_at_rest
+        - gomboc-ai/policy/encryption/encryption_at_rest/encryption_at_rest_with_provider_managed_key
+spec:
+    template:
+        language: terraform
+        audit_language: ast
+        variables: []
+        collect: []
+        audit: ""
+        remediation: []
+    rules:
+        - name: ensure-that-enabled-is-true-when-it-is-explicitly-wrong
+          language: null
+          variables: null
+          audit: |
+            {{ aResource("aws_dax_cluster", aBlock("server_side_encryption", anAttributeValueNotEq("enabled", "true"))) }}
+          remediation:
+            - command: replace
+              path: value
+              skip: ""
+              value: "true"
+              flags: {}
+          collect: null
+        - name: ensure-that-enabled-is-true-when-the-block-is-missing
+          language: null
+          variables: null
+          audit: |
+            {{ aResource("aws_dax_cluster", aMissingBlock("server_side_encryption")) }}
+          remediation:
+            - command: insert_after
+              path: body
+              skip: ""
+              value: |
+                server_side_encryption {
+                  enabled = true
+                }
+              flags:
+                indent: '  '
+                prefix: |4+
+          collect: null
+        - name: ensure-that-enabled-is-true-when-the-attribute-is-missing
+          language: null
+          variables: null
+          audit: |
+            {{ aResource("aws_dax_cluster", aBlock("server_side_encryption", aMissingAttribute("enabled"))) }}
+          remediation:
+            - command: insert_after
+              path: block_body
+              skip: ""
+              value: |
+                enabled = true
+              flags:
+                indent: '    '
+                prefix: |4+
+          collect: null
+        - name: ensure-that-enabled-is-true-when-the-block-is-empty
+          language: null
+          variables: null
+          audit: |
+            {{ aResource("aws_dax_cluster", anEmptyBlock("server_side_encryption")) }}
+          remediation:
+            - command: insert_before
+              path: block_end
+              skip: ""
+              value: |
+                enabled = true
+              flags:
+                indent: '    '
+                prefix: |4+
+                suffix: '  '
+          collect: null

@@ -1,0 +1,35 @@
+type: Ruleset
+version: v1
+metadata:
+    name: gomboc-ai/ensure-the-base-image-uses-a-non-latest-version-tag
+    display_name: Prevent latest tag in Docker base images
+    skip: false
+spec:
+    template:
+        language: docker
+        audit_language: ast
+        variables: []
+        collect:
+            - name: image_aliases
+              audit: |
+                (from_instruction as: (image_alias) @alias)
+        audit: ""
+        remediation: []
+    rules:
+        - name: specify_latest
+          language: null
+          variables: null
+          audit: |-
+            (from_instruction
+              (image_spec name: (image_name) @name tag: (image_tag) @tag
+                (#eq? @tag ":latest")
+              ) @spec
+            ) @from
+          remediation:
+            - command: replace
+              path: tag
+              skip: ""
+              value: :USER_INPUT
+              flags:
+                indent: ""
+          collect: null

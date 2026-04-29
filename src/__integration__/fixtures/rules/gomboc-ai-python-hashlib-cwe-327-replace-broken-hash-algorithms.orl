@@ -1,0 +1,35 @@
+type: Ruleset
+version: v1
+metadata:
+    name: gomboc-ai/python/hashlib/cwe-327-replace-broken-hash-algorithms
+    display_name: Replace Broken Hash Algorithms for Python hashlib
+    skip: false
+spec:
+    template:
+        language: python
+        audit_language: ast
+        variables: []
+        collect: []
+        audit: ""
+        remediation: []
+    rules:
+        - name: replace-hashlib-md5-sha1-direct-call
+          language: null
+          variables: null
+          audit: |
+            (call
+              function: (attribute
+                object: (identifier) @_hashlib
+                (#eq? @_hashlib "hashlib")
+                attribute: (identifier) @method
+                (#match? @method "^(md5|sha1)$"))
+              arguments: (argument_list) @body)
+          skip_finding: |
+            hasSubString(finding.body, "usedforsecurity")
+          remediation:
+            - command: replace
+              path: method
+              skip: ""
+              value: sha256
+              flags: {}
+          collect: null

@@ -1,0 +1,209 @@
+type: Ruleset
+version: v1
+metadata:
+    name: gomboc-ai/bicep/azure/Microsoft.Sql/securityAlertPolicies/ckv-azure-25-sql-threat-detection-types
+    display_name: Enable All Threat Detection Types for Azure SQL Bicep
+    skip: false
+    priority: 1250000
+    description: |
+        ## Description
+
+        Ensures that all threat detection alert types are enabled on Azure SQL Server security
+        alert policies defined in Bicep templates.
+
+        The `disabledAlerts` property on `securityAlertPolicies` resources is an array of threat
+        category strings that are suppressed. When this array is non-empty, the corresponding
+        alert types are silenced. This rule detects any non-empty `disabledAlerts` array and
+        replaces it with `[]`, re-enabling all detection types.
+
+        Both resource declaration patterns are covered:
+        1. `Microsoft.Sql/servers/databases/securityAlertPolicies` — database-level policy.
+        2. `Microsoft.Sql/servers/securityAlertPolicies` — server-level policy.
+        3. Inline child resource `securityAlertPolicies@<version>` nested inside a parent
+           `databases` resource block (Bicep parent/child inline syntax).
+
+        ## Known Limitations
+
+        - `disabledAlerts` specified as a parameter or variable reference (e.g.,
+          `disabledAlerts: alertsParam`) is not matched — only literal arrays are captured.
+        - The absent `disabledAlerts` property is treated as compliant (all alerts active by
+          platform default).
+
+        ## SCOPE_NOTE vs CKV_AZURE_25 (Checkov)
+
+        Checkov CKV_AZURE_25 targets the Terraform runner
+        (`azurerm_mssql_server_security_alert_policy.disabled_alerts`). For Bicep, Checkov
+        processes templates via ARM JSON compilation or a dedicated Bicep runner. This ORL rule
+        directly targets the Bicep AST and covers both database-level and server-level resource
+        types, plus inline child syntax.
+
+        Absent `disabledAlerts` is treated as **compliant** by this rule, consistent with the
+        Azure platform default (all alerts enabled when the property is omitted). Checkov's exact
+        behavior for absent `disabledAlerts` in Bicep is unconfirmed; scanner counts may differ.
+    annotations:
+        contributed-by: gomboc-ai
+        gomboc-ai/checkov/id: CKV_AZURE_25
+        gomboc-ai/checkov/name: Ensure that 'Threat Detection types' is set to 'All'
+        gomboc-ai/configoption/capability/title: Enable All Threat Detection Types on Azure SQL Server (Bicep)
+        gomboc-ai/description-plain: Ensures that all threat detection alert types are enabled on Azure SQL Server security alert policies by setting disabledAlerts to an empty array in Bicep templates.
+        gomboc-ai/example: |-
+            ```diff
+            resource securityAlertPolicy 'Microsoft.Sql/servers/databases/securityAlertPolicies@2021-11-01' = {
+              name: '${sqlDatabase.name}/default'
+              properties: {
+                state: 'Enabled'
+            -   disabledAlerts: ['Sql_Injection', 'Data_Exfiltration']
+            +   disabledAlerts: []
+              }
+            }
+            ```
+        gomboc-ai/future-improvements: Add support for detecting disabledAlerts set to [''] (single empty-string element), which some Checkov implementations treat as equivalent to disabling no alerts. Consider adding an audit-only variant that flags parameter-referenced disabledAlerts values for manual review.
+        gomboc-ai/impact/score: low
+        gomboc-ai/impact/statement: |
+            ## Impact
+
+            Sets `disabledAlerts` to `[]` on `Microsoft.Sql/servers/databases/securityAlertPolicies`
+            and `Microsoft.Sql/servers/securityAlertPolicies` resources.
+            * **Alert notifications** for previously suppressed threat categories will resume upon next deployment.
+            * **No data loss** or schema changes occur; this only affects the Advanced Threat Protection notification configuration.
+            * Enabling additional alert types may surface new alerts for previously undetected issues.
+        gomboc-ai/impact/statement-plain: Sets disabledAlerts to [] on Microsoft.Sql/servers/databases/securityAlertPolicies and Microsoft.Sql/servers/securityAlertPolicies resources. This re-enables any previously suppressed alert types, causing alerts and notifications to be generated for those threat categories.
+        gomboc-ai/limitations/application: This rule only applies when disabledAlerts is set to a literal non-empty array. If disabledAlerts is omitted entirely, the resource is considered compliant (Azure defaults to all alerts enabled). If disabledAlerts is set via a Bicep parameter or variable reference, the rule cannot statically resolve the value and will not match.
+        gomboc-ai/limitations/implementation: 'Bicep parameter and variable references for disabledAlerts (e.g., disabledAlerts: alertsParam) cannot be statically resolved by ORL. Expression-valued disabledAlerts properties are out of scope. The rule relies on tree-sitter AST matching of literal array nodes only.'
+        gomboc-ai/provider: Azure
+        gomboc-ai/public-rule-bodies: "true"
+        gomboc-ai/resource: Microsoft.Sql/servers/securityAlertPolicies
+        gomboc-ai/reviewer/date: "2026-04-06"
+        gomboc-ai/reviewer/name: matt.sweeney@gomboc.ai
+        gomboc-ai/reviewer/status: valid
+        gomboc-ai/risk/score: low
+        gomboc-ai/risk/statement: |
+            ## Risk
+
+            Setting `disabledAlerts` to `[]` is a **non-destructive** template change.
+            * Existing SQL databases and server configurations are not altered — only the Advanced Threat Protection alert suppression list is cleared.
+            * Alert volume may increase as previously suppressed threat categories begin generating findings.
+            * No downtime, resource recreation, or data migration is required.
+        gomboc-ai/risk/statement-plain: Setting disabledAlerts to an empty array is a non-destructive change. It restores full threat monitoring by re-enabling all alert types. No SQL data or schema is affected.
+        gomboc-ai/severity/score: medium
+        gomboc-ai/severity/statement: |
+            ## Severity
+
+            Partially disabling threat detection creates monitoring blind spots on Azure SQL:
+            * **SQL Injection** suppression allows injection attacks to proceed silently without alerts.
+            * **Data Exfiltration** suppression hides unauthorized bulk data extraction activity.
+            * **Access Anomaly** suppression conceals unusual login patterns indicative of credential compromise.
+            * **Compliance**: Violates CKV_AZURE_25 (Prisma Cloud bc-azr-general-6) and reduces Azure Defender for SQL coverage.
+
+            Remediation should occur promptly for any internet-facing SQL Server.
+        gomboc-ai/severity/statement-plain: Disabling threat detection types creates monitoring blind spots that allow SQL injection attacks, data exfiltration, and other threats to go undetected. This violates CKV_AZURE_25 / Prisma Cloud bc-azr-general-6.
+        gomboc-ai/visibility: public
+        use-case-1: git@github.com:Gomboc-AI/orl-rules.git;main;/workspace/use-case-ff812b1d-202603152005/bicep/outputs/ckv-azure-25-sql-threat-detection-types-bicep
+    classifications:
+        - gomboc-ai/policy/surface_area/auditing_and_monitoring/security_logs
+        - gomboc-ai/prismacloud/CKV_AZURE_25
+spec:
+    template:
+        language: bicep
+        audit_language: ast
+        variables: []
+        collect: []
+        audit: ""
+        remediation: []
+    rules:
+        - name: database-level-non-empty-disabled-alerts
+          language: null
+          variables: null
+          audit: |
+            (resource_declaration
+              (string
+                (string_content) @_type (#match? @_type "^Microsoft\\.Sql/servers/databases/securityAlertPolicies@")
+              )
+              (object
+                (object_property
+                  (identifier) @_props_key (#eq? @_props_key "properties")
+                  (object
+                    (object_property
+                      (identifier) @_da_key (#eq? @_da_key "disabledAlerts")
+                      (array
+                        .
+                        (string
+                          (string_content) @_first_item
+                        )
+                      ) @da_value
+                    )
+                  )
+                )
+              )
+            )
+          remediation:
+            - command: replace
+              path: da_value
+              skip: ""
+              value: '[]'
+              flags: {}
+          collect: null
+        - name: server-level-non-empty-disabled-alerts
+          language: null
+          variables: null
+          audit: |
+            (resource_declaration
+              (string
+                (string_content) @_type (#match? @_type "^Microsoft\\.Sql/servers/securityAlertPolicies@")
+              )
+              (object
+                (object_property
+                  (identifier) @_props_key (#eq? @_props_key "properties")
+                  (object
+                    (object_property
+                      (identifier) @_da_key (#eq? @_da_key "disabledAlerts")
+                      (array
+                        .
+                        (string
+                          (string_content) @_first_item
+                        )
+                      ) @da_value
+                    )
+                  )
+                )
+              )
+            )
+          remediation:
+            - command: replace
+              path: da_value
+              skip: ""
+              value: '[]'
+              flags: {}
+          collect: null
+        - name: inline-child-non-empty-disabled-alerts
+          language: null
+          variables: null
+          audit: |
+            (resource_declaration
+              (string
+                (string_content) @_type (#match? @_type "^securityAlertPolicies@")
+              )
+              (object
+                (object_property
+                  (identifier) @_props_key (#eq? @_props_key "properties")
+                  (object
+                    (object_property
+                      (identifier) @_da_key (#eq? @_da_key "disabledAlerts")
+                      (array
+                        .
+                        (string
+                          (string_content) @_first_item
+                        )
+                      ) @da_value
+                    )
+                  )
+                )
+              )
+            )
+          remediation:
+            - command: replace
+              path: da_value
+              skip: ""
+              value: '[]'
+              flags: {}
+          collect: null

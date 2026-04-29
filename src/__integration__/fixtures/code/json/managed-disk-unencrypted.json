@@ -1,0 +1,11 @@
+{
+  "resources": [
+    {
+      "type": "Microsoft.Compute/disks",
+      "name": "disk1",
+      "properties": {
+        "diskSizeGB": 128
+      }
+    }
+  ]
+}

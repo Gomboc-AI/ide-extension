@@ -18,5 +18,11 @@
     // "noFallthroughCasesInSwitch": true, /* Report errors for fallthrough cases in switch statement. */
     // "noUnusedParameters": true,  /* Report errors on unused parameters. */
   },
-  "exclude": ["/node_modules", "dist", "**/*.test.ts", "./tests/**/*"]
+  "exclude": [
+    "/node_modules",
+    "dist",
+    "**/*.test.ts",
+    "./tests/**/*",
+    "jest.integration.config.ts"
+  ]
 }

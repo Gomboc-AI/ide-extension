@@ -1,0 +1,80 @@
+type: Ruleset
+version: v1
+metadata:
+    name: gomboc-ai/java/log4shell_upgrade_log4j_gradle_kotlin
+    display_name: 'Log4Shell: Upgrade log4j dependencies (Gradle Kotlin DSL)'
+    skip: false
+spec:
+    template:
+        language: kotlin
+        audit_language: ast
+        variables: []
+        collect: []
+        audit: ""
+        remediation: []
+    rules:
+        - name: log4shell_upgrade_log4j_core_kotlin
+          language: null
+          variables: null
+          audit: |
+            (source_file
+              (call_expression
+                (call_suffix
+                  (annotated_lambda
+                    (lambda_literal
+                      (statements
+                        (call_expression
+                          (call_suffix
+                            (value_arguments
+                              (value_argument
+                                (string_literal
+                                  (string_content) @dep
+                                ))))))))))
+              (#match? @dep "org\\.apache\\.logging\\.log4j:log4j-(core|api):")
+            ) @doc
+          skip_finding: |
+            let ver = split(finding.dep, ":")[2];
+            let isJava7 = hasSubString(finding.doc, "JavaVersion.VERSION_1_7");
+            let isJava6 = hasSubString(finding.doc, "JavaVersion.VERSION_1_6");
+            hasSubString(finding.dep, "$") ||
+            (isJava6 && semVerCmp(ver, ">=", "2.3.2")) ||
+            (isJava7 && semVerCmp(ver, ">=", "2.12.4")) ||
+            (!isJava6 && !isJava7 && semVerCmp(ver, ">=", "2.17.1"))
+          remediation:
+            - command: replace
+              path: dep
+              skip: |
+                !hasSubString(finding.dep, "log4j-core") || hasSubString(finding.doc, "JavaVersion.VERSION_1_7") || hasSubString(finding.doc, "JavaVersion.VERSION_1_6")
+              value: org.apache.logging.log4j:log4j-core:2.17.1
+              flags: {}
+            - command: replace
+              path: dep
+              skip: |
+                !hasSubString(finding.dep, "log4j-api") || hasSubString(finding.doc, "JavaVersion.VERSION_1_7") || hasSubString(finding.doc, "JavaVersion.VERSION_1_6")
+              value: org.apache.logging.log4j:log4j-api:2.17.1
+              flags: {}
+            - command: replace
+              path: dep
+              skip: |
+                !hasSubString(finding.dep, "log4j-core") || !hasSubString(finding.doc, "JavaVersion.VERSION_1_7")
+              value: org.apache.logging.log4j:log4j-core:2.12.4
+              flags: {}
+            - command: replace
+              path: dep
+              skip: |
+                !hasSubString(finding.dep, "log4j-api") || !hasSubString(finding.doc, "JavaVersion.VERSION_1_7")
+              value: org.apache.logging.log4j:log4j-api:2.12.4
+              flags: {}
+            - command: replace
+              path: dep
+              skip: |
+                !hasSubString(finding.dep, "log4j-core") || !hasSubString(finding.doc, "JavaVersion.VERSION_1_6")
+              value: org.apache.logging.log4j:log4j-core:2.3.2
+              flags: {}
+            - command: replace
+              path: dep
+              skip: |
+                !hasSubString(finding.dep, "log4j-api") || !hasSubString(finding.doc, "JavaVersion.VERSION_1_6")
+              value: org.apache.logging.log4j:log4j-api:2.3.2
+              flags: {}
+          collect: null

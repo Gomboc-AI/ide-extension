@@ -1,0 +1,47 @@
+type: Ruleset
+version: v1
+metadata:
+    name: gomboc-ai/ckv-azure-2/ensure-azure-managed-disks-are-encrypted
+    display_name: Ensure Azure Managed Disks Are Encrypted
+    skip: false
+spec:
+    template:
+        language: json
+        audit_language: ast
+        variables: []
+        collect: []
+        audit: ""
+        remediation: []
+    rules:
+        - name: Missing encryption block in non-empty properties
+          language: null
+          variables: null
+          audit: |
+            (object
+              (pair
+                key: (string (string_content) @_type_key)
+                value: (string (string_content) @_type_value)
+              )
+              (pair
+                key: (string (string_content) @_props_key)
+                value: (object
+                  (pair)
+                  (r_brace) @props_close
+                ) @properties
+              )
+              (#eq? @_type_key "type")
+              (#eq? @_type_value "Microsoft.Compute/disks")
+              (#eq? @_props_key "properties")
+              (#not-match? @properties "\"encryption")
+            )
+          remediation:
+            - command: insert_before
+              path: props_close
+              skip: ""
+              value: |-
+                ,
+                        "encryption": {
+                          "type": "EncryptionAtRestWithPlatformKey"
+                        }
+              flags: {}
+          collect: null

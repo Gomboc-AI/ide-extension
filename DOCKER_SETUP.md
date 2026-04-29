@@ -57,11 +57,11 @@ mkdir rules
 # Pull rules from service
 docker run --rm \
   -v $(pwd)/rules:/output \
-  -e RULE_SERVICE_TOKEN="your-token" \
+  -e RULE_SERVICE_TOKEN="eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjNiMTg1OGFkIn0.eyJzdWIiOiI2NDVjYThhNC0xNmQ5LTQ3MzktYmRiZS00ZjA0NjM3ZDMwMGMiLCJ0eXBlIjoidXNlckFjY2Vzc1Rva2VuIiwidGVuYW50SWQiOiJjNjUwMWM1Yy00ZGIzLTQxMWMtOTE2OC1kZjMxYTQ1NTA1NWQiLCJ1c2VySWQiOiJlMGI5ZWYxYi05NGQ5LTQwMzUtODYyZi0yMjE5MGRhMWU4NDgiLCJhcHBsaWNhdGlvbklkIjoiMjMzZjIxOWMtZjhkMC00MDI4LTliYzItODFkNzRmMjhlNDU2Iiwicm9sZXMiOlsiRkVUQ0gtUk9MRVMtQlktQVBJIl0sInBlcm1pc3Npb25zIjpbIkZFVENILVBFUk1JU1NJT05TLUJZLUFQSSJdLCJhdWQiOiIzYjE4NThhZC0zOTExLTQ5YmItOGVkZi1lNDUzODI1YmY0YjciLCJpc3MiOiJodHRwczovL2F1dGguYXBwLmdvbWJvYy5haSIsImlhdCI6MTc3MzI2NjQ1Nn0.ANmIWMgbxKPJNLY3abDvj3NvWa8W-gUSSY8zcGCneAUo5mw0xiwlIG0riIU2c0H4UWW7HxcCl4xESbbwOe4zpHeB7cy7igBwtCkp-I2lZkU7LuAKkWCCcoSBSrWvqEdG_5yHUGJRHx8mF0T_HfmkBDXkjKW3joTyVJiT1v8UM0dhUiicUsxE2SsQK1_TNJhejvOiLLmvh0yZeNU6YJPBI1OZ1K7g453TiRcXlqjZ7Rv3b0PSWe4I-dukCt6QRoDRN0isEPY_HN1y9HzEWfrQUfi_1iIMouSXOvegEbvRh-iXjLytsVZmP4C8dk-Gpe59Q0fVwcgRgVkFX1u_QPC1PQ" \
   gombocai/orl:v1.3.0-latest rules pull \
-  --url="https://rules.dev.gcp.gomboc.ai" \
+  --url="https://rules.prod.gcp.gomboc.ai" \
   --out=/output \
-  --channel="orl-test-channel"
+  --channel="c6501c5c-4db3-411c-9168-df31a455055d/set/default"
 
 # Verify rules were pulled
 ls -la rules/
