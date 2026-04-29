@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { detectLanguageId } from '../generics/languageHandler';
+import { detectLanguageId } from '@gomboc-ai/gomboc-node-sdk';
 
 export interface OrlDocumentKinds {
   isDockerfile: boolean;
@@ -8,7 +8,7 @@ export interface OrlDocumentKinds {
   isCloudFormation: boolean;
   isXmlBuild: boolean;
   isGradleBuild: boolean;
-  isNpmPackage: boolean;
+  isNpmPackage: false;
 }
 
 export interface CloudFormationTemplateContext {
@@ -23,7 +23,6 @@ export function detectOrlDocumentKinds(args: {
   content: string;
 }): OrlDocumentKinds {
   const filePath = args.filePath || '';
-  const fileName = path.basename(filePath).toLowerCase();
   const ext = path.extname(filePath).toLowerCase();
   const languageId = detectLanguageId({
     filePath,
@@ -32,10 +31,6 @@ export function detectOrlDocumentKinds(args: {
   const isDockerfile = languageId === 'dockerfile';
   const isXmlBuild = ext === '.xml';
   const isGradleBuild = ext === '.gradle' || ext === '.kts';
-  const isNpmPackage =
-    languageId === 'npm-package-json' ||
-    fileName === 'package.json' ||
-    fileName === 'package-lock.json';
   const isHelm = languageId === 'helm-template';
   const isKubernetes = languageId === 'kubernetes-yaml';
   const isCloudFormation =
@@ -49,7 +44,7 @@ export function detectOrlDocumentKinds(args: {
     isCloudFormation,
     isXmlBuild,
     isGradleBuild,
-    isNpmPackage,
+    isNpmPackage: false,
   };
 }
 

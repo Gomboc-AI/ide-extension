@@ -4,7 +4,7 @@ import { getFileType } from './lib';
 import {
   detectLanguageId,
   mapLanguageIdToOrlLanguage,
-} from '../generics/languageHandler';
+} from '@gomboc-ai/gomboc-node-sdk';
 
 export interface ScanPreparation {
   filePath: string;
@@ -47,7 +47,7 @@ export class ScanValidator {
 
     if (!language) {
       throw new Error(
-        'Current file is not a supported file (Terraform, CloudFormation, Docker, Helm, Kubernetes, Maven XML, Gradle, Java, Bicep, Python, or npm package.json)',
+        'Current file is not a supported file (Terraform, Hcl, Helm, Kubernetes Yaml, CloudFormation Yaml/Json, Yaml, Toml, Json, Maven Xml, Gradle, Java, Kotlin, Groovy, JavaScript, TypeScript, Python, Go, Bash, C, C++, C#, Rust, Ruby, Php, Scala, Swift, Sql, Html, Css, Markdown, Lua, Ocaml, Elixir, Protobuf, or Bicep)',
       );
     }
 

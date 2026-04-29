@@ -14,7 +14,7 @@ import { CheckovIdExtractor } from '../fixproof/checkov/CheckovIdExtractor';
 import {
   detectLanguageId,
   mapLanguageIdToOrlLanguage,
-} from '../generics/languageHandler';
+} from '@gomboc-ai/gomboc-node-sdk';
 
 /**
  * ORL scans are executed by spawning a docker container (`orlClient.remediate`).

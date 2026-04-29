@@ -6,8 +6,10 @@ import { PathConverter } from '../utils/pathConverter';
 import { FileDiffAnalyzer, Difference } from '../utils/fileDiffAnalyzer';
 import { DiffContentAnalyzer } from '../utils/diffContentAnalyzer';
 import { parseOrlReport } from '../utils/orlReportParser';
-import { buildLanguageDiagnosticContextWithFallback } from '../generics/languageDiagnosticOrchestrator';
-import { chooseLanguageImplementation } from '../generics/languageHandler';
+import {
+  buildLanguageDiagnosticContextWithFallback,
+  chooseLanguageImplementation,
+} from '@gomboc-ai/gomboc-node-sdk';
 import type { ScanRemediationPayload } from '../schemas/scanRemediation';
 import { zOrlReport } from '../schemas/orlReport';
 

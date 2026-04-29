@@ -4,8 +4,10 @@ import * as fs from 'fs/promises';
 import { createOrlClient } from '../orl/orlClient';
 import { diffToHunks, DiffHunk, DiffLine } from './diffRender';
 import { ResourceContext } from './resourceContext';
-import { isOrlScannableLanguageFile } from '../generics/languageHandler';
-import { buildLanguagePreviewResourceContexts } from '../generics/languagePreviewContextOrchestrator';
+import {
+  isOrlScannableLanguageFile,
+  buildLanguagePreviewResourceContexts,
+} from '@gomboc-ai/gomboc-node-sdk';
 
 export type FixPreviewPayload = {
   scannedAt?: string;

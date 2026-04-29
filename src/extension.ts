@@ -12,14 +12,16 @@ import { CodeActionProvider } from './providers/codeActionProvider';
 import { GombocInfoViewProvider } from './providers/sidebarProvider';
 import { clearOrlRulesCache } from './orl/orlClient';
 import { OrlHoverProvider } from './providers/orlHoverProvider';
-import { chooseLanguageImplementation } from './generics/languageHandler';
+import {
+  chooseLanguageImplementation,
+  detectLanguageId,
+} from '@gomboc-ai/gomboc-node-sdk';
 import { DiagnosticCollectionManager } from './diagnosticCollectionManager';
 import {
   initializeIntegrationsService,
   vsCodeIntegrationsService,
 } from './utils/integrationsService';
 import { initScanStatus } from './utils/scanStatus';
-import { detectLanguageId } from './generics/languageHandler';
 
 const previousContentMap = new Map<string, string>();
 
