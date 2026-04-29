@@ -1091,7 +1091,7 @@ export class OrlClient {
                   path: discoveryDir,
                   opts: { recursive: true, force: true },
                 })
-                .catch((err) => {
+                .catch(err => {
                   logger.warn(
                     'Failed to clean up discovery directory; stale temp dir may remain',
                     {

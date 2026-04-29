@@ -278,11 +278,13 @@ export class ScanResultsProvider {
         uniqueOffset: args.uniqueOffset,
       });
       const anchorStart =
-        Number.isFinite(args.anchorCharacter) && (args.anchorCharacter || 0) >= 0
+        Number.isFinite(args.anchorCharacter) &&
+        (args.anchorCharacter || 0) >= 0
           ? Math.floor(args.anchorCharacter || 0)
           : result.startChar;
       const startChar = Math.max(result.startChar, anchorStart);
-      const endChar = Math.max(startChar + 1, result.endChar);
+      // Large column so VS Code clamps to the line end (same idea as API-mode fixes).
+      const endChar = 999;
       return new vscode.Range(
         new vscode.Position(line - 1, startChar),
         new vscode.Position(line - 1, endChar),
@@ -313,7 +315,10 @@ export class ScanResultsProvider {
       Number.isFinite(args.anchorCharacter) && (args.anchorCharacter || 0) >= 0
         ? Math.floor(args.anchorCharacter || 0)
         : startChar;
-    const anchoredStartChar = Math.min(maxEnd - 1, Math.max(startChar, anchorStart));
+    const anchoredStartChar = Math.min(
+      maxEnd - 1,
+      Math.max(startChar, anchorStart),
+    );
     const endChar = Math.min(maxEnd, Math.max(anchoredStartChar + 1, rawEnd));
 
     return new vscode.Range(
@@ -980,7 +985,7 @@ export class ScanResultsProvider {
   }
 
   // uses the scan response to generate a diagnostic for the diagnostic collection
-  createDiagnostic() {
+  public createDiagnostic() {
     this.diagnosticCollectionManager.getDiagnosticCollection().clear();
 
     const issues: OrlIssuesSnapshot['issues'] = [];
@@ -1158,8 +1163,21 @@ export class ScanResultsProvider {
         // Keep "Apply all fixes" but only once (at the first diagnostic line).
         const firstLine =
           uniqueLines.size > 0 ? Math.min(...Array.from(uniqueLines)) : 1;
-        const startPosition = new vscode.Position(firstLine - 1, 0);
-        const endPosition = new vscode.Position(firstLine - 1, 999);
+        const lineIdx = firstLine - 1;
+        const contentLines = (fileContent ?? '').split('\n');
+        const firstLineText =
+          contentLines[
+            Math.min(Math.max(0, lineIdx), Math.max(0, contentLines.length - 1))
+          ] ?? '';
+        const firstNonWs = firstLineText.search(/\S/);
+        const gCol =
+          firstNonWs >= 0 ? firstNonWs : firstLineText.length > 0 ? 0 : 0;
+        const gEndCol =
+          firstLineText.length > 0
+            ? Math.min(gCol + 1, firstLineText.length)
+            : 1;
+        const startPosition = new vscode.Position(lineIdx, gCol);
+        const endPosition = new vscode.Position(lineIdx, gEndCol);
         const groupedDiagnostic = new GroupedFixGombocDiagnostic(
           new vscode.Range(startPosition, endPosition),
           'Apply all fixes',
