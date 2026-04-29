@@ -50,7 +50,8 @@ describe('PathConverter.convertOrlPathToActualPath', () => {
       { uri: { fsPath: '/home/user/project' } },
     ];
 
-    const result = PathConverter.convertOrlPathToActualPath('/workspace/main.tf');
+    const result =
+      PathConverter.convertOrlPathToActualPath('/workspace/main.tf');
 
     expect(result).toBe('/home/user/project/main.tf');
   });
@@ -80,7 +81,8 @@ describe('PathConverter.convertOrlPathToActualPath', () => {
   it('returns original ORL path when workspace folders are empty', () => {
     mockedWorkspace.workspaceFolders = [];
 
-    const result = PathConverter.convertOrlPathToActualPath('/workspace/main.tf');
+    const result =
+      PathConverter.convertOrlPathToActualPath('/workspace/main.tf');
 
     expect(result).toBe('/workspace/main.tf');
   });

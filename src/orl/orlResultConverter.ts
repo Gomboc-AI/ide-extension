@@ -9,6 +9,7 @@ import { parseOrlReport } from '../utils/orlReportParser';
 import {
   buildLanguageDiagnosticContextWithFallback,
   chooseLanguageImplementation,
+  makeIacScanReport,
 } from '@gomboc-ai/gomboc-node-sdk';
 import type { ScanRemediationPayload } from '../schemas/scanRemediation';
 import { zOrlReport } from '../schemas/orlReport';
@@ -39,6 +40,8 @@ const zOrlDiagnosticRuleFile = z
   .passthrough();
 type OrlDiagnosticRuleFile = z.infer<typeof zOrlDiagnosticRuleFile>;
 type OrlDiagnosticFileResource = z.infer<typeof zOrlDiagnosticFileResource>;
+type LanguageHandler = ReturnType<typeof chooseLanguageImplementation>;
+type MakeScanReportInput = Parameters<typeof makeIacScanReport>[0];
 
 export interface OrlResult {
   success: boolean;
@@ -82,6 +85,220 @@ export interface OrlResult {
 }
 
 export type ScanResponse = ScanRemediationPayload;
+
+/**
+ * Builds resilient file lookup keys for ORL and local path variants.
+ */
+const addFileKeys = (p: string): string[] => {
+  const keys = new Set<string>();
+  const norm = p.replace(/^[.][/]/, '');
+  keys.add(norm);
+  keys.add(norm.startsWith('/') ? norm : '/' + norm);
+  keys.add(path.basename(norm));
+  keys.add('/workspace/' + norm);
+  keys.add('/workspace/' + norm.replace(/^\//, ''));
+  return Array.from(keys);
+};
+
+/**
+ * Removes ORL instance suffixes like `...000` while keeping numeric rule names intact.
+ */
+const stripOrlInstanceSuffix = (name: string): string => {
+  if (!name || typeof name !== 'string') {
+    return '';
+  }
+  const m = name.match(/^(.*?)(\d{3})$/);
+  if (!m) {
+    return name;
+  }
+  const base = m[1] ?? '';
+  if (!base) {
+    return name;
+  }
+  const prev = base[base.length - 1];
+  if (prev && /[0-9]/.test(prev)) {
+    return name;
+  }
+  return base;
+};
+
+/**
+ * Normalizes rule names to a comparable, URL-safe form for fuzzy matching.
+ */
+export function normalizeRuleName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[0-9]+$/, '')
+    .replace(/[^a-z0-9\/]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .replace(/\/$/, '');
+}
+
+/**
+ * Merges report-derived and diagnostics-derived file->rule attribution maps.
+ */
+export function buildFileToRulesMap(args: {
+  diagnostics: OrlResult['diagnostics'];
+  reportRuleToChangedFiles: Record<string, string[]>;
+}): {
+  fileToRules: Record<string, string[]>;
+  fileToReportRules: Record<string, string[]>;
+} {
+  const fileToRules: Record<string, string[]> = {};
+  const fileToReportRules: Record<string, string[]> = {};
+  const pushRule = (
+    map: Record<string, string[]>,
+    key: string,
+    rule: string,
+  ) => {
+    if (!map[key]) {
+      map[key] = [];
+    }
+    if (!map[key].includes(rule)) {
+      map[key].push(rule);
+    }
+  };
+
+  for (const [ruleName, paths] of Object.entries(
+    args.reportRuleToChangedFiles,
+  )) {
+    for (const p of paths) {
+      for (const key of addFileKeys(p)) {
+        pushRule(fileToRules, key, ruleName);
+        pushRule(fileToReportRules, key, ruleName);
+      }
+    }
+  }
+
+  const diagnosticRules = args.diagnostics?.rules || [];
+  for (const diagnosticRule of diagnosticRules) {
+    for (const file of diagnosticRule.files || []) {
+      for (const key of addFileKeys(file.path)) {
+        pushRule(fileToRules, key, diagnosticRule.ruleName);
+      }
+    }
+  }
+
+  return { fileToRules, fileToReportRules };
+}
+
+/**
+ * Resolves the best matching rule description using progressively looser matching.
+ */
+export function pickBestRuleDescription(
+  ruleName: string,
+  ruleDescriptions: Record<string, string>,
+): string | undefined {
+  let description = ruleDescriptions[ruleName];
+  if (description) {
+    return description;
+  }
+
+  const baseName = stripOrlInstanceSuffix(ruleName);
+  if (baseName && baseName !== ruleName) {
+    for (const [reportRuleName, desc] of Object.entries(ruleDescriptions)) {
+      if (
+        reportRuleName.startsWith(baseName) ||
+        baseName.startsWith(reportRuleName)
+      ) {
+        return desc;
+      }
+    }
+  }
+
+  const normalizedRuleName = normalizeRuleName(ruleName);
+  for (const [reportRuleName, desc] of Object.entries(ruleDescriptions)) {
+    const normalizedReportName = normalizeRuleName(reportRuleName);
+    if (
+      normalizedRuleName === normalizedReportName ||
+      normalizedRuleName.includes(normalizedReportName) ||
+      normalizedReportName.includes(normalizedRuleName)
+    ) {
+      return desc;
+    }
+  }
+
+  const coreName = ruleName.split('/').pop() || ruleName;
+  const normalizedCoreName = normalizeRuleName(coreName);
+  for (const [reportRuleName, desc] of Object.entries(ruleDescriptions)) {
+    const reportCore = reportRuleName.split('/').pop() || reportRuleName;
+    const normalizedReportCore = normalizeRuleName(reportCore);
+    if (
+      normalizedCoreName === normalizedReportCore ||
+      normalizedCoreName.includes(normalizedReportCore) ||
+      normalizedReportCore.includes(normalizedCoreName) ||
+      coreName.includes(reportCore) ||
+      reportCore.includes(coreName)
+    ) {
+      description = desc;
+      break;
+    }
+  }
+
+  return description;
+}
+
+/**
+ * Attributes a diff to rules using a deterministic fallback waterfall.
+ */
+export function attributeRulesToDiff(args: {
+  resourceName: string;
+  resourceInstanceName: string | null;
+  allFileRules: string[];
+  reportFileRules: string[];
+  diffLine: number;
+  diffContent: string;
+  properties: string[];
+  handler: LanguageHandler;
+  diagnosticRules: string[];
+}): string[] {
+  const dedupe = (rules: string[]): string[] =>
+    Array.from(new Set(rules)).sort((a, b) => a.localeCompare(b));
+
+  // Stage 1: when no concrete resource was identified, trust report changed-file attribution.
+  if (args.resourceName === 'Resource' && args.reportFileRules.length > 0) {
+    return dedupe(args.reportFileRules).slice(0, 20);
+  }
+
+  if (args.resourceName !== 'Resource' && args.allFileRules.length > 0) {
+    // Stage 2: language-aware matching on the current resource.
+    const matched = args.handler.matchRulesToDiff({
+      blockType: args.resourceName,
+      blockName: args.resourceInstanceName,
+      allFileRules: args.allFileRules,
+      diffLine: args.diffLine,
+      diffContent: args.diffContent,
+      properties: args.properties,
+    });
+    if (matched.length > 0) {
+      return dedupe(matched);
+    }
+  }
+
+  if (args.resourceName !== 'Resource' && args.allFileRules.length > 0) {
+    // Stage 3: if handler cannot narrow further, use file-level rule attribution.
+    return dedupe(args.allFileRules);
+  }
+
+  if (args.diagnosticRules.length > 0) {
+    // Stage 4: final handler attempt against diagnostics-only rules.
+    const matched = args.handler.matchRulesToDiff({
+      blockType: args.resourceName,
+      blockName: args.resourceInstanceName,
+      allFileRules: args.diagnosticRules,
+      diffLine: args.diffLine,
+      diffContent: args.diffContent,
+      properties: args.properties,
+    });
+    if (matched.length > 0) {
+      return dedupe(matched);
+    }
+  }
+
+  // Stage 5: ultimate fallback when no stronger signal is available.
+  return dedupe(args.diagnosticRules).slice(0, 20);
+}
 
 /**
  * Utility class for converting ORL results to VS Code scan response format
@@ -193,12 +410,7 @@ export class OrlResultConverter {
     if (!parsed) {
       return out;
     }
-    let reportPayload: z.infer<typeof zOrlReport>;
-    try {
-      reportPayload = zOrlReport.parse(parsed);
-    } catch {
-      return out;
-    }
+    const reportPayload = parsed;
     const rules = reportPayload.spec?.rules;
     if (!Array.isArray(rules)) {
       return out;
@@ -218,7 +430,7 @@ export class OrlResultConverter {
       if (!metadata) {
         return undefined;
       }
-      const metadataRecord = metadata;
+      const metadataRecord = metadata as Record<string, unknown>;
 
       // New source of truth: plain-text description annotation (support both key spellings).
       const annotationKeys = [
@@ -227,7 +439,8 @@ export class OrlResultConverter {
       ];
 
       const annotations =
-        metadataRecord.annotations || metadataRecord.annotation;
+        (metadataRecord.annotations as Record<string, unknown> | undefined) ||
+        (metadataRecord.annotation as Record<string, unknown> | undefined);
 
       if (annotations) {
         for (const k of annotationKeys) {
@@ -291,55 +504,48 @@ export class OrlResultConverter {
     if (!parsed) {
       return out;
     }
-    let reportPayload: z.infer<typeof zOrlReport>;
-    try {
-      reportPayload = zOrlReport.parse(parsed);
-    } catch {
-      return out;
-    }
-    const rules = reportPayload.spec?.rules;
-    if (!Array.isArray(rules)) {
-      return out;
-    }
+    const reportPayload = parsed;
+    const rules = Array.isArray(reportPayload.spec?.rules)
+      ? reportPayload.spec.rules
+      : [];
 
-    const stripOrlInstanceSuffix = (name: string): string => {
-      if (!name || typeof name !== 'string') {
-        return '';
-      }
-      const m = name.match(/^(.*?)(\d{3})$/);
-      if (!m) {
-        return name;
-      }
-      const base = m[1] ?? '';
-      if (!base) {
-        return name;
-      }
-      const prev = base[base.length - 1];
-      if (prev && /[0-9]/.test(prev)) {
-        return name;
-      }
-      return base;
-    };
-
-    for (const r of rules) {
+    const displayNameByRule: Record<string, string> = {};
+    for (const rule of rules) {
       const ruleName: string | undefined =
-        (typeof r?.name === 'string' && r.name) ||
-        (typeof r?.metadata?.name === 'string' && r.metadata.name) ||
+        (typeof rule?.name === 'string' && rule.name) ||
+        (typeof rule?.metadata?.name === 'string' && rule.metadata.name) ||
         undefined;
       if (!ruleName) {
         continue;
       }
-
       const displayName: string | undefined =
-        (typeof r?.metadata?.display_name === 'string' &&
-          r.metadata.display_name) ||
-        (typeof r?.metadata?.displayName === 'string' &&
-          r.metadata.displayName) ||
+        (typeof rule?.metadata?.display_name === 'string' &&
+          rule.metadata.display_name) ||
+        (typeof rule?.metadata?.displayName === 'string' &&
+          rule.metadata.displayName) ||
         undefined;
+      if (displayName?.trim()) {
+        displayNameByRule[ruleName] = displayName.trim();
+      }
+    }
 
+    // TODO: Export the proper report input type from @gomboc-ai/gomboc-node-sdk
+    // and replace this cast once available.
+    const scanReport = makeIacScanReport(
+      reportPayload as unknown as MakeScanReportInput,
+    );
+    const appliedRules = Array.isArray(scanReport.appliedRules)
+      ? scanReport.appliedRules
+      : [];
+    for (const appliedRule of appliedRules) {
+      if (typeof appliedRule !== 'string' || !appliedRule.trim()) {
+        continue;
+      }
+      const ruleName = appliedRule.trim();
+      const displayName = displayNameByRule[ruleName];
       const cleaned = stripOrlInstanceSuffix(ruleName);
       const fallback = cleaned.split('/').pop() || cleaned;
-      out[ruleName] = (displayName && displayName.trim()) || fallback;
+      out[ruleName] = displayName || fallback;
     }
 
     return out;
@@ -353,57 +559,67 @@ export class OrlResultConverter {
     filetype: string,
     currentFilePath: string,
   ): Promise<ScanResponse> {
+    const originalFileContents =
+      await OrlResultConverter.loadModifiedFileContents({
+        modifiedFiles: result.modifiedFiles,
+        currentFilePath,
+      });
+    return OrlResultConverter.buildPayload({
+      result,
+      filetype,
+      currentFilePath,
+      originalFileContents,
+    });
+  }
+
+  private static async loadModifiedFileContents(args: {
+    modifiedFiles: { [filePath: string]: string };
+    currentFilePath: string;
+  }): Promise<Record<string, string>> {
+    // Preload originals once so the pure payload builder can run without I/O.
+    const out: Record<string, string> = {};
+    for (const orlFilePath of Object.keys(args.modifiedFiles || {})) {
+      const actualFilePath = PathConverter.convertOrlPathToActualPath(
+        orlFilePath,
+        args.currentFilePath,
+      );
+      const originalContent = await vscode.workspace.fs.readFile(
+        vscode.Uri.file(actualFilePath),
+      );
+      out[actualFilePath] = new TextDecoder().decode(originalContent);
+    }
+    return out;
+  }
+
+  /**
+   * Builds the final scan payload from preloaded inputs without filesystem access.
+   */
+  static buildPayload(args: {
+    result: OrlResult;
+    filetype: string;
+    currentFilePath: string;
+    originalFileContents: Record<string, string>;
+  }): ScanResponse {
+    const { result, currentFilePath, originalFileContents } = args;
     // Create individual fixes based on actual differences between original and modified files
     const individualFixes: any[] = [];
     const groupedFixes: any[] = [];
 
-    // Build file-to-rules mapping from diagnostics
-    // Since we simplified hooks to only provide file paths (not hunks), we do file-level attribution
-    const fileToRules: Record<string, string[]> = {};
-    const addFileKeys = (p: string): string[] => {
-      const keys = new Set<string>();
-      const norm = p.replace(/^[.][/]/, '');
-      keys.add(norm);
-      keys.add(norm.startsWith('/') ? norm : '/' + norm);
-      keys.add(path.basename(norm));
-      // Also add /workspace/ prefix variants
-      keys.add('/workspace/' + norm);
-      keys.add('/workspace/' + norm.replace(/^\//, ''));
-      return Array.from(keys);
-    };
     // Build mapping: file -> rules, and file -> resource instances -> rules
     const fileToResourceInstances: Record<
       string,
       Array<{ type: string; name: string; startLine: number; endLine: number }>
     > = {};
     const resourceInstanceToRules: Record<string, string[]> = {};
-    const fileToReportRules: Record<string, string[]> = {};
 
     // Pull per-rule changed files from the report (if present) as a reliable attribution source.
     // This avoids depending solely on hook diagnostics for file mapping.
     const reportRuleToChangedFiles =
       OrlResultConverter.extractChangedFilesByRuleFromReport(result.report);
-
-    // Seed fileToRules with report-derived changed-file mappings first.
-    for (const [ruleName, paths] of Object.entries(reportRuleToChangedFiles)) {
-      for (const p of paths) {
-        const keys = addFileKeys(p);
-        for (const k of keys) {
-          if (!fileToRules[k]) {
-            fileToRules[k] = [];
-          }
-          if (!fileToRules[k].includes(ruleName)) {
-            fileToRules[k].push(ruleName);
-          }
-          if (!fileToReportRules[k]) {
-            fileToReportRules[k] = [];
-          }
-          if (!fileToReportRules[k].includes(ruleName)) {
-            fileToReportRules[k].push(ruleName);
-          }
-        }
-      }
-    }
+    const { fileToRules, fileToReportRules } = buildFileToRulesMap({
+      diagnostics: result.diagnostics,
+      reportRuleToChangedFiles: reportRuleToChangedFiles,
+    });
 
     logger.debug('Processing diagnostics', {
       hasDiagnostics: !!result.diagnostics,
@@ -417,25 +633,6 @@ export class OrlResultConverter {
     });
 
     if (result.diagnostics?.rules?.length) {
-      for (const r of result.diagnostics.rules) {
-        const files = r.files || [];
-        for (const f of files) {
-          const keys = addFileKeys(f.path);
-          for (const k of keys) {
-            if (!fileToRules[k]) {
-              fileToRules[k] = [];
-            }
-            if (!fileToRules[k].includes(r.ruleName)) {
-              fileToRules[k].push(r.ruleName);
-            }
-          }
-
-          // Track file-level rules (resource-level matching happens later when processing diffs)
-          // In non-dry-run mode, resources_modified.json should contain the actual modified resources
-          // from hash comparison, enabling precise attribution
-        }
-      }
-
       logger.debug('Built fileToRules mapping', {
         totalRules: result.diagnostics.rules.length,
         fileToRulesKeys: Object.keys(fileToRules),
@@ -486,11 +683,7 @@ export class OrlResultConverter {
         currentFilePath,
       );
 
-      // Read the original file content
-      const originalContent = await vscode.workspace.fs.readFile(
-        vscode.Uri.file(actualFilePath),
-      );
-      const originalText = new TextDecoder().decode(originalContent);
+      const originalText = originalFileContents[actualFilePath] || '';
 
       // Resolve the language handler once per file
       const handler = chooseLanguageImplementation({
@@ -672,13 +865,6 @@ export class OrlResultConverter {
             })),
         });
 
-        // Match rules to this diff using file-level rule lists from diagnostics, then the
-        // language handler's matchRulesToDiff (resource/block typing, Terraform variants, etc.).
-        // Historical attribution buckets (for debugging):
-        // - file-mapped:precise   — handler matched from allFileRules
-        // - file-mapped:heuristic — broadened to all file rules when the first pass was empty
-        // - ultimate              — no fileToRules entries; fall back to diagnostics.rules
-        let matchingRules: string[] = [];
         const diffLine = diff.targetLine;
 
         logger.debug('Starting rule matching', {
@@ -692,84 +878,19 @@ export class OrlResultConverter {
           allFileRules: allFileRules.slice(0, 3),
         });
 
-        // If we couldn't detect a meaningful "resource" but the ORL report indicates
-        // specific rules actually changed this file, attribute to those.
-        if (resourceName === 'Resource' && reportFileRules.length > 0) {
-          matchingRules = reportFileRules.slice(0, 20);
-          logger.debug('Attributing rules by ORL report changed-file mapping', {
-            file: actualFilePath,
-            matchingRulesCount: matchingRules.length,
-          });
-        }
-
-        // Delegate rule matching to the language handler
-        if (
-          matchingRules.length === 0 &&
-          resourceName !== 'Resource' &&
-          allFileRules.length > 0
-        ) {
-          matchingRules = handler.matchRulesToDiff({
-            blockType: resourceName,
-            blockName: resourceInstanceName,
-            allFileRules,
-            diffLine,
-            diffContent: diff.newLines.join('\n'),
-            properties: analysis.properties || [],
-          });
-
-          if (matchingRules.length > 0) {
-            logger.debug('Handler matched rules for resource', {
-              resourceType: resourceName,
-              resourceInstance: resourceInstanceName,
-              diffLine,
-              matchingRulesCount: matchingRules.length,
-              matchingRules: matchingRules.slice(0, 3),
-            });
-          }
-        }
-
-        // Fallback: if handler returned nothing but we have file rules, use all of them
-        if (
-          matchingRules.length === 0 &&
-          resourceName !== 'Resource' &&
-          allFileRules.length > 0
-        ) {
-          matchingRules = handler.matchRulesToDiff({
-            blockType: resourceName,
-            blockName: resourceInstanceName,
-            allFileRules,
-            diffLine,
-            diffContent: diff.newLines.join('\n'),
-            properties: analysis.properties || [],
-          });
-          if (matchingRules.length === 0) {
-            // Use all file rules as last resort
-            matchingRules = [...allFileRules];
-          }
-        }
-
-        // Ultimate fallback: if no file-level rules at all, try diagnostics rules
-        if (
-          matchingRules.length === 0 &&
-          allFileRules.length === 0 &&
-          result.diagnostics?.rules &&
-          result.diagnostics.rules.length > 0
-        ) {
-          const allDiagRules = result.diagnostics.rules.map(r => r.ruleName);
-          matchingRules = handler.matchRulesToDiff({
-            blockType: resourceName,
-            blockName: resourceInstanceName,
-            allFileRules: allDiagRules,
-            diffLine,
-            diffContent: diff.newLines.join('\n'),
-            properties: analysis.properties || [],
-          });
-          logger.debug('Ultimate fallback: handler matched from diagnostics', {
-            file: actualFilePath,
-            resourceType: resourceName,
-            matchingRulesCount: matchingRules.length,
-          });
-        }
+        const matchingRules = attributeRulesToDiff({
+          resourceName,
+          resourceInstanceName,
+          allFileRules,
+          reportFileRules,
+          diffLine,
+          diffContent: diff.newLines.join('\n'),
+          properties: analysis.properties || [],
+          handler,
+          diagnosticRules: (result.diagnostics?.rules || []).map(
+            r => r.ruleName,
+          ),
+        });
 
         // Get rule descriptions
         let aggregatedDescriptions: string[] = [];
@@ -778,82 +899,8 @@ export class OrlResultConverter {
           primaryRule = matchingRules[0];
           const descs: string[] = [];
 
-          // Helper function to normalize rule names for matching
-          // Handles differences between underscores and dashes, case, special chars
-          const normalizeRuleName = (name: string): string => {
-            return name
-              .toLowerCase()
-              .replace(/[0-9]+$/, '') // Remove trailing numeric suffixes
-              .replace(/[^a-z0-9\/]/g, '-') // Replace ALL special chars (including underscores) with dashes
-              .replace(/-+/g, '-') // Collapse multiple dashes (-- becomes -)
-              .replace(/^-|-$/g, '') // Remove leading/trailing dashes
-              .replace(/\/$/, ''); // Remove trailing slash
-          };
-
           for (const ruleName of matchingRules) {
-            // Try exact match first
-            let d = ruleDescriptions[ruleName];
-
-            // If no exact match, try partial matching (rule names in diagnostics might have suffixes)
-            if (!d) {
-              // Rule names in diagnostics might be like "gomboc-ai/ensure_data_at_rest_is_encrypted_for_hashicorp__aws-resources-aws_rds_cluster000"
-              // But in YAML report might be "gomboc-ai/ensure_data_at_rest_is_encrypted_for_hashicorp__aws-resources-aws_rds_cluster"
-              // Try matching without the numeric suffix
-              const baseName = ruleName.replace(/[0-9]+$/, '');
-              for (const [reportRuleName, desc] of Object.entries(
-                ruleDescriptions,
-              )) {
-                if (
-                  reportRuleName.startsWith(baseName) ||
-                  baseName.startsWith(reportRuleName)
-                ) {
-                  d = desc;
-                  break;
-                }
-              }
-            }
-
-            // If still no match, try normalized matching (handles special chars, case, etc.)
-            if (!d) {
-              const normalizedRuleName = normalizeRuleName(ruleName);
-              for (const [reportRuleName, desc] of Object.entries(
-                ruleDescriptions,
-              )) {
-                const normalizedReportName = normalizeRuleName(reportRuleName);
-                // Check if normalized names match (exact or contains)
-                if (
-                  normalizedRuleName === normalizedReportName ||
-                  normalizedRuleName.includes(normalizedReportName) ||
-                  normalizedReportName.includes(normalizedRuleName)
-                ) {
-                  d = desc;
-                  break;
-                }
-              }
-            }
-
-            // If still no match, try matching the core rule name (after last /)
-            if (!d) {
-              const coreName = ruleName.split('/').pop() || ruleName;
-              const normalizedCoreName = normalizeRuleName(coreName);
-              for (const [reportRuleName, desc] of Object.entries(
-                ruleDescriptions,
-              )) {
-                const reportCore =
-                  reportRuleName.split('/').pop() || reportRuleName;
-                const normalizedReportCore = normalizeRuleName(reportCore);
-                if (
-                  normalizedCoreName === normalizedReportCore ||
-                  normalizedCoreName.includes(normalizedReportCore) ||
-                  normalizedReportCore.includes(normalizedCoreName) ||
-                  coreName.includes(reportCore) ||
-                  reportCore.includes(coreName)
-                ) {
-                  d = desc;
-                  break;
-                }
-              }
-            }
+            const d = pickBestRuleDescription(ruleName, ruleDescriptions);
 
             if (d && !descs.includes(d)) {
               descs.push(d);

@@ -116,13 +116,11 @@ describe('diffRender', () => {
 
       expect(firstChangeIdx).toBe(3);
       expect(lastChangeIdx).toBe(4);
-      expect(hunk.lines.slice(0, firstChangeIdx).every(l => l.kind === 'context')).toBe(
-        true,
-      );
       expect(
-        hunk.lines
-          .slice(lastChangeIdx + 1)
-          .every(l => l.kind === 'context'),
+        hunk.lines.slice(0, firstChangeIdx).every(l => l.kind === 'context'),
+      ).toBe(true);
+      expect(
+        hunk.lines.slice(lastChangeIdx + 1).every(l => l.kind === 'context'),
       ).toBe(true);
       expect(hunk.lines.slice(0, firstChangeIdx)).toHaveLength(3);
       expect(hunk.lines.slice(lastChangeIdx + 1)).toHaveLength(3);
@@ -145,9 +143,9 @@ describe('diffRender', () => {
       const result = diffToHunks(before, after);
       const hunk = result.hunks[0];
 
-      expect(hunk.lines.some(line => line.kind !== 'context' && line.text === 'x')).toBe(
-        true,
-      );
+      expect(
+        hunk.lines.some(line => line.kind !== 'context' && line.text === 'x'),
+      ).toBe(true);
       expect(
         hunk.lines.every(
           line =>
@@ -209,7 +207,9 @@ describe('diffRender', () => {
       expect(hunk.lines).toHaveLength(4);
       expect(hunk.lines[0].kind).toBe('context');
       expect(hunk.lines[3].kind).toBe('context');
-      expect(hunk.lines.slice(1, 3).every(l => l.kind !== 'context')).toBe(true);
+      expect(hunk.lines.slice(1, 3).every(l => l.kind !== 'context')).toBe(
+        true,
+      );
     });
   });
 });

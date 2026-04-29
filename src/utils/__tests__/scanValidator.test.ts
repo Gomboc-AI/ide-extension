@@ -4,7 +4,10 @@ jest.mock('@gomboc-ai/gomboc-node-sdk', () => ({
 }));
 
 import * as vscode from 'vscode';
-import { detectLanguageId, mapLanguageIdToOrlLanguage } from '@gomboc-ai/gomboc-node-sdk';
+import {
+  detectLanguageId,
+  mapLanguageIdToOrlLanguage,
+} from '@gomboc-ai/gomboc-node-sdk';
 import { ScanValidator, detectLanguageFromFile } from '../scanValidator';
 
 const mockDetectLanguageId = detectLanguageId as jest.Mock;

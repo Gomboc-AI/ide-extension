@@ -83,7 +83,7 @@ function createProviderHarness() {
     context,
     diagnosticCollectionManager as unknown as DiagnosticCollectionManager,
   ) as ScanResultsProvider;
-  return { provider, diagnosticCollectionManager };
+  return { provider, diagnosticCollectionManager, context };
 }
 
 describe('ScanResultsProvider branch deltas', () => {
@@ -611,5 +611,82 @@ describe('ScanResultsProvider branch deltas', () => {
     provider.createDiagnostic();
 
     expect(getFirstDiagnosticStartLine(diagnosticCollectionManager)).toBe(6);
+  });
+
+  it('stores and returns last ORL scan context', () => {
+    const { provider } = createProviderHarness();
+    provider.setLastOrlScanContext({
+      workspacePath: '/repo',
+      language: 'terraform',
+      report: 'type: Report',
+    });
+    const context = provider.getLastOrlScanContext();
+    expect(context?.workspacePath).toBe('/repo');
+    expect(context?.language).toBe('terraform');
+  });
+
+  it('cacheFixProofCheckovTargets uses injected clock and touch extends ttl', async () => {
+    const { provider, context } = createProviderHarness();
+    const nowOne = () => 10_000;
+    const nowTwo = () => 20_000;
+
+    await provider.cacheFixProofCheckovTargets(
+      {
+        workspacePath: '/repo',
+        checkIds: ['CKV_AWS_1'],
+      },
+      nowOne,
+    );
+
+    const firstUpdate = (context.globalState.update as jest.Mock).mock
+      .calls[0][1];
+    expect(firstUpdate['/repo'].capturedAtMs).toBe(10_000);
+
+    (context.globalState.get as jest.Mock).mockReturnValue(firstUpdate);
+    await provider.touchFixProofCheckovTargets(
+      { workspacePath: '/repo' },
+      nowTwo,
+    );
+
+    const secondUpdate = (context.globalState.update as jest.Mock).mock
+      .calls[1][1];
+    expect(secondUpdate['/repo'].capturedAtMs).toBe(20_000);
+  });
+
+  it('generateComments stores payload and createDiagnostic emits diagnostics', () => {
+    const { provider, diagnosticCollectionManager } = createProviderHarness();
+    provider.generateComments({
+      individualFixes: [
+        {
+          rule: { id: 'api-rule:1', name: 'Rule', shortName: 'rule' },
+          codeObservation: {
+            codeResourceInstance: {
+              filepath: '/repo/main.tf',
+              line: 2,
+              type: 'terraform',
+            },
+            disposition: 'NonCompliant',
+          },
+          fixes: [
+            {
+              filepath: '/repo/main.tf',
+              oldLine: '',
+              newLine: ['x'],
+              codePosition: { line: 2, column: 0 },
+              lineOffset: 0,
+              fixType: 'ADD',
+            },
+          ],
+        },
+      ],
+      groupedFixes: [],
+      orlRuleDescriptions: {},
+      orlRuleShortNames: {},
+    });
+    provider.createDiagnostic();
+    expect(
+      (diagnosticCollectionManager.updateDiagnosticCollection as jest.Mock).mock
+        .calls.length,
+    ).toBeGreaterThan(0);
   });
 });

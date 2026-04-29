@@ -737,11 +737,11 @@ export class ScanResultsProvider {
 
   private pruneFixProofCheckovCache(
     cache: Record<string, FixProofCheckovTargetsCacheEntry>,
+    now: number = Date.now(),
   ): {
     pruned: Record<string, FixProofCheckovTargetsCacheEntry>;
     changed: boolean;
   } {
-    const now = Date.now();
     let changed = false;
     const out: Record<string, FixProofCheckovTargetsCacheEntry> = {};
     for (const [k, v] of Object.entries(cache || {})) {
@@ -781,15 +781,18 @@ export class ScanResultsProvider {
    * - Passing an empty list does NOT clear/replace existing IDs.
    * - Use `touchFixProofCheckovTargets` to extend TTL without adding IDs.
    */
-  public async cacheFixProofCheckovTargets(args: {
-    workspacePath: string;
-    checkIds: string[];
-    checkIdsByRule?: Record<string, string[]>;
-    evidenceByCheckId?: Record<
-      string,
-      Array<{ ruleName: string; source: string; key: string }>
-    >;
-  }): Promise<void> {
+  public async cacheFixProofCheckovTargets(
+    args: {
+      workspacePath: string;
+      checkIds: string[];
+      checkIdsByRule?: Record<string, string[]>;
+      evidenceByCheckId?: Record<
+        string,
+        Array<{ ruleName: string; source: string; key: string }>
+      >;
+    },
+    now: () => number = Date.now,
+  ): Promise<void> {
     const workspacePath = (args.workspacePath || '').trim();
     if (!workspacePath) {
       return;
@@ -804,9 +807,9 @@ export class ScanResultsProvider {
         ? (raw as Record<string, FixProofCheckovTargetsCacheEntry>)
         : {};
 
-    const { pruned } = this.pruneFixProofCheckovCache(current);
+    const nowMs = now();
+    const { pruned } = this.pruneFixProofCheckovCache(current, nowMs);
     const existing = pruned[workspacePath];
-    const now = Date.now();
 
     const unionIds = Array.from(
       new Set([...(existing?.checkIds || []), ...incomingIds].filter(Boolean)),
@@ -885,8 +888,8 @@ export class ScanResultsProvider {
 
     pruned[workspacePath] = {
       workspacePath,
-      capturedAtMs: now,
-      expiresAtMs: now + ScanResultsProvider.FIXPROOF_CHECKOV_TTL_MS,
+      capturedAtMs: nowMs,
+      expiresAtMs: nowMs + ScanResultsProvider.FIXPROOF_CHECKOV_TTL_MS,
       checkIds: unionIds,
       checkIdsByRule:
         Object.keys(mergedCheckIdsByRule).length > 0
@@ -908,9 +911,12 @@ export class ScanResultsProvider {
    * This is useful when the user is actively scanning/verifying but the current scan
    * doesn't yield additional Checkov IDs.
    */
-  public async touchFixProofCheckovTargets(args: {
-    workspacePath: string;
-  }): Promise<void> {
+  public async touchFixProofCheckovTargets(
+    args: {
+      workspacePath: string;
+    },
+    now: () => number = Date.now,
+  ): Promise<void> {
     const workspacePath = (args.workspacePath || '').trim();
     if (!workspacePath) {
       return;
@@ -924,7 +930,8 @@ export class ScanResultsProvider {
         ? (raw as Record<string, FixProofCheckovTargetsCacheEntry>)
         : {};
 
-    const { pruned } = this.pruneFixProofCheckovCache(current);
+    const nowMs = now();
+    const { pruned } = this.pruneFixProofCheckovCache(current, nowMs);
     const existing = pruned[workspacePath];
     if (
       !existing ||
@@ -934,11 +941,10 @@ export class ScanResultsProvider {
       return;
     }
 
-    const now = Date.now();
     pruned[workspacePath] = {
       ...existing,
-      capturedAtMs: now,
-      expiresAtMs: now + ScanResultsProvider.FIXPROOF_CHECKOV_TTL_MS,
+      capturedAtMs: nowMs,
+      expiresAtMs: nowMs + ScanResultsProvider.FIXPROOF_CHECKOV_TTL_MS,
     };
     await this.context.globalState.update(
       ScanResultsProvider.FIXPROOF_CHECKOV_CACHE_KEY,

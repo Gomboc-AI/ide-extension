@@ -22,20 +22,75 @@ export type FixPreviewPayload = {
   }>;
 };
 
-type PreviewCacheEntry = { capturedAtMs: number; payload: FixPreviewPayload };
+type PreviewCacheEntry<T> = { capturedAtMs: number; payload: T };
+
+/**
+ * Small TTL cache used to avoid recomputing identical preview selections.
+ */
+export class PreviewCache<T> {
+  constructor(
+    private readonly ttlMs: number,
+    private readonly now: () => number = Date.now,
+  ) {}
+
+  private readonly cache = new Map<string, PreviewCacheEntry<T>>();
+
+  /**
+   * Returns a cached value when present and not expired.
+   */
+  public get(key: string): T | undefined {
+    const hit = this.cache.get(key);
+    if (!hit) {
+      return undefined;
+    }
+    if (this.now() - hit.capturedAtMs > this.ttlMs) {
+      this.cache.delete(key);
+      return undefined;
+    }
+    return hit.payload;
+  }
+
+  /**
+   * Stores a value with the current capture timestamp.
+   */
+  public set(key: string, payload: T): void {
+    this.cache.set(key, { capturedAtMs: this.now(), payload });
+  }
+
+  /**
+   * Clears all entries, typically after workspace edits apply.
+   */
+  public clear(): void {
+    this.cache.clear();
+  }
+}
 
 export class FixPreviewService {
-  private readonly cache = new Map<string, PreviewCacheEntry>();
   private static readonly CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
 
   constructor(
     private readonly env: { extensionPath: string; storagePath: string },
+    private readonly createClient: typeof createOrlClient = createOrlClient,
+    private readonly copyDirectory: typeof copyScanScopeDirectory = copyScanScopeDirectory,
+    private readonly openDocument: (
+      filePath: string,
+    ) => Thenable<vscode.TextDocument> = filePath =>
+      vscode.workspace.openTextDocument(vscode.Uri.file(filePath)),
+    private readonly cache = new PreviewCache<FixPreviewPayload>(
+      FixPreviewService.CACHE_TTL_MS,
+    ),
   ) {}
 
+  /**
+   * Invalidates memoized previews after files change.
+   */
   public clearCache(): void {
     this.cache.clear();
   }
 
+  /**
+   * Builds a combined preview by sequentially applying selected rules in a temp copy.
+   */
   public async previewSelected(args: {
     scanScope: { workspacePath: string; language: string; scannedAt?: string };
     selectedIssues: Array<{ ruleName: string; filePath: string }>;
@@ -65,7 +120,7 @@ export class FixPreviewService {
       scannedAt: args.scanScope.scannedAt || '',
       issues: selectedIssues,
     });
-    const cached = this.getCache(cacheKey);
+    const cached = this.cache.get(cacheKey);
     if (cached) {
       return cached;
     }
@@ -94,7 +149,7 @@ export class FixPreviewService {
       if (!fp || baselineByFile.has(fp)) {
         continue;
       }
-      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(fp));
+      const doc = await this.openDocument(fp);
       baselineByFile.set(fp, doc.getText());
     }
 
@@ -113,11 +168,11 @@ export class FixPreviewService {
       for (const sourceDir of byDir.keys()) {
         const destDir = path.join(tempRoot, safeSegment(sourceDir));
         await fs.mkdir(destDir, { recursive: true });
-        await copyScanScopeDirectory({ sourceDir, destDir });
+        await this.copyDirectory({ sourceDir, destDir });
         tempDirBySourceDir.set(sourceDir, destDir);
       }
 
-      const orlClient = await createOrlClient({
+      const orlClient = await this.createClient({
         extensionPath: this.env.extensionPath,
         storagePath: this.env.storagePath,
       });
@@ -219,28 +274,12 @@ export class FixPreviewService {
         scannedAt: args.scanScope.scannedAt,
         files: files.sort((a, b) => a.filePath.localeCompare(b.filePath)),
       };
-      this.setCache(cacheKey, payload);
+      this.cache.set(cacheKey, payload);
       return payload;
     } finally {
       // Best-effort cleanup.
       fs.rm(tempRoot, { recursive: true, force: true }).catch(() => {});
     }
-  }
-
-  private getCache(key: string): FixPreviewPayload | undefined {
-    const hit = this.cache.get(key);
-    if (!hit) {
-      return undefined;
-    }
-    if (Date.now() - hit.capturedAtMs > FixPreviewService.CACHE_TTL_MS) {
-      this.cache.delete(key);
-      return undefined;
-    }
-    return hit.payload;
-  }
-
-  private setCache(key: string, payload: FixPreviewPayload): void {
-    this.cache.set(key, { capturedAtMs: Date.now(), payload });
   }
 }
 
@@ -251,7 +290,10 @@ function safeSegment(p: string): string {
   return parts.join('__').replace(/[^a-zA-Z0-9_.-]/g, '_');
 }
 
-async function copyScanScopeDirectory(args: {
+/**
+ * Copies the flat scan-scope directory into a temporary preview workspace.
+ */
+export async function copyScanScopeDirectory(args: {
   sourceDir: string;
   destDir: string;
 }): Promise<void> {
