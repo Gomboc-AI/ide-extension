@@ -6,6 +6,10 @@ This doc is a focused guide for:
 - getting **Problems tab diagnostics** + **Fix Reviewer webview** correct
 - understanding how we submit scan/reporting data to the **Integrations** service
 
+### Updating Orl Version
+
+We have decided to keep the ORL version hardcoded to a certain value, so that we will only update it when necessary, so when you want to update it, make sure that you update it in every case (code, workflows, readmes)
+
 ## Adding a new language (end-to-end checklist)
 
 ### 1) Decide the two “language identities”

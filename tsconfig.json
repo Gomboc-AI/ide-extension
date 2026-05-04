@@ -21,6 +21,10 @@
   "exclude": [
     "/node_modules",
     "dist",
+    "test-_development/**/*",
+    "test_development/**/*",
+    "src/test-_development/**/*",
+    "src/test_development/**/*",
     "**/*.test.ts",
     "./tests/**/*",
     "jest.integration.config.ts"
