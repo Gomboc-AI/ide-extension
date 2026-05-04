@@ -223,6 +223,59 @@ describe('ScanResultsProvider branch deltas', () => {
     expect(startLines).toEqual(expect.arrayContaining([3, 8]));
   });
 
+  it('strips ORL instance suffix from quick-fix labels when short name is missing', () => {
+    const { provider, diagnosticCollectionManager } = createProviderHarness();
+
+    (
+      provider as unknown as { individualRemediations: unknown[] }
+    ).individualRemediations = [
+      {
+        rule: {
+          id: 'orl-rule:alpha',
+          name: 'rule_alpha005',
+          metadata: { short_name: '', description: 'desc' },
+        },
+        codeObservation: {
+          codeResourceInstance: {
+            filepath: '/repo/main.tf',
+            line: 6,
+            name: 'resource_a',
+            type: 'aws_s3_bucket',
+          },
+        },
+        fixes: [
+          {
+            codePosition: { line: 6, column: 0 },
+            fixType: 'UPDATE',
+            newLine: ['x'],
+          },
+        ],
+      },
+    ];
+    (
+      provider as unknown as { groupedRemediations: unknown[] }
+    ).groupedRemediations = [
+      { path: '/repo/main.tf', content: '', comments: [] },
+    ];
+
+    provider.createDiagnostic();
+
+    const calls = (
+      diagnosticCollectionManager.updateDiagnosticCollection as jest.Mock
+    ).mock.calls;
+    const diagnostics = calls[0][1] as Array<{
+      ruleName?: string;
+      quickFixMessage?: string;
+    }>;
+    const orlDiagnostic = diagnostics.find(
+      d => typeof d.ruleName === 'string',
+    ) as { quickFixMessage?: string } | undefined;
+
+    expect(orlDiagnostic).toBeDefined();
+    expect(orlDiagnostic?.quickFixMessage).toContain('Apply fix (');
+    expect(orlDiagnostic?.quickFixMessage).not.toContain('005');
+  });
+
   it('uses scoped Terraform replacement when line resolves to a resource block', async () => {
     const { provider } = createProviderHarness();
     const before = [
