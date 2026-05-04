@@ -223,6 +223,74 @@ describe('ScanResultsProvider branch deltas', () => {
     expect(startLines).toEqual(expect.arrayContaining([3, 8]));
   });
 
+  it('dedupes ORL diagnostics for same rule/resource across multiple fix anchors', () => {
+    const { provider, diagnosticCollectionManager } = createProviderHarness();
+
+    const remediationBase = {
+      rule: {
+        id: 'orl-rule:abc',
+        name: 'rule_alpha001',
+        metadata: { short_name: 'rule alpha', description: 'desc' },
+      },
+      codeObservation: {
+        codeResourceInstance: {
+          filepath: '/repo/main.tf',
+          line: 6,
+          name: 'resource_a',
+          type: 'aws_instance',
+        },
+      },
+      fixes: [
+        {
+          codePosition: { line: 10, column: 0 },
+          fixType: 'UPDATE',
+          newLine: ['x'],
+        },
+      ],
+    };
+
+    (
+      provider as unknown as { individualRemediations: unknown[] }
+    ).individualRemediations = [
+      remediationBase,
+      {
+        ...remediationBase,
+        fixes: [
+          {
+            codePosition: { line: 14, column: 0 },
+            fixType: 'UPDATE',
+            newLine: ['y'],
+          },
+        ],
+      },
+    ];
+    (
+      provider as unknown as { groupedRemediations: unknown[] }
+    ).groupedRemediations = [
+      { path: '/repo/main.tf', content: '', comments: [] },
+    ];
+
+    provider.createDiagnostic();
+
+    const calls = (
+      diagnosticCollectionManager.updateDiagnosticCollection as jest.Mock
+    ).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    const diagnostics = calls[0][1] as Array<{
+      ruleName?: string;
+      message: string;
+      range?: vscode.Range;
+    }>;
+    const orlDiagnostics = diagnostics.filter(
+      d => typeof d.ruleName === 'string' && d.message !== 'Apply all fixes',
+    );
+    expect(orlDiagnostics).toHaveLength(1);
+    const startLine = orlDiagnostics[0].range?.start.line;
+    expect(startLine).toEqual(expect.any(Number));
+    expect([9, 13]).toContain(startLine as number);
+    expect(startLine).not.toBe(5);
+  });
+
   it('strips ORL instance suffix from quick-fix labels when short name is missing', () => {
     const { provider, diagnosticCollectionManager } = createProviderHarness();
 

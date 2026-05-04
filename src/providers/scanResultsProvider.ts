@@ -1073,10 +1073,9 @@ export class ScanResultsProvider {
         for (const remediation of currentRemediation) {
           const rule = remediation.rule;
           const ruleNames = this.getRenderableOrlRuleNames(rule);
-
-          // Prefer operation-aware anchors (UPDATE/DELETE on target line,
-          // ADD on the previous line) so selection does not depend on
-          // resource headers.
+          // Keep ORL diagnostics anchored to the actionable fix location
+          // (UPDATE/DELETE line, or previous line for ADD) so Problems points
+          // near where edits will happen.
           const operationAnchor =
             this.pickOperationDiagnosticAnchor(remediation);
           let line: number = operationAnchor.line;
@@ -1098,9 +1097,12 @@ export class ScanResultsProvider {
 
           for (const rn of ruleNames) {
             const baseRuleName = this.stripOrlInstanceSuffix(rn);
-            const ruleLineKey = `${baseRuleName}::${line}`;
-            if (!ruleToMeta.has(ruleLineKey)) {
-              ruleToMeta.set(ruleLineKey, {
+            const normalizedResourceHeader = resourceHeader?.trim();
+            const ruleResourceKey = normalizedResourceHeader
+              ? `${baseRuleName}::resource::${normalizedResourceHeader}`
+              : `${baseRuleName}::line::${line}`;
+            if (!ruleToMeta.has(ruleResourceKey)) {
+              ruleToMeta.set(ruleResourceKey, {
                 ruleName: rn,
                 line,
                 character: resolvedAnchor.character,
