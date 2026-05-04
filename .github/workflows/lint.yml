@@ -45,7 +45,7 @@ jobs:
 
       - name: Cache ORL Docker image
         id: cache-orl
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /tmp/orl-image.tar
           key: docker-gombocai-orl-v1.3.0
