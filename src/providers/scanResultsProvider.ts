@@ -1088,38 +1088,6 @@ export class ScanResultsProvider {
             suggestedLine: line,
             fromFixOperation: operationAnchor.fromFixOperation,
           });
-          // #region agent log
-          fetch('http://127.0.0.1:7506/ingest/72d938a8-39c1-4b55-a919-a901f1ce7aac', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Debug-Session-Id': '0c2f3b',
-            },
-            body: JSON.stringify({
-              sessionId: '0c2f3b',
-              runId: 'line-anchor-debug',
-              hypothesisId: 'H1',
-              location: 'scanResultsProvider.ts:createDiagnostic:resolveAnchor',
-              message: 'Resolved ORL diagnostic anchor line',
-              data: {
-                filePath: filepath,
-                ruleId: remediation?.rule?.id,
-                ruleName: remediation?.rule?.name,
-                ruleNames,
-                codeObservationLine:
-                  remediation?.codeObservation?.codeResourceInstance?.line,
-                operationAnchor,
-                resolvedAnchor,
-                fixes: (remediation?.fixes || []).map(f => ({
-                  fixType: f.fixType,
-                  line: f.codePosition?.line,
-                  column: f.codePosition?.column,
-                })),
-              },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-          // #endregion
           line = resolvedAnchor.line;
 
           const resourceHeader: string | undefined =
@@ -1131,32 +1099,6 @@ export class ScanResultsProvider {
           for (const rn of ruleNames) {
             const baseRuleName = this.stripOrlInstanceSuffix(rn);
             const ruleLineKey = `${baseRuleName}::${line}`;
-            // #region agent log
-            fetch('http://127.0.0.1:7506/ingest/72d938a8-39c1-4b55-a919-a901f1ce7aac', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-Debug-Session-Id': '0c2f3b',
-              },
-              body: JSON.stringify({
-                sessionId: '0c2f3b',
-                runId: 'line-anchor-debug',
-                hypothesisId: 'H2',
-                location: 'scanResultsProvider.ts:createDiagnostic:ruleLineKey',
-                message: 'Computed ORL dedupe key for rule-line pair',
-                data: {
-                  filePath: filepath,
-                  originalRuleName: rn,
-                  baseRuleName,
-                  line,
-                  ruleLineKey,
-                  existedBeforeInsert: ruleToMeta.has(ruleLineKey),
-                  resourceHeader,
-                },
-                timestamp: Date.now(),
-              }),
-            }).catch(() => {});
-            // #endregion
             if (!ruleToMeta.has(ruleLineKey)) {
               ruleToMeta.set(ruleLineKey, {
                 ruleName: rn,
@@ -1221,36 +1163,6 @@ export class ScanResultsProvider {
             { ruleName, filePath: filepath },
             vscode.DiagnosticSeverity.Error,
           );
-          // #region agent log
-          fetch('http://127.0.0.1:7506/ingest/72d938a8-39c1-4b55-a919-a901f1ce7aac', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Debug-Session-Id': '0c2f3b',
-            },
-            body: JSON.stringify({
-              sessionId: '0c2f3b',
-              runId: 'line-anchor-debug',
-              hypothesisId: 'H3',
-              location: 'scanResultsProvider.ts:createDiagnostic:emitDiagnostic',
-              message: 'Emitting ORL diagnostic',
-              data: {
-                filePath: filepath,
-                ruleName,
-                line,
-                range: {
-                  startLine: range.start.line + 1,
-                  startChar: range.start.character,
-                  endLine: range.end.line + 1,
-                  endChar: range.end.character,
-                },
-                quickFixMessage: `Apply fix (${shortName})`,
-                resourceHeader: meta.resourceHeader,
-              },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-          // #endregion
           diagnostic.source = 'Gomboc';
           diagnostic.resourceHeader = meta.resourceHeader;
           diagnostic.ruleShortName = shortName;
@@ -1576,29 +1488,6 @@ export class ScanResultsProvider {
     const ruleName = first?.ruleName;
     const filePath = first?.filePath;
     const line = first?.line;
-    // #region agent log
-    fetch('http://127.0.0.1:7506/ingest/72d938a8-39c1-4b55-a919-a901f1ce7aac', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Debug-Session-Id': '0c2f3b',
-      },
-      body: JSON.stringify({
-        sessionId: '0c2f3b',
-        runId: 'line-anchor-debug',
-        hypothesisId: 'H4',
-        location: 'scanResultsProvider.ts:applyOrlRuleRemediation:entry',
-        message: 'Apply ORL rule remediation requested',
-        data: {
-          args,
-          selectedRuleName: ruleName,
-          selectedFilePath: filePath,
-          selectedLine: line,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     if (!ruleName || !filePath) {
       vscode.window.showErrorMessage(
         'Unable to apply rule fix: missing rule or file path',
@@ -1698,31 +1587,6 @@ export class ScanResultsProvider {
           const existing = beforeLines
             .slice(beforeBlock.startLine - 1, beforeBlock.endLine)
             .join('\n');
-          // #region agent log
-          fetch('http://127.0.0.1:7506/ingest/72d938a8-39c1-4b55-a919-a901f1ce7aac', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Debug-Session-Id': '0c2f3b',
-            },
-            body: JSON.stringify({
-              sessionId: '0c2f3b',
-              runId: 'line-anchor-debug',
-              hypothesisId: 'H5',
-              location:
-                'scanResultsProvider.ts:applyOrlRuleRemediation:scopedEdit',
-              message: 'Resolved scoped edit blocks for ORL apply',
-              data: {
-                absPath,
-                requestedLine: line,
-                beforeBlock,
-                afterBlock,
-                replacementEqualsExisting: replacement === existing,
-              },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-          // #endregion
           if (replacement !== existing) {
             changedAny = true;
             updatedFiles.add(absPath);
