@@ -59,7 +59,7 @@ docker run --rm \
   -v $(pwd)/rules:/output \
   -e RULE_SERVICE_TOKEN="token" \
   gombocai/orl:v1.3.0-latest rules pull \
-  --url="https://rules.prod.gcp.gomboc.ai" \
+  --url="https://rules.app.gomboc.ai" \
   --out=/output \
   --channel="channel-to-use"
 
