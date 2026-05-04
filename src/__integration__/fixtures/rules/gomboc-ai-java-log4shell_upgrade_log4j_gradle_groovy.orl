@@ -1,0 +1,76 @@
+type: Ruleset
+version: v1
+metadata:
+    name: gomboc-ai/java/log4shell_upgrade_log4j_gradle_groovy
+    display_name: 'Log4Shell: Upgrade log4j dependencies (Gradle Groovy)'
+    skip: false
+spec:
+    template:
+        language: groovy
+        audit_language: ast
+        variables: []
+        collect: []
+        audit: ""
+        remediation: []
+    rules:
+        - name: log4shell_upgrade_log4j_core_groovy
+          language: null
+          variables: null
+          audit: |
+            (source_file
+              (juxt_function_call
+                (argument_list
+                  (closure
+                    (juxt_function_call
+                      (argument_list
+                        (string
+                          (string_content) @dep
+                        ))))))
+              (#match? @dep "org\\.apache\\.logging\\.log4j:log4j-(core|api):")
+            ) @doc
+          skip_finding: |
+            let ver = split(finding.dep, ":")[2];
+            let isJava7 = hasSubString(finding.doc, "sourceCompatibility = 1.7");
+            let isJava6 = hasSubString(finding.doc, "sourceCompatibility = 1.6");
+            hasSubString(finding.dep, "$") ||
+            (isJava6 && semVerCmp(ver, ">=", "2.3.2")) ||
+            (isJava7 && semVerCmp(ver, ">=", "2.12.4")) ||
+            (!isJava6 && !isJava7 && semVerCmp(ver, ">=", "2.17.1"))
+          remediation:
+            - command: replace
+              path: dep
+              skip: |
+                !hasSubString(finding.dep, "log4j-core") || hasSubString(finding.doc, "sourceCompatibility = 1.7") || hasSubString(finding.doc, "sourceCompatibility = 1.6")
+              value: org.apache.logging.log4j:log4j-core:2.17.1
+              flags: {}
+            - command: replace
+              path: dep
+              skip: |
+                !hasSubString(finding.dep, "log4j-api") || hasSubString(finding.doc, "sourceCompatibility = 1.7") || hasSubString(finding.doc, "sourceCompatibility = 1.6")
+              value: org.apache.logging.log4j:log4j-api:2.17.1
+              flags: {}
+            - command: replace
+              path: dep
+              skip: |
+                !hasSubString(finding.dep, "log4j-core") || !hasSubString(finding.doc, "sourceCompatibility = 1.7")
+              value: org.apache.logging.log4j:log4j-core:2.12.4
+              flags: {}
+            - command: replace
+              path: dep
+              skip: |
+                !hasSubString(finding.dep, "log4j-api") || !hasSubString(finding.doc, "sourceCompatibility = 1.7")
+              value: org.apache.logging.log4j:log4j-api:2.12.4
+              flags: {}
+            - command: replace
+              path: dep
+              skip: |
+                !hasSubString(finding.dep, "log4j-core") || !hasSubString(finding.doc, "sourceCompatibility = 1.6")
+              value: org.apache.logging.log4j:log4j-core:2.3.2
+              flags: {}
+            - command: replace
+              path: dep
+              skip: |
+                !hasSubString(finding.dep, "log4j-api") || !hasSubString(finding.doc, "sourceCompatibility = 1.6")
+              value: org.apache.logging.log4j:log4j-api:2.3.2
+              flags: {}
+          collect: null

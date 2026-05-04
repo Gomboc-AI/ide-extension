@@ -65,6 +65,343 @@ type ExtToIssuesPanelMessage =
       payload: { kind: 'info' | 'warn' | 'error'; message: string };
     };
 
+type PreviewSelectionContext = {
+  scanScope: {
+    workspacePath: string;
+    language: string;
+    scannedAt?: string;
+  };
+  selectedIssues: Array<{
+    ruleName: string;
+    filePath: string;
+    line?: number;
+    resourceHeader?: string;
+  }>;
+};
+
+/**
+ * Handles one webview message with injected side effects for testability.
+ */
+export async function handleWebviewMessage(args: {
+  message: IssuesPanelToExtMessage;
+  panel: vscode.WebviewPanel;
+  service: FixPreviewService;
+  scanResultsProvider: ScanResultsProvider;
+  post: (message: ExtToIssuesPanelMessage) => void;
+  lastPreviewContext: PreviewSelectionContext | undefined;
+  setLastPreviewContext: (ctx: PreviewSelectionContext) => void;
+  applyKeptHunks: (args: {
+    preview: unknown;
+    keptByFile: Map<string, Set<string>>;
+    applyFn: typeof applyHunksToText;
+  }) => Promise<void>;
+  applyFn: typeof applyHunksToText;
+}): Promise<void> {
+  const { message } = args;
+  switch (message.type) {
+    case 'ready': {
+      const snapshot = args.scanResultsProvider.getCurrentIssuesSnapshot();
+      args.post({ type: 'snapshot', payload: snapshot });
+      return;
+    }
+    case 'requestSnapshot': {
+      const snapshot = args.scanResultsProvider.getCurrentIssuesSnapshot();
+      args.post({ type: 'snapshot', payload: snapshot });
+      return;
+    }
+    case 'openFile': {
+      const fp = (message.filePath || '').trim();
+      if (!fp) {
+        return;
+      }
+      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(fp));
+      const editor = await vscode.window.showTextDocument(doc, {
+        preview: false,
+        viewColumn: vscode.ViewColumn.One,
+      });
+      const line = Number.isFinite(message.line)
+        ? (message.line as number)
+        : undefined;
+      if (line && line > 0) {
+        const pos = new vscode.Position(line - 1, 0);
+        editor.selection = new vscode.Selection(pos, pos);
+        editor.revealRange(
+          new vscode.Range(pos, pos),
+          vscode.TextEditorRevealType.InCenter,
+        );
+      }
+      return;
+    }
+    case 'rescan': {
+      vscode.commands.executeCommand('gomboc-vscode-extension.scanFile').then(
+        () => {},
+        () => {},
+      );
+      return;
+    }
+    case 'applySelected': {
+      const issues = Array.isArray(message.issues) ? message.issues : [];
+      if (!issues.length) {
+        args.post({
+          type: 'toast',
+          payload: { kind: 'info', message: 'No issues selected.' },
+        });
+        return;
+      }
+
+      const capped = issues.slice(0, 10);
+      if (issues.length > capped.length) {
+        args.post({
+          type: 'toast',
+          payload: {
+            kind: 'warn',
+            message: `Selection capped at ${capped.length} issues (v1 guardrail).`,
+          },
+        });
+      }
+
+      const total = capped.length;
+      for (let i = 0; i < capped.length; i++) {
+        const cur = capped[i];
+        args.post({
+          type: 'applyProgress',
+          payload: {
+            done: i,
+            total,
+            ruleName: cur.ruleName,
+            filePath: cur.filePath,
+          },
+        });
+        try {
+          await args.scanResultsProvider.applyOrlRuleRemediation([cur]);
+        } catch (e) {
+          args.post({
+            type: 'applyResult',
+            payload: {
+              ok: false,
+              error: e instanceof Error ? e.message : String(e),
+            },
+          });
+          return;
+        }
+      }
+
+      args.post({ type: 'applyProgress', payload: { done: total, total } });
+      args.post({ type: 'applyResult', payload: { ok: true } });
+      return;
+    }
+    case 'previewSelected': {
+      const issues = Array.isArray(message.issues) ? message.issues : [];
+      if (!issues.length) {
+        args.post({
+          type: 'toast',
+          payload: { kind: 'info', message: 'No issues selected.' },
+        });
+        return;
+      }
+
+      const capped = issues.slice(0, 10);
+      if (issues.length > capped.length) {
+        args.post({
+          type: 'toast',
+          payload: {
+            kind: 'warn',
+            message: `Selection capped at ${capped.length} issues (v1 guardrail).`,
+          },
+        });
+      }
+
+      const last = args.scanResultsProvider.getLastOrlScanContext();
+      const scopeWorkspacePath = last?.workspacePath;
+      const scopeLanguage = last?.language;
+      if (!scopeWorkspacePath || !scopeLanguage) {
+        args.post({
+          type: 'previewError',
+          payload: {
+            message:
+              'Preview requires an ORL scan scope. Run an ORL scan first, then try preview again.',
+          },
+        });
+        return;
+      }
+
+      try {
+        const previewContext = {
+          scanScope: {
+            workspacePath: scopeWorkspacePath,
+            language: scopeLanguage,
+            scannedAt: last?.scannedAt,
+          },
+          selectedIssues: capped,
+        };
+        const result = await args.service.previewSelected({
+          ...previewContext,
+          onProgress: p => {
+            args.post({
+              type: 'previewProgress',
+              payload: {
+                done: p.done,
+                total: p.total,
+                ruleName: p.current?.ruleName,
+                filePath: p.current?.filePath,
+              },
+            });
+          },
+        });
+        args.setLastPreviewContext(previewContext);
+        args.post({ type: 'previewResult', payload: result });
+      } catch (e) {
+        args.post({
+          type: 'previewError',
+          payload: { message: e instanceof Error ? e.message : String(e) },
+        });
+      }
+      return;
+    }
+    case 'applyPreviewSelection': {
+      const files = Array.isArray(message.files) ? message.files : [];
+      if (!files.length) {
+        args.post({
+          type: 'previewApplyResult',
+          payload: { ok: false, message: 'No files to apply.' },
+        });
+        return;
+      }
+      if (files.length > 25) {
+        args.post({
+          type: 'previewApplyResult',
+          payload: {
+            ok: false,
+            message: 'Refusing to apply: too many files selected (max 25).',
+          },
+        });
+        return;
+      }
+      if (!args.lastPreviewContext) {
+        args.post({
+          type: 'previewApplyResult',
+          payload: {
+            ok: false,
+            message: 'No preview context found. Run Preview again first.',
+          },
+        });
+        return;
+      }
+
+      try {
+        const preview = await args.service.previewSelected({
+          ...args.lastPreviewContext,
+        });
+        const totalKeptHunks = files.reduce((sum, f) => {
+          const kept = Array.isArray(f.keptHunkFingerprints)
+            ? f.keptHunkFingerprints.length
+            : 0;
+          return sum + kept;
+        }, 0);
+        if (totalKeptHunks > 400) {
+          throw new Error(
+            'Refusing to apply: too many hunks selected (max 400).',
+          );
+        }
+        await args.applyKeptHunks({
+          preview,
+          keptByFile: new Map(
+            files.map(f => [
+              f.filePath,
+              new Set(
+                Array.isArray(f.keptHunkFingerprints)
+                  ? f.keptHunkFingerprints
+                  : [],
+              ),
+            ]),
+          ),
+          applyFn: args.applyFn,
+        });
+        args.service.clearCache();
+        args.post({
+          type: 'previewApplyResult',
+          payload: { ok: true, message: 'Applied kept changes.' },
+        });
+
+        vscode.commands.executeCommand('gomboc-vscode-extension.scanFile').then(
+          () => {},
+          () => {},
+        );
+      } catch (e) {
+        args.post({
+          type: 'previewApplyResult',
+          payload: {
+            ok: false,
+            message: e instanceof Error ? e.message : String(e),
+          },
+        });
+      }
+      return;
+    }
+    case 'openDiffInEditor': {
+      const filePath = (message.filePath || '').trim();
+      if (!filePath) {
+        return;
+      }
+      const afterText =
+        typeof message.afterText === 'string' ? message.afterText : '';
+      const left = vscode.Uri.file(filePath);
+      const rightDoc = await vscode.workspace.openTextDocument({
+        content: afterText,
+        language: 'plaintext',
+      });
+      await vscode.commands.executeCommand(
+        'vscode.diff',
+        left,
+        rightDoc.uri,
+        `Gomboc Preview: ${filePath}`,
+        { preview: true },
+      );
+      return;
+    }
+    case 'verify': {
+      try {
+        const result = await fixProofCheckovVerifyForPanel(
+          args.scanResultsProvider,
+        );
+        if (!result.ok) {
+          args.post({
+            type: 'verifyResult',
+            payload: { ok: false, summary: result.error },
+          });
+          return;
+        }
+        if (result.allPassed) {
+          args.post({
+            type: 'verifyResult',
+            payload: {
+              ok: true,
+              summary: `Third Party Compare: passed for ${result.checkCount} targeted checks.`,
+            },
+          });
+          return;
+        }
+        args.post({
+          type: 'verifyResult',
+          payload: {
+            ok: false,
+            summary: `Third Party Compare: still failing for ${result.failingCheckIds.length} / ${result.checkCount} targeted checks.`,
+          },
+        });
+      } catch (e) {
+        args.post({
+          type: 'verifyResult',
+          payload: {
+            ok: false,
+            summary: e instanceof Error ? e.message : String(e),
+          },
+        });
+      }
+      return;
+    }
+  }
+}
+
 export class IssuesPanel {
   private static currentPanel: IssuesPanel | undefined;
 
@@ -154,327 +491,41 @@ export class IssuesPanel {
   }
 
   private async onMessage(message: IssuesPanelToExtMessage): Promise<void> {
-    switch (message.type) {
-      case 'ready': {
-        const snapshot = this.scanResultsProvider.getCurrentIssuesSnapshot();
-        this.post({ type: 'snapshot', payload: snapshot });
-        return;
-      }
-      case 'requestSnapshot': {
-        const snapshot = this.scanResultsProvider.getCurrentIssuesSnapshot();
-        this.post({ type: 'snapshot', payload: snapshot });
-        return;
-      }
-      case 'openFile': {
-        const fp = (message.filePath || '').trim();
-        if (!fp) {
-          return;
-        }
-        const doc = await vscode.workspace.openTextDocument(
-          vscode.Uri.file(fp),
-        );
-        const editor = await vscode.window.showTextDocument(doc, {
-          preview: false,
-          viewColumn: vscode.ViewColumn.One,
-        });
-        const line = Number.isFinite(message.line)
-          ? (message.line as number)
-          : undefined;
-        if (line && line > 0) {
-          const pos = new vscode.Position(line - 1, 0);
-          editor.selection = new vscode.Selection(pos, pos);
-          editor.revealRange(
-            new vscode.Range(pos, pos),
-            vscode.TextEditorRevealType.InCenter,
-          );
-        }
-        return;
-      }
-      case 'rescan': {
-        vscode.commands.executeCommand('gomboc-vscode-extension.scanFile').then(
-          () => {},
-          () => {},
-        );
-        return;
-      }
-      case 'applySelected': {
-        const issues = Array.isArray(message.issues) ? message.issues : [];
-        if (!issues.length) {
-          this.post({
-            type: 'toast',
-            payload: { kind: 'info', message: 'No issues selected.' },
-          });
-          return;
-        }
-
-        // Guardrail: cap bulk size.
-        const capped = issues.slice(0, 10);
-        if (issues.length > capped.length) {
-          this.post({
-            type: 'toast',
-            payload: {
-              kind: 'warn',
-              message: `Selection capped at ${capped.length} issues (v1 guardrail).`,
-            },
-          });
-        }
-
-        const total = capped.length;
-        for (let i = 0; i < capped.length; i++) {
-          const cur = capped[i];
-          this.post({
-            type: 'applyProgress',
-            payload: {
-              done: i,
-              total,
-              ruleName: cur.ruleName,
-              filePath: cur.filePath,
-            },
-          });
-          try {
-            await this.scanResultsProvider.applyOrlRuleRemediation([cur]);
-          } catch (e) {
-            this.post({
-              type: 'applyResult',
-              payload: {
-                ok: false,
-                error: e instanceof Error ? e.message : String(e),
-              },
-            });
-            return;
-          }
-        }
-
-        this.post({ type: 'applyProgress', payload: { done: total, total } });
-        this.post({ type: 'applyResult', payload: { ok: true } });
-        return;
-      }
-      case 'previewSelected': {
-        const issues = Array.isArray(message.issues) ? message.issues : [];
-        if (!issues.length) {
-          this.post({
-            type: 'toast',
-            payload: { kind: 'info', message: 'No issues selected.' },
-          });
-          return;
-        }
-
-        // Guardrail: cap preview size.
-        const capped = issues.slice(0, 10);
-        if (issues.length > capped.length) {
-          this.post({
-            type: 'toast',
-            payload: {
-              kind: 'warn',
-              message: `Selection capped at ${capped.length} issues (v1 guardrail).`,
-            },
-          });
-        }
-
-        const last = this.scanResultsProvider.getLastOrlScanContext();
-        const scopeWorkspacePath = last?.workspacePath;
-        const scopeLanguage = last?.language;
-        if (!scopeWorkspacePath || !scopeLanguage) {
-          this.post({
-            type: 'previewError',
-            payload: {
-              message:
-                'Preview requires an ORL scan scope. Run an ORL scan first, then try preview again.',
-            },
-          });
-          return;
-        }
-
-        try {
-          const previewContext = {
-            scanScope: {
-              workspacePath: scopeWorkspacePath,
-              language: scopeLanguage,
-              scannedAt: last?.scannedAt,
-            },
-            selectedIssues: capped,
-          };
-          const result = await this.fixPreviewService.previewSelected({
-            ...previewContext,
-            onProgress: (p: {
-              done: number;
-              total: number;
-              current?: { ruleName: string; filePath: string };
-            }) => {
-              this.post({
-                type: 'previewProgress',
-                payload: {
-                  done: p.done,
-                  total: p.total,
-                  ruleName: p.current?.ruleName,
-                  filePath: p.current?.filePath,
-                },
-              });
-            },
-          });
-          this.lastPreviewContext = previewContext;
-          this.post({ type: 'previewResult', payload: result });
-        } catch (e) {
-          this.post({
-            type: 'previewError',
-            payload: { message: e instanceof Error ? e.message : String(e) },
-          });
-        }
-        return;
-      }
-      case 'applyPreviewSelection': {
-        const files = Array.isArray(message.files) ? message.files : [];
-        if (!files.length) {
-          this.post({
-            type: 'previewApplyResult',
-            payload: { ok: false, message: 'No files to apply.' },
-          });
-          return;
-        }
-        if (files.length > 25) {
-          this.post({
-            type: 'previewApplyResult',
-            payload: {
-              ok: false,
-              message: 'Refusing to apply: too many files selected (max 25).',
-            },
-          });
-          return;
-        }
-        if (!this.lastPreviewContext) {
-          this.post({
-            type: 'previewApplyResult',
-            payload: {
-              ok: false,
-              message: 'No preview context found. Run Preview again first.',
-            },
-          });
-          return;
-        }
-
-        try {
-          const preview = await this.fixPreviewService.previewSelected({
-            ...this.lastPreviewContext,
-          });
-          const totalKeptHunks = files.reduce((sum, f) => {
-            const kept = Array.isArray(f.keptHunkFingerprints)
-              ? f.keptHunkFingerprints.length
-              : 0;
-            return sum + kept;
-          }, 0);
-          if (totalKeptHunks > 400) {
-            throw new Error(
-              'Refusing to apply: too many hunks selected (max 400).',
-            );
-          }
-          await this.applyKeptHunks({
-            preview,
-            keptByFile: new Map(
-              files.map(f => [
-                f.filePath,
-                new Set(
-                  Array.isArray(f.keptHunkFingerprints)
-                    ? f.keptHunkFingerprints
-                    : [],
-                ),
-              ]),
-            ),
-          });
-          // Invalidate cached previews immediately; the workspace has changed.
-          this.fixPreviewService.clearCache();
-          this.post({
-            type: 'previewApplyResult',
-            payload: { ok: true, message: 'Applied kept changes.' },
-          });
-
-          // Rescan to refresh issues/preview.
-          vscode.commands
-            .executeCommand('gomboc-vscode-extension.scanFile')
-            .then(
-              () => {},
-              () => {},
-            );
-        } catch (e) {
-          this.post({
-            type: 'previewApplyResult',
-            payload: {
-              ok: false,
-              message: e instanceof Error ? e.message : String(e),
-            },
-          });
-        }
-        return;
-      }
-      case 'openDiffInEditor': {
-        const filePath = (message.filePath || '').trim();
-        if (!filePath) {
-          return;
-        }
-        const afterText =
-          typeof message.afterText === 'string' ? message.afterText : '';
-        const left = vscode.Uri.file(filePath);
-        const rightDoc = await vscode.workspace.openTextDocument({
-          content: afterText,
-          language: 'plaintext',
-        });
-        await vscode.commands.executeCommand(
-          'vscode.diff',
-          left,
-          rightDoc.uri,
-          `Gomboc Preview: ${filePath}`,
-          { preview: true },
-        );
-        return;
-      }
-      case 'verify': {
-        try {
-          const result = await fixProofCheckovVerifyForPanel(
-            this.scanResultsProvider,
-          );
-          if (!result.ok) {
-            this.post({
-              type: 'verifyResult',
-              payload: { ok: false, summary: result.error },
-            });
-            return;
-          }
-          if (result.allPassed) {
-            this.post({
-              type: 'verifyResult',
-              payload: {
-                ok: true,
-                summary: `Third Party Compare: passed for ${result.checkCount} targeted checks.`,
-              },
-            });
-            return;
-          }
-          this.post({
-            type: 'verifyResult',
-            payload: {
-              ok: false,
-              summary: `Third Party Compare: still failing for ${result.failingCheckIds.length} / ${result.checkCount} targeted checks.`,
-            },
-          });
-        } catch (e) {
-          this.post({
-            type: 'verifyResult',
-            payload: {
-              ok: false,
-              summary: e instanceof Error ? e.message : String(e),
-            },
-          });
-        }
-        return;
-      }
-    }
+    await handleWebviewMessage({
+      message,
+      panel: this.panel,
+      service: this.fixPreviewService,
+      scanResultsProvider: this.scanResultsProvider,
+      post: m => this.post(m),
+      lastPreviewContext: this.lastPreviewContext,
+      setLastPreviewContext: ctx => {
+        this.lastPreviewContext = ctx;
+      },
+      applyKeptHunks: args => this.applyKeptHunks(args),
+      applyFn: applyHunksToText,
+    });
   }
 
+  /**
+   * Applies selected preview hunks after validating source files are unchanged.
+   */
   private async applyKeptHunks(args: {
-    preview: any;
+    preview: unknown;
     keptByFile: Map<string, Set<string>>;
+    applyFn: typeof applyHunksToText;
   }): Promise<void> {
-    const preview = args.preview;
-    const files: any[] = Array.isArray(preview?.files) ? preview.files : [];
+    type PreviewFile = {
+      filePath?: string;
+      beforeText?: string;
+      hunks?: unknown[];
+    };
+    const previewRecord =
+      args.preview && typeof args.preview === 'object'
+        ? (args.preview as { files?: unknown })
+        : {};
+    const files: PreviewFile[] = Array.isArray(previewRecord.files)
+      ? (previewRecord.files as PreviewFile[])
+      : [];
     const edit = new vscode.WorkspaceEdit();
     for (const f of files) {
       const filePath = (f?.filePath || '').trim();
@@ -497,7 +548,7 @@ export class IssuesPanel {
         );
       }
 
-      const target = applyHunksToText({
+      const target = args.applyFn({
         beforeText,
         hunks,
         keptFingerprints: kept,
@@ -1154,6 +1205,16 @@ export class IssuesPanel {
       }
     }
   }
+}
+
+/**
+ * Exposes HTML generation for lightweight unit tests.
+ */
+export function buildWebviewHtml(args: { webview: vscode.Webview }): string {
+  const proto = IssuesPanel.prototype as unknown as {
+    getHtmlForWebview: (webview: vscode.Webview) => string;
+  };
+  return proto.getHtmlForWebview.call({}, args.webview);
 }
 
 function iconCheck(): string {

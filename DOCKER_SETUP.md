@@ -57,11 +57,11 @@ mkdir rules
 # Pull rules from service
 docker run --rm \
   -v $(pwd)/rules:/output \
-  -e RULE_SERVICE_TOKEN="your-token" \
+  -e RULE_SERVICE_TOKEN="token" \
   gombocai/orl:v1.3.0-latest rules pull \
-  --url="https://rules.dev.gcp.gomboc.ai" \
+  --url="https://rules.app.gomboc.ai" \
   --out=/output \
-  --channel="orl-test-channel"
+  --channel="channel-to-use"
 
 # Verify rules were pulled
 ls -la rules/

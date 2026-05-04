@@ -1,0 +1,45 @@
+type: Ruleset
+version: v1
+metadata:
+    name: gomboc-ai/ensure-that-the--audit-log-path-argument-is-set
+    display_name: Ensure that the --audit-log-path argument is set
+    skip: false
+spec:
+    template:
+        language: kubernetes
+        audit_language: ast
+        variables: []
+        collect: []
+        audit: ""
+        remediation: []
+    rules:
+        - name: Detect kube-apiserver command and audit-log-path argument with one or more arguments
+          language: null
+          variables: null
+          audit: |
+            (block_mapping_pair
+              key: (flow_node) @k
+              value: (block_node
+                (block_sequence
+                  .
+                  (block_sequence_item
+                    (flow_node) @cmd_executable
+                  )
+
+                  (block_sequence_item)* @all_args
+                ) @command_sequence
+              )
+              (#eq? @k "command")
+              (#eq? @cmd_executable "kube-apiserver")
+              (#not-match? @all_args "--audit-log-path")
+            )
+          remediation:
+            - command: insert_after
+              path: cmd_executable
+              skip: ""
+              value: |
+                - --audit-log-path=/var/log/kubernetes/apiserver/audit.log
+              flags:
+                indent: '        '
+                prefix: ""
+          collect: null

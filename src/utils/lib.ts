@@ -29,10 +29,14 @@ type MetaDataInput = {
 // stolen from stackoverflow
 // https://stackoverflow.com/questions/190852/how-can-i-get-file-extensions-with-javascript
 export const getFileType = (filename: string) => {
-  return (
-    filename.substring(filename.lastIndexOf('.') + 1, filename.length) ||
-    filename
-  );
+  if (!filename || filename.endsWith('.')) {
+    return '';
+  }
+  const dotIndex = filename.lastIndexOf('.');
+  if (dotIndex === -1) {
+    return filename;
+  }
+  return filename.substring(dotIndex + 1);
 };
 
 export const generateRequestMetadata = async (): Promise<MetaDataInput> => {

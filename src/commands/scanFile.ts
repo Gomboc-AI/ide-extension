@@ -17,18 +17,46 @@ import {
 } from '@gomboc-ai/gomboc-node-sdk';
 
 /**
- * ORL scans are executed by spawning a docker container (`orlClient.remediate`).
- * Overlapping runs can race on temp workspace state and frequently cause the
- * “first scan works, subsequent scans fail” behavior when retriggered quickly
- * (save events, command palette, post-remediation rescans, etc.).
- *
- * We intentionally serialize ORL scans and allow at most one queued "latest"
- * rescan request while a scan is running.
+ * Serializes ORL scans and allows a single queued rerun.
  */
-let orlScanRunning = false;
-let orlScanQueued = false;
-let orlScanSeq = 0;
+export class OrlScanSerializer {
+  private running = false;
+  private queued = false;
+  private seq = 0;
 
+  public async run(args: {
+    task: (args: { seq: number }) => Promise<void>;
+  }): Promise<void> {
+    if (this.running) {
+      this.queued = true;
+      logger.info('ORL scan already running; queued a rescan');
+      setScanStatus({ running: true, queued: true });
+      return;
+    }
+
+    this.running = true;
+    setScanStatus({ running: true, queued: false });
+    const seq = ++this.seq;
+    try {
+      do {
+        this.queued = false;
+        logger.info('ORL scan execution begin', { seq });
+        await args.task({ seq });
+        logger.info('ORL scan execution end', { seq, queued: this.queued });
+        setScanStatus({ running: true, queued: this.queued });
+      } while (this.queued);
+    } finally {
+      this.running = false;
+      setScanStatus({ running: false });
+    }
+  }
+}
+
+const orlScanSerializer = new OrlScanSerializer();
+
+/**
+ * Derives a stable filetype token used by conversion and telemetry.
+ */
 function deriveFiletypeFromPath(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
   if (ext) {
@@ -45,32 +73,16 @@ export async function scanFileCommand(
   await runOrlScanSerialized(context, scanResultsProvider);
 }
 
+/**
+ * Routes scan execution through the shared serializer to avoid overlap races.
+ */
 async function runOrlScanSerialized(
   context: vscode.ExtensionContext,
   scanResultsProvider: ScanResultsProvider,
 ) {
-  if (orlScanRunning) {
-    orlScanQueued = true;
-    logger.info('ORL scan already running; queued a rescan');
-    setScanStatus({ running: true, queued: true });
-    return;
-  }
-
-  orlScanRunning = true;
-  setScanStatus({ running: true, queued: false });
-  const seq = ++orlScanSeq;
-  try {
-    do {
-      orlScanQueued = false;
-      logger.info('ORL scan execution begin', { seq });
-      await scanWithOrl(context, scanResultsProvider);
-      logger.info('ORL scan execution end', { seq, queued: orlScanQueued });
-      setScanStatus({ running: true, queued: orlScanQueued });
-    } while (orlScanQueued);
-  } finally {
-    orlScanRunning = false;
-    setScanStatus({ running: false });
-  }
+  await orlScanSerializer.run({
+    task: async () => scanWithOrl(context, scanResultsProvider),
+  });
 }
 
 async function scanWithOrl(
@@ -372,7 +384,10 @@ async function scanWithOrl(
   }
 }
 
-async function pickRepresentativeFileInDirectory(args: {
+/**
+ * Picks a file in the scan directory that matches the intended ORL language.
+ */
+export async function pickRepresentativeFileInDirectory(args: {
   workspacePath: string;
   language: string;
 }): Promise<string | undefined> {

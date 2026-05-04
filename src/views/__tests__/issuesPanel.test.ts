@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
-import { IssuesPanel } from '../issuesPanel';
+import { buildWebviewHtml, handleWebviewMessage } from '../issuesPanel';
 import type { ScanResultsProvider } from '../../providers/scanResultsProvider';
+import { fixProofCheckovVerifyForPanel } from '../../commands/fixProofCheckovVerify';
 
 jest.mock('../../commands/fixProofCheckovVerify', () => ({
   fixProofCheckovVerifyForPanel: jest.fn().mockResolvedValue({
@@ -25,47 +26,174 @@ jest.mock(
   { virtual: true },
 );
 
-describe('IssuesPanel branch deltas', () => {
+describe('issuesPanel helpers', () => {
   afterEach(() => {
     jest.clearAllMocks();
-    (IssuesPanel as unknown as { currentPanel?: IssuesPanel }).currentPanel =
-      undefined;
   });
 
-  it('embeds unique keying with line/resource and includes line/resource in selected payloads', () => {
+  it('buildWebviewHtml includes expected selection metadata fields', () => {
     const webview = {
       html: '',
       postMessage: jest.fn().mockResolvedValue(true),
       onDidReceiveMessage: jest.fn(),
       asWebviewUri: (uri: vscode.Uri) => uri,
+      cspSource: 'vscode-resource:',
     };
-    const panel = {
-      webview,
-      reveal: jest.fn(),
-      onDidDispose: jest.fn(),
-      dispose: jest.fn(),
-    } as unknown as vscode.WebviewPanel;
-
-    jest.mocked(vscode.window.createWebviewPanel).mockReturnValue(panel);
-
-    const fakeProvider = {
-      getCurrentIssuesSnapshot: jest.fn(() => ({ issues: [] })),
-      onDidUpdateIssues: jest.fn(
-        (listener: (snapshot: unknown) => void) =>
-          new vscode.Disposable(() => listener),
-      ),
-    } as unknown as ScanResultsProvider;
-    const context = {
-      extensionPath: '/ext',
-      globalStorageUri: { fsPath: '/storage' },
-    } as unknown as vscode.ExtensionContext;
-
-    IssuesPanel.show(context, fakeProvider);
-    const html = webview.html;
+    const html = buildWebviewHtml({
+      webview: webview as unknown as vscode.Webview,
+    });
 
     expect(html).toContain("String(Number.isFinite(i.line) ? i.line : '')");
     expect(html).toContain('i.resourceHeader ||');
     expect(html).toContain('line: i.line');
     expect(html).toContain('resourceHeader: i.resourceHeader');
+  });
+
+  it('previewSelected posts preview results', async () => {
+    const post = jest.fn();
+    const previewSelected = jest.fn().mockResolvedValue({ files: [] });
+    const provider = {
+      getCurrentIssuesSnapshot: jest.fn(() => ({ issues: [] })),
+      getLastOrlScanContext: jest.fn(() => ({
+        workspacePath: '/repo',
+        language: 'terraform',
+        scannedAt: 'now',
+      })),
+    } as unknown as ScanResultsProvider;
+
+    await handleWebviewMessage({
+      message: {
+        type: 'previewSelected',
+        issues: [{ ruleName: 'r', filePath: '/repo/main.tf' }],
+      },
+      panel: {} as vscode.WebviewPanel,
+      service: { previewSelected } as unknown as never,
+      scanResultsProvider: provider,
+      post,
+      lastPreviewContext: undefined,
+      setLastPreviewContext: jest.fn(),
+      applyKeptHunks: jest.fn(),
+      applyFn: jest.fn(),
+    });
+
+    expect(previewSelected).toHaveBeenCalled();
+    expect(post).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'previewResult' }),
+    );
+  });
+
+  it('applyPreviewSelection calls applyKeptHunks and posts success', async () => {
+    const post = jest.fn();
+    const previewSelected = jest.fn().mockResolvedValue({ files: [] });
+    const applyKeptHunks = jest.fn().mockResolvedValue(undefined);
+
+    await handleWebviewMessage({
+      message: {
+        type: 'applyPreviewSelection',
+        files: [{ filePath: '/repo/main.tf', keptHunkFingerprints: ['abc'] }],
+      },
+      panel: {} as vscode.WebviewPanel,
+      service: {
+        previewSelected,
+        clearCache: jest.fn(),
+      } as unknown as never,
+      scanResultsProvider: {} as ScanResultsProvider,
+      post,
+      lastPreviewContext: {
+        scanScope: { workspacePath: '/repo', language: 'terraform' },
+        selectedIssues: [{ ruleName: 'r', filePath: '/repo/main.tf' }],
+      },
+      setLastPreviewContext: jest.fn(),
+      applyKeptHunks,
+      applyFn: jest.fn(),
+    });
+
+    expect(applyKeptHunks).toHaveBeenCalledTimes(1);
+    expect(post).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'previewApplyResult',
+        payload: expect.objectContaining({ ok: true }),
+      }),
+    );
+  });
+
+  it('openDiffInEditor executes vscode.diff command', async () => {
+    (
+      vscode.workspace.openTextDocument as unknown as jest.Mock
+    ).mockResolvedValue({
+      uri: vscode.Uri.file('/virtual/after'),
+      getText: () => 'after',
+    } as unknown as vscode.TextDocument);
+    (vscode.commands.executeCommand as unknown as jest.Mock).mockResolvedValue(
+      undefined,
+    );
+    const post = jest.fn();
+
+    await handleWebviewMessage({
+      message: {
+        type: 'openDiffInEditor',
+        filePath: '/repo/main.tf',
+        afterText: 'after',
+      },
+      panel: {} as vscode.WebviewPanel,
+      service: {} as never,
+      scanResultsProvider: {} as ScanResultsProvider,
+      post,
+      lastPreviewContext: undefined,
+      setLastPreviewContext: jest.fn(),
+      applyKeptHunks: jest.fn(),
+      applyFn: jest.fn(),
+    });
+
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+      'vscode.diff',
+      expect.anything(),
+      expect.anything(),
+      expect.stringContaining('/repo/main.tf'),
+      expect.anything(),
+    );
+  });
+
+  it('verify posts failing summary when verify is not ok', async () => {
+    (fixProofCheckovVerifyForPanel as jest.Mock).mockResolvedValue({
+      ok: false,
+      error: 'verification failed',
+    });
+    const post = jest.fn();
+
+    await handleWebviewMessage({
+      message: { type: 'verify' },
+      panel: {} as vscode.WebviewPanel,
+      service: {} as never,
+      scanResultsProvider: {} as ScanResultsProvider,
+      post,
+      lastPreviewContext: undefined,
+      setLastPreviewContext: jest.fn(),
+      applyKeptHunks: jest.fn(),
+      applyFn: jest.fn(),
+    });
+
+    expect(post).toHaveBeenCalledWith({
+      type: 'verifyResult',
+      payload: { ok: false, summary: 'verification failed' },
+    });
+  });
+
+  it('unknown message type does nothing and does not throw', async () => {
+    const post = jest.fn();
+    await expect(
+      handleWebviewMessage({
+        message: { type: 'unknown' } as unknown as never,
+        panel: {} as vscode.WebviewPanel,
+        service: {} as never,
+        scanResultsProvider: {} as ScanResultsProvider,
+        post,
+        lastPreviewContext: undefined,
+        setLastPreviewContext: jest.fn(),
+        applyKeptHunks: jest.fn(),
+        applyFn: jest.fn(),
+      }),
+    ).resolves.toBeUndefined();
+    expect(post).not.toHaveBeenCalled();
   });
 });

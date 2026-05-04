@@ -1,0 +1,40 @@
+type: Ruleset
+version: v1
+metadata:
+    name: gomboc-ai/java/jca/cwe-321-remove-hardcoded-cryptographic-keys
+    display_name: Remove Hard-coded Cryptographic Keys from Java Code (CWE-321)
+    skip: false
+spec:
+    template:
+        language: java
+        audit_language: ast
+        variables: []
+        collect: []
+        audit: ""
+        remediation: []
+    rules:
+        - name: secretkeyspec-inline-literal
+          language: null
+          variables: null
+          audit: |
+            (
+              (object_creation_expression
+                type: (type_identifier) @_constructor_type
+                (argument_list
+                  (method_invocation
+                    object: (string_literal) @key_literal
+                    (identifier) @_getBytes
+                    (argument_list)
+                  )
+                )
+              )
+              (#match? @_constructor_type "^(SecretKeySpec|PBEKeySpec|DESedeKeySpec|DESKeySpec)$")
+              (#eq? @_getBytes "getBytes")
+            )
+          remediation:
+            - command: replace
+              path: key_literal
+              skip: ""
+              value: System.getenv("USER_INPUT_1")
+              flags: {}
+          collect: null

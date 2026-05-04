@@ -13,7 +13,12 @@ module.exports = {
   },
   testMatch: ['**/__tests__/**/*.[jt]s?(x)', '**/?(*.)+(spec|test).[tj]s?(x)'],
   preset: 'ts-jest',
-  testPathIgnorePatterns: ['/node_modules/', '/dist/', '/.ci/'],
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/dist/',
+    '/.ci/',
+    '/src/__integration__/',
+  ],
 
   // coverage
   collectCoverageFrom: [

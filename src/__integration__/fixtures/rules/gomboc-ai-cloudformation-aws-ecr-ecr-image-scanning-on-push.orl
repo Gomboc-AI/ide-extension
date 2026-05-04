@@ -1,0 +1,242 @@
+type: Ruleset
+version: v1
+metadata:
+    name: gomboc-ai/cloudformation/aws/ecr/ecr-image-scanning-on-push
+    display_name: Enable Image Scanning on Push for AWS ECR Repository
+    skip: false
+    priority: 1400000
+    description: |
+        ## Description
+
+        Ensures that all AWS::ECR::Repository resources have image scanning on push enabled
+        by setting ImageScanningConfiguration.ScanOnPush to true. Without this, container
+        images pushed to the repository are not automatically scanned for vulnerabilities,
+        leaving security gaps undetected until a manual scan is triggered.
+    annotations:
+        contributed-by: gomboc-ai
+        gomboc-ai/checkov/id: CKV_AWS_163
+        gomboc-ai/checkov/name: Ensure ECR image scanning on push is enabled
+        gomboc-ai/description-plain: Ensures AWS ECR repositories have image scanning on push enabled by setting ImageScanningConfiguration.ScanOnPush to true, automating vulnerability detection for all newly pushed container images.
+        gomboc-ai/example: |-
+            ```diff
+            Resources:
+              MyECRRepository:
+                Type: AWS::ECR::Repository
+                Properties:
+                  RepositoryName: my-ecr-repo
+            +     ImageScanningConfiguration:
+            +       ScanOnPush: true
+            ```
+        gomboc-ai/impact/score: medium
+        gomboc-ai/impact/statement: |
+            ## Impact
+
+            Without image scanning on push, vulnerabilities in container images may go undetected
+            until a manual scan is explicitly triggered. This rule sets
+            ImageScanningConfiguration.ScanOnPush to true, ensuring every pushed image is
+            automatically scanned for known CVEs and OS-level vulnerabilities, reducing the window
+            of exposure from unscanned images in production.
+        gomboc-ai/impact/statement-plain: Without scan on push, pushed images are not automatically scanned for vulnerabilities. This rule enables automatic scanning on every push, reducing the vulnerability exposure window.
+        gomboc-ai/provider: AWS
+        gomboc-ai/public-rule-bodies: "true"
+        gomboc-ai/resource: AWS::ECR::Repository
+        gomboc-ai/reviewer/date: "2026-04-01"
+        gomboc-ai/reviewer/name: Zach Talarick
+        gomboc-ai/reviewer/status: valid
+        gomboc-ai/risk/score: medium
+        gomboc-ai/risk/statement: |
+            ## Risk
+
+            Enabling image scanning on push triggers an automatic scan every time a new image is
+            pushed to the repository. For repositories with high push frequency, this adds scan
+            queue latency. Existing images already in the repository are not retroactively scanned
+            — only new pushes are affected. There is no additional AWS charge for basic scanning.
+        gomboc-ai/risk/statement-plain: Enabling scan on push adds automatic scan latency for each new image pushed. Existing images are not retroactively scanned. No additional cost for basic scanning.
+        gomboc-ai/severity/score: medium
+        gomboc-ai/severity/statement: |
+            ## Severity
+
+            Without scan-on-push enabled on AWS::ECR::Repository, container images are not
+            automatically checked for known CVEs upon push. This means vulnerable images could
+            be deployed to production without detection. The configuration gap represents a
+            **medium** severity finding — it does not directly expose data or enable immediate
+            exploitation, but it significantly increases the window during which vulnerable
+            images may be in use. Organizations should remediate within 30 days.
+        gomboc-ai/severity/statement-plain: Without scan-on-push enabled, container images pushed to ECR are not automatically checked for CVEs. Vulnerable images could reach production undetected. This is a medium severity gap that should be remediated within 30 days.
+        gomboc-ai/visibility: public
+        use-case-1: ""
+    classifications:
+        - gomboc-ai/policy/surface_area/auditing_and_monitoring/continuous_vulnerability_scanning
+        - gomboc-ai/cis/controls_8-1-2/7_continuous_vulnerability_management/7-5_perform_automated_vulnerability_scans_of_internal_enterprise_assets
+        - gomboc-ai/prismacloud/CKV_AWS_163
+spec:
+    template:
+        language: cloudformation-yaml
+        audit_language: ast
+        variables: []
+        collect: []
+        audit: ""
+        remediation: []
+    rules:
+        - name: Missing ImageScanningConfiguration block
+          language: null
+          variables: null
+          audit: |
+            (block_mapping_pair
+              (flow_node) @_section
+              (block_node
+                (block_mapping
+                  (block_mapping_pair
+                    (flow_node) @_unique_resource_name
+                    (block_node
+                      (block_mapping
+                        (block_mapping_pair
+                          (flow_node) @_resource_type_key
+                          (flow_node) @_resource_type_value
+                        )
+                        (block_mapping_pair
+                          (flow_node) @_properties_key
+                          (block_node
+                            (block_mapping
+                              [
+                                (block_mapping_pair
+                                  (flow_node) @key
+                                  (_)
+                                )
+                                (comment)
+                              ]*
+                              (#not-eq? @key "ImageScanningConfiguration")
+                            )
+                          ) @properties
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+              (#eq? @_section "Resources")
+              (#eq? @_resource_type_key "Type")
+              (#eq? @_resource_type_value "AWS::ECR::Repository")
+              (#eq? @_properties_key "Properties")
+            )
+          remediation:
+            - command: insert_after
+              path: properties
+              skip: ""
+              value: |
+                ImageScanningConfiguration:
+                  ScanOnPush: true
+              flags:
+                indent: '      '
+          collect: null
+        - name: ImageScanningConfiguration present but ScanOnPush absent
+          language: null
+          variables: null
+          audit: |
+            (block_mapping_pair
+              (flow_node) @_section
+              (block_node
+                (block_mapping
+                  (block_mapping_pair
+                    (flow_node) @_unique_resource_name
+                    (block_node
+                      (block_mapping
+                        (block_mapping_pair
+                          (flow_node) @_resource_type_key
+                          (flow_node) @_resource_type_value
+                        )
+                        (block_mapping_pair
+                          (flow_node) @_properties_key
+                          (block_node
+                            (block_mapping
+                              (block_mapping_pair
+                                (flow_node) @_scanning_config_key
+                                (block_node
+                                  (block_mapping
+                                    [
+                                      (block_mapping_pair
+                                        (flow_node) @key
+                                        (_)
+                                      )
+                                      (comment)
+                                    ]*
+                                    (#not-eq? @key "ScanOnPush")
+                                  )
+                                ) @image_scanning_config
+                              )
+                            )
+                          )
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+              (#eq? @_section "Resources")
+              (#eq? @_resource_type_key "Type")
+              (#eq? @_resource_type_value "AWS::ECR::Repository")
+              (#eq? @_properties_key "Properties")
+              (#eq? @_scanning_config_key "ImageScanningConfiguration")
+            )
+          remediation:
+            - command: insert_after
+              path: image_scanning_config
+              skip: ""
+              value: 'ScanOnPush: true'
+              flags:
+                indent: '        '
+          collect: null
+        - name: ScanOnPush is explicitly set to a falsy value
+          language: null
+          variables: null
+          audit: |
+            (block_mapping_pair
+              (flow_node) @_section
+              (block_node
+                (block_mapping
+                  (block_mapping_pair
+                    (flow_node) @_unique_resource_name
+                    (block_node
+                      (block_mapping
+                        (block_mapping_pair
+                          (flow_node) @_resource_type_key
+                          (flow_node) @_resource_type_value
+                        )
+                        (block_mapping_pair
+                          (flow_node) @_properties_key
+                          (block_node
+                            (block_mapping
+                              (block_mapping_pair
+                                (flow_node) @_scanning_config_key
+                                (block_node
+                                  (block_mapping
+                                    (block_mapping_pair
+                                      (flow_node) @_scan_on_push_key
+                                      (flow_node) @scan_on_push_value
+                                    )
+                                  )
+                                )
+                              )
+                            )
+                          )
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+              (#eq? @_section "Resources")
+              (#eq? @_resource_type_key "Type")
+              (#eq? @_resource_type_value "AWS::ECR::Repository")
+              (#eq? @_properties_key "Properties")
+              (#eq? @_scanning_config_key "ImageScanningConfiguration")
+              (#eq? @_scan_on_push_key "ScanOnPush")
+              (#match? @scan_on_push_value "^(false|False|FALSE|no|No|NO|off|Off|OFF|n|N|0)$")
+            )
+          remediation:
+            - command: replace
+              path: scan_on_push_value
+              skip: ""
+              value: "true"
+              flags: {}
+          collect: null

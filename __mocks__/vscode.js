@@ -128,6 +128,10 @@ module.exports = {
   ViewColumn: {
     One: 1,
   },
+  FileType: {
+    File: 1,
+    Directory: 2,
+  },
   CancellationToken: {
     None: {},
   },
