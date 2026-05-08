@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { OrlClient } from '../../orl/orlClient';
 
-const ORL_IMAGE = 'gombocai/orl:v1.3.0-latest';
+const ORL_IMAGE = 'gombocai/orl:v1.3.5';
 const RULES_SERVICE_URL = 'https://rules.app.gomboc.ai';
 const REPO_ROOT = path.join(__dirname, '../../..');
 
