@@ -48,13 +48,13 @@ jobs:
         uses: actions/cache@v5
         with:
           path: /tmp/orl-image.tar
-          key: docker-gombocai-orl-v1.3.0
+          key: docker-gombocai-orl-v1.3.5
 
       - name: Pull ORL Docker image
         if: steps.cache-orl.outputs.cache-hit != 'true'
         run: |
-          docker pull gombocai/orl:v1.3.0-latest
-          docker save gombocai/orl:v1.3.0-latest -o /tmp/orl-image.tar
+          docker pull gombocai/orl:v1.3.5
+          docker save gombocai/orl:v1.3.5 -o /tmp/orl-image.tar
 
       - name: Load ORL Docker image from cache
         if: steps.cache-orl.outputs.cache-hit == 'true'

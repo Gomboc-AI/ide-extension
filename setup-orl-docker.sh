@@ -40,19 +40,19 @@ check_docker() {
 # Check if ORL image is available
 check_orl_image() {
     echo "Checking ORL Docker image..."
-    if ! docker images | grep -q "gombocai/orl.*v1.0.0"; then
-        print_warning "ORL Docker image v1.0.0 not found locally"
+    if ! docker images | grep -q "gombocai/orl.*v1.3.5"; then
+        print_warning "ORL Docker image v1.3.5 not found locally"
         print_status "Will pull the public image from Docker Hub"
     else
-        print_status "ORL Docker image v1.0.0 found locally"
+        print_status "ORL Docker image v1.3.5 found locally"
     fi
 }
 
 # Pull ORL Docker image
 pull_orl_image() {
     echo "Pulling ORL Docker image..."
-    docker pull gombocai/orl:v1.3.0-latest
-    print_status "ORL Docker image v1.3.0 pulled successfully"
+    docker pull gombocai/orl:v1.3.5
+    print_status "ORL Docker image v1.3.5 pulled successfully"
 }
 
 # Test ORL image
@@ -60,7 +60,7 @@ test_orl_image() {
     echo "Testing ORL image..."
     
     # Test basic help
-    if docker run --rm gombocai/orl:v1.3.0-latest --help > /dev/null 2>&1; then
+    if docker run --rm gombocai/orl:v1.3.5 --help > /dev/null 2>&1; then
         print_status "ORL image basic test passed"
     else
         print_error "ORL image basic test failed"
@@ -68,7 +68,7 @@ test_orl_image() {
     fi
     
     # Test remediate command
-    if docker run --rm gombocai/orl:v1.3.0-latest remediate --help > /dev/null 2>&1; then
+    if docker run --rm gombocai/orl:v1.3.5 remediate --help > /dev/null 2>&1; then
         print_status "ORL remediate command test passed"
     else
         print_error "ORL remediate command test failed"
@@ -143,7 +143,7 @@ test_orl_with_files() {
     if docker run --rm \
         -v $(pwd):/workspace \
         -e RULE_SERVICE_TOKEN="$RULE_SERVICE_TOKEN" \
-        gombocai/orl:v1.3.0-latest remediate /workspace --dry-run > /dev/null 2>&1; then
+        gombocai/orl:v1.3.5 remediate /workspace --dry-run > /dev/null 2>&1; then
         print_status "ORL remediation test passed"
     else
         print_warning "ORL remediation test failed (this may be due to authentication or network issues)"
