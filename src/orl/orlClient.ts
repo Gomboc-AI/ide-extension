@@ -191,7 +191,7 @@ export interface OrlConfig {
 // to ensure consistent behavior across environments and easier support/debugging.
 // For local dev with XML/Gradle support, switch to 'orl-dev:local'
 // (rebuild via: /path/to/orl/reload-dev-image.sh)
-const ORL_CONTAINER_IMAGE = 'gombocai/orl:v1.3.5';
+const ORL_CONTAINER_IMAGE = 'gombocai/orl:v1.3.6';
 
 export interface OrlResult {
   success: boolean;
