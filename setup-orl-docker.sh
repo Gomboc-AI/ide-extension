@@ -51,7 +51,7 @@ check_orl_image() {
 # Pull ORL Docker image
 pull_orl_image() {
     echo "Pulling ORL Docker image..."
-    docker pull gombocai/orl:v1.3.5
+    docker pull gombocai/orl:v1.3.6
     print_status "ORL Docker image v1.3.5 pulled successfully"
 }
 
@@ -60,7 +60,7 @@ test_orl_image() {
     echo "Testing ORL image..."
     
     # Test basic help
-    if docker run --rm gombocai/orl:v1.3.5 --help > /dev/null 2>&1; then
+    if docker run --rm gombocai/orl:v1.3.6 --help > /dev/null 2>&1; then
         print_status "ORL image basic test passed"
     else
         print_error "ORL image basic test failed"
@@ -68,7 +68,7 @@ test_orl_image() {
     fi
     
     # Test remediate command
-    if docker run --rm gombocai/orl:v1.3.5 remediate --help > /dev/null 2>&1; then
+    if docker run --rm gombocai/orl:v1.3.6 remediate --help > /dev/null 2>&1; then
         print_status "ORL remediate command test passed"
     else
         print_error "ORL remediate command test failed"
@@ -143,7 +143,7 @@ test_orl_with_files() {
     if docker run --rm \
         -v $(pwd):/workspace \
         -e RULE_SERVICE_TOKEN="$RULE_SERVICE_TOKEN" \
-        gombocai/orl:v1.3.5 remediate /workspace --dry-run > /dev/null 2>&1; then
+        gombocai/orl:v1.3.6 remediate /workspace --dry-run > /dev/null 2>&1; then
         print_status "ORL remediation test passed"
     else
         print_warning "ORL remediation test failed (this may be due to authentication or network issues)"

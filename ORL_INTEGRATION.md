@@ -51,7 +51,7 @@ VS Code Extension → Docker Container → ORL Engine → Rules Service → VS C
 | `orlRulesServiceAccountId` | string  | `""`                          | Account ID (sensitive)           |
 | `orlChannel`               | string  | `default`                     | Channel name for rules           |
 
-**ORL Docker image**: pinned by the extension to `gombocai/orl:v1.3.5` (not configurable via settings).
+**ORL Docker image**: pinned by the extension to `gombocai/orl:v1.3.6` (not configurable via settings).
 
 ## Troubleshooting
 
