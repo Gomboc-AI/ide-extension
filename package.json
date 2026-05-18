@@ -2,7 +2,7 @@
   "name": "gomboc-vscode-extension",
   "publisher": "GombocAI",
   "displayName": "Gomboc",
-  "description": "Find and fix infrastructure as code misconfigurations",
+  "description": "Find and fix cloud security issues in code and config files",
   "repository": {
     "type": "git",
     "url": "https://github.com/Gomboc-AI/ide-extension"

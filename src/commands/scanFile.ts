@@ -120,7 +120,7 @@ async function scanWithOrl(
         language = last?.language;
         if (!workspacePath || !language) {
           vscode.window.showErrorMessage(
-            'Scan requires an active IaC file. Open a Terraform/CloudFormation file (or run one scan first) then try again.',
+            'Scan requires an active supported file. Open a supported file (or run one scan first) then try again.',
           );
           return;
         }
@@ -130,7 +130,7 @@ async function scanWithOrl(
         });
         if (!filePath) {
           vscode.window.showErrorMessage(
-            `Scan could not find a representative IaC file under: ${workspacePath}`,
+            `Scan could not find a representative file under: ${workspacePath}`,
           );
           return;
         }
@@ -181,7 +181,7 @@ async function scanWithOrl(
     logger.info('ORL scanning scope', {
       currentFile: filePath,
       workspacePath: workspacePath,
-      scope: 'workspace-level (all IaC files in directory)',
+      scope: 'workspace-level (all supported files in directory)',
     });
 
     // Create ORL client and execute remediation
