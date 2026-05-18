@@ -268,7 +268,7 @@ Check the VS Code Developer Console for detailed logs:
 ### Performance Issues
 
 - **Docker Resource Limits**: Ensure Docker has enough memory/CPU
-- **Large Workspaces**: ORL scans all IaC files in the directory
+- **Large Workspaces**: ORL scans all supported files in the directory
 - **Network Issues**: Rules service calls may be slow
 
 ## File Structure
@@ -312,7 +312,7 @@ ide-extension/
 1. **Test with Real Projects**: Try the extension with actual Terraform/CloudFormation projects
 2. **Customize Rules**: Modify the channel or add custom rules
 3. **Performance Tuning**: Optimize Docker resources and scanning scope
-4. **Integration Testing**: Test with different IaC languages and configurations
+4. **Integration Testing**: Test with different supported languages and configurations
 
 ## Support
 

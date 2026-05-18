@@ -1319,7 +1319,7 @@ export class OrlClient {
   }
 
   /**
-   * Copy a single IaC file into the temp workspace, preserving its basename.
+   * Copy a single supported file into the temp workspace, preserving its basename.
    * We intentionally do not copy the whole directory so ORL only sees this file.
    */
   private async copySingleWorkspaceFile(args: {
@@ -1797,7 +1797,7 @@ export class OrlClient {
           .map(p => p.replace(/^[.][/]/, '').replace(/^\/+/, ''))
           .map(p => path.join(tempDir, p));
       } else {
-        // Fallback: Read all IaC files from temp directory
+        // Fallback: Read all supported files from temp directory
         files = await this.getAllIacFiles(tempDir);
       }
 

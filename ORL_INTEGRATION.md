@@ -28,7 +28,7 @@ VS Code Extension → Docker Container → ORL Engine → Rules Service → VS C
 ### Process Flow
 
 1. **Scan trigger**: User runs "Gomboc: Scan current file or scenario"
-2. **Workspace preparation**: Extension copies IaC files to `.orl-temp/` directory
+2. **Workspace preparation**: Extension copies scanned workspace files to `.orl-temp/` directory
 3. **Rules download**: ORL pulls rules from rules service using `rules pull` command
 4. **Remediation**: ORL runs `remediate --dry-run` on workspace files
 5. **Result parsing**: Extension parses ORL output and creates VS Code diagnostics

@@ -2,7 +2,7 @@
 
 This doc is a focused guide for:
 
-- adding **new IaC languages/file types**
+- adding **new supported languages/file types**
 - getting **Problems tab diagnostics** + **Fix Reviewer webview** correct
 - understanding how we submit scan/reporting data to the **Integrations** service
 
@@ -32,7 +32,7 @@ Update it to:
 - return the ORL language string you want
 - keep the validation error message up to date (the “supported file types” list)
 
-### 3) Ensure the extension’s “IaC tool classification” includes it
+### 3) Ensure the extension’s “file/tool classification” includes it
 
 This affects how we clear diagnostics on edit and how we scope collections (file vs directory):
 

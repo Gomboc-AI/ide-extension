@@ -1,13 +1,13 @@
-## Gomboc AI \- Cloud Security for IaC  
-Whether writing new cloud infrastructure or cleaning up legacy IaC, Gomboc's VS Code Plugin enables real-time, AI-generated code fixes. Start your [free trial](https://app.gomboc.ai/) with Gomboc AI today\!
+## Gomboc AI \- Cloud Security for Code  
+Whether writing new cloud infrastructure or cleaning up legacy code, Gomboc's VS Code Plugin enables real-time, AI-generated code fixes. Start your [free trial](https://app.gomboc.ai/) with Gomboc AI today\!
 
 ## Overview   
-The Gomboc.ai VSCode Plugin transforms how developers handle cloud issues in Infrastructure as Code (IaC). By integrating directly into your IDE, it eliminates security bottlenecks, automates compliance, and provides actionable fixes in real time, so you can deploy faster and safer.  
+The Gomboc.ai VSCode Plugin transforms how developers handle cloud issues in source files. By integrating directly into your IDE, it eliminates security bottlenecks, automates compliance, and provides actionable fixes in real time, so you can deploy faster and safer.  
 
 ## Key Features
 
 * Real-Time Security Guardrail   
-  Catch misconfigurations and vulnerabilities as you code. Get instant feedback and one-click fixes for AWS, Azure, and GCP IaC templates.    
+  Catch misconfigurations and vulnerabilities as you code. Get instant feedback and one-click fixes for AWS, Azure, and GCP templates and config files.    
 * Automated Compliance    
   Enforce security best practices and regulatory standards (CIS, NIST CSF, etc.) without manual reviews. Gomboc auto-remediates issues to keep deployments compliant.    
 * Accelerate CI/CD Pipelines  
