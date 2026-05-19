@@ -156,11 +156,8 @@ export class IntegrationsService {
   }
 
   public async flushOrlFixAppliedEvents(): Promise<void> {
-    const {
-      integrationsServiceUrl,
-      apiKey,
-      orlFixAppliedAnalyticsEnabled,
-    } = this.integrationsConfigProvider();
+    const { integrationsServiceUrl, apiKey, orlFixAppliedAnalyticsEnabled } =
+      this.integrationsConfigProvider();
 
     if (!orlFixAppliedAnalyticsEnabled) {
       return;
