@@ -18,6 +18,8 @@ import {
   QueueOrlFixAppliedEventInput,
 } from './types';
 
+const ORL_FIX_APPLIED_ENDPOINT_PATH = '/reporting/orl-fix-applied';
+
 export class IntegrationsService {
   private readonly execAsync = promisify(exec);
   private readonly integrationsConfigProvider: () => IntegrationsRuntimeConfig;
@@ -154,12 +156,8 @@ export class IntegrationsService {
   }
 
   public async flushOrlFixAppliedEvents(): Promise<void> {
-    const {
-      integrationsServiceUrl,
-      apiKey,
-      orlFixAppliedAnalyticsEnabled,
-      integrationsFixAppliedEndpointPath,
-    } = this.integrationsConfigProvider();
+    const { integrationsServiceUrl, apiKey, orlFixAppliedAnalyticsEnabled } =
+      this.integrationsConfigProvider();
 
     if (!orlFixAppliedAnalyticsEnabled) {
       return;
@@ -202,7 +200,7 @@ export class IntegrationsService {
         await this.postFixAppliedEvent({
           url: integrationsServiceUrl,
           apiKey,
-          endpointPath: integrationsFixAppliedEndpointPath,
+          endpointPath: ORL_FIX_APPLIED_ENDPOINT_PATH,
           event: item.event,
         });
         sent[item.event.idempotencyKey] = Date.now();
@@ -216,7 +214,7 @@ export class IntegrationsService {
         if (status && status >= 400 && status < 500 && status !== 429) {
           logger.warn('Dropping ORL fix applied event (non-retryable)', {
             status,
-            endpointPath: integrationsFixAppliedEndpointPath,
+            endpointPath: ORL_FIX_APPLIED_ENDPOINT_PATH,
           });
           droppedCount++;
           continue;
@@ -227,7 +225,7 @@ export class IntegrationsService {
         if (attempts >= IntegrationsService.MAX_ATTEMPTS) {
           logger.warn('Dropping ORL fix applied event (max attempts reached)', {
             attempts,
-            endpointPath: integrationsFixAppliedEndpointPath,
+            endpointPath: ORL_FIX_APPLIED_ENDPOINT_PATH,
             status,
           });
           droppedCount++;

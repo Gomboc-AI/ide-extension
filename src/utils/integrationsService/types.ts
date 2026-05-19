@@ -2,7 +2,6 @@ export type IntegrationsRuntimeConfig = {
   integrationsServiceUrl: string | undefined;
   apiKey: string | undefined;
   orlFixAppliedAnalyticsEnabled: boolean;
-  integrationsFixAppliedEndpointPath: string;
 };
 
 export type OrlResult = {

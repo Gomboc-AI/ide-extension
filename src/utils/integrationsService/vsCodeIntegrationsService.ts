@@ -57,11 +57,6 @@ export const getIntegrationsConfig = (): IntegrationsRuntimeConfig => {
       'orlFixAppliedAnalyticsEnabled',
       true,
     ),
-    integrationsFixAppliedEndpointPath: getStringSetting(
-      config,
-      'integrationsFixAppliedEndpointPath',
-      DEFAULTS.integrationsFixAppliedEndpointPath,
-    ),
   };
 };
 

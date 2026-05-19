@@ -11,6 +11,7 @@ import { parseOrlReportPayload } from '../schemas/orlReport';
 import {
   DEFAULTS,
   getBooleanSetting,
+  getNumberSetting,
   getStringSetting,
 } from '../utils/configDefaults';
 import { createProfiler } from '../utils/profiler';
@@ -71,6 +72,13 @@ function getErrorCode(error: unknown): number {
   return 1;
 }
 
+function formatRemediationTimeoutError(args: {
+  timeoutSeconds: number;
+}): string {
+  const { timeoutSeconds } = args;
+  return `Docker remediate step exceeded timeout threshold (${timeoutSeconds}s)`;
+}
+
 /**
  * Run a command without going through a shell.
  * This avoids quoting/escaping pitfalls on Windows (PowerShell/cmd) and is safer cross-platform.
@@ -124,7 +132,7 @@ async function runProcess(args: {
       t = setTimeout(() => {
         timedOut = true;
         try {
-          child.kill();
+          child.kill('SIGKILL');
         } catch {
           // ignore
         }
@@ -171,6 +179,10 @@ export interface OrlConfig {
    * actually produce changes, then rerun ORL with only those rules + hooks enabled.
    */
   twoPassEnabled?: boolean;
+  /**
+   * Maximum per-step timeout for ORL docker remediate operations (in seconds).
+   */
+  scanTimeoutSeconds?: number;
   /**
    * DEV ONLY: when enabled, inject `.orl-dev-rules/` as an extra rulespace (if present).
    * Default OFF to avoid accidental production usage.
@@ -220,6 +232,24 @@ export class OrlClient {
   constructor(config: OrlConfig) {
     this.config = config;
     this.storageClient = new FileSystemHandler();
+  }
+
+  private getScanTimeoutSeconds(): number {
+    const timeoutSeconds = this.config.scanTimeoutSeconds;
+    if (!timeoutSeconds || !Number.isFinite(timeoutSeconds)) {
+      return DEFAULTS.orlScanTimeoutSeconds;
+    }
+    return Math.max(10, Math.min(300, Math.floor(timeoutSeconds)));
+  }
+
+  private getScanTimeoutMs(): number {
+    return this.getScanTimeoutSeconds() * 1000;
+  }
+
+  private getRemediationTimeoutError(): string {
+    return formatRemediationTimeoutError({
+      timeoutSeconds: this.getScanTimeoutSeconds(),
+    });
   }
 
   private getRulesCacheDir(): string {
@@ -778,7 +808,12 @@ export class OrlClient {
         component: 'orlClient.remediate',
         baseFields: { workspacePath, language: language ?? '' },
       });
+      const remediationTimeoutMs = this.getScanTimeoutMs();
+      const remediationTimeoutSeconds = this.getScanTimeoutSeconds();
       logger.info('Starting ORL remediation', { workspacePath });
+      logger.info('Using ORL docker remediate timeout', {
+        timeoutSeconds: remediationTimeoutSeconds,
+      });
 
       const twoPassEnabled =
         typeof this.config.twoPassEnabled === 'boolean'
@@ -885,7 +920,7 @@ export class OrlClient {
               const execDiscovery = await runProcess({
                 command: 'docker',
                 commandArgs: dockerArgsDiscovery,
-                timeoutMs: 90000,
+                timeoutMs: remediationTimeoutMs,
                 maxOutputBytes: 10 * 1024 * 1024,
                 cwd: workspacePath,
               });
@@ -893,6 +928,18 @@ export class OrlClient {
                 exitCode: execDiscovery.exitCode,
                 timedOut: execDiscovery.timedOut,
               });
+              if (execDiscovery.timedOut) {
+                prof.end({
+                  success: false,
+                  exitCode: execDiscovery.exitCode ?? 1,
+                });
+                return {
+                  success: false,
+                  modifiedFiles: {},
+                  exitCode: execDiscovery.exitCode ?? 1,
+                  error: this.getRemediationTimeoutError(),
+                };
+              }
 
               const reportFileDiscovery =
                 await this.readReportFile(discoveryDir);
@@ -994,7 +1041,7 @@ export class OrlClient {
               const execResult = await runProcess({
                 command: 'docker',
                 commandArgs: dockerArgs,
-                timeoutMs: 90000, // hooks add overhead but shouldn't take this long
+                timeoutMs: remediationTimeoutMs,
                 maxOutputBytes: 10 * 1024 * 1024,
                 cwd: workspacePath,
               });
@@ -1060,7 +1107,7 @@ export class OrlClient {
                   modifiedFiles: {},
                   exitCode: exitCode ?? 1,
                   error: execResult.timedOut
-                    ? 'ORL execution timed out'
+                    ? this.getRemediationTimeoutError()
                     : `ORL execution failed (exit code ${exitCode ?? 'unknown'})`,
                 };
               }
@@ -1141,7 +1188,7 @@ export class OrlClient {
         const execResult = await runProcess({
           command: 'docker',
           commandArgs: dockerArgs,
-          timeoutMs: 90000, // 90 second timeout - hooks add overhead but shouldn't take this long
+          timeoutMs: remediationTimeoutMs,
           maxOutputBytes: 10 * 1024 * 1024,
           cwd: workspacePath,
         });
@@ -1198,7 +1245,8 @@ export class OrlClient {
 
         if (execResult.timedOut) {
           logger.error('ORL docker process timed out', {
-            timeoutMs: 90000,
+            timeoutMs: remediationTimeoutMs,
+            timeoutSeconds: remediationTimeoutSeconds,
             signal: execResult.signal,
           });
         } else if (exitCode === 2) {
@@ -1225,7 +1273,7 @@ export class OrlClient {
             modifiedFiles: {},
             exitCode: exitCode ?? 1,
             error: execResult.timedOut
-              ? 'ORL execution timed out'
+              ? this.getRemediationTimeoutError()
               : `ORL execution failed (exit code ${exitCode ?? 'unknown'})`,
           };
         }
@@ -2109,10 +2157,15 @@ export class OrlClient {
           targetFilePath: targetFilePath ?? '',
         },
       });
+      const remediationTimeoutMs = this.getScanTimeoutMs();
+      const remediationTimeoutSeconds = this.getScanTimeoutSeconds();
       logger.info('Starting ORL single-rule remediation', {
         workspacePath,
         ruleName,
         targetFilePath,
+      });
+      logger.info('Using ORL docker remediate timeout (single-rule)', {
+        timeoutSeconds: remediationTimeoutSeconds,
       });
 
       // Use an OS temp directory to avoid contending with .orl-temp from scans.
@@ -2243,7 +2296,7 @@ export class OrlClient {
       const execResult = await runProcess({
         command: 'docker',
         commandArgs: dockerArgs,
-        timeoutMs: 90000,
+        timeoutMs: remediationTimeoutMs,
         maxOutputBytes: 10 * 1024 * 1024,
         cwd: workspacePath,
       });
@@ -2315,7 +2368,7 @@ export class OrlClient {
           modifiedFiles: {},
           exitCode: exitCode ?? 1,
           error: execResult.timedOut
-            ? 'ORL execution timed out'
+            ? this.getRemediationTimeoutError()
             : `ORL execution failed (exit code ${exitCode ?? 'unknown'})`,
         };
       }
@@ -2421,6 +2474,11 @@ export async function createOrlClient(args: {
       config,
       'orlTwoPassEnabled',
       DEFAULTS.orlTwoPassEnabled,
+    ),
+    scanTimeoutSeconds: getNumberSetting(
+      config,
+      'orlScanTimeoutSeconds',
+      DEFAULTS.orlScanTimeoutSeconds,
     ),
     customRulesOnly: getBooleanSetting(
       config,
