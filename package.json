@@ -115,6 +115,43 @@
             "default": true,
             "description": "Experimental: run a fast first pass with ORL hooks disabled to discover which rules actually produce changes, then rerun ORL with only those rules + hooks enabled. This can significantly speed up scans on some Windows/Docker setups."
           },
+          "gomboc-vscode-extension.orlScanTimeoutSeconds": {
+            "type": "number",
+            "enum": [
+              10,
+              20,
+              30,
+              40,
+              50,
+              60,
+              70,
+              80,
+              90,
+              100,
+              110,
+              120,
+              130,
+              140,
+              150,
+              160,
+              170,
+              180,
+              190,
+              200,
+              210,
+              220,
+              230,
+              240,
+              250,
+              260,
+              270,
+              280,
+              290,
+              300
+            ],
+            "default": 90,
+            "description": "Maximum time (seconds) allowed for each ORL Docker remediate step before failing the scan."
+          },
           "gomboc-vscode-extension.orlLocalDevRulesEnabled": {
             "type": "boolean",
             "default": false,
@@ -134,11 +171,6 @@
             "type": "boolean",
             "default": true,
             "description": "Emit analytics to integrations service when an ORL fix is applied."
-          },
-          "gomboc-vscode-extension.integrationsFixAppliedEndpointPath": {
-            "type": "string",
-            "default": "/reporting/orl-fix-applied",
-            "description": "Integrations service endpoint path for ORL fix applied analytics events."
           },
           "gomboc-vscode-extension.integrationsServiceUrl": {
             "type": "string",

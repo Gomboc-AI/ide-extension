@@ -1,9 +1,10 @@
 import * as vscode from 'vscode';
+import { z } from 'zod';
 
 export const DEFAULTS = {
   orlRulesServiceUrl: 'https://rules.app.gomboc.ai',
   integrationsServiceUrl: 'https://integrations.app.gomboc.ai',
-  integrationsFixAppliedEndpointPath: '/reporting/orl-fix-applied',
+  orlScanTimeoutSeconds: 90,
   orlDebugKeepTemp: false,
   orlDebugPersistDiagnostics: false,
   // Experimental: run a fast first pass with ORL hooks disabled to discover which rules
@@ -37,4 +38,14 @@ export function getBooleanSetting(
 ): boolean {
   const v = cfg.get(key) as unknown;
   return typeof v === 'boolean' ? v : fallback;
+}
+
+export function getNumberSetting(
+  cfg: vscode.WorkspaceConfiguration,
+  key: string,
+  fallback: number,
+): number {
+  const v = cfg.get(key) as unknown;
+  const parsed = z.coerce.number().finite().safeParse(v);
+  return parsed.success ? parsed.data : fallback;
 }
