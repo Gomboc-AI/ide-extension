@@ -17,7 +17,7 @@ describe('parseOrlReport', () => {
   });
 
   it('parses valid YAML with type Report and no leading delimiter', () => {
-    const report = 'type: Report\nspec:\n  workspace: repo';
+    const report = 'type: Report\nversion: v1\nspec:\n  workspace: repo';
 
     const parsed = parseOrlReport(report);
 
@@ -29,7 +29,7 @@ describe('parseOrlReport', () => {
   });
 
   it('parses valid YAML with leading delimiter', () => {
-    const report = '---\ntype: Report\nspec:\n  workspace: repo';
+    const report = '---\ntype: Report\nversion: v1\nspec:\n  workspace: repo';
 
     const parsed = parseOrlReport(report);
 
@@ -50,6 +50,7 @@ describe('parseOrlReport', () => {
       '+bar',
       '---',
       'type: Report',
+      'version: v1',
       'spec:',
       '  workspace: repo',
     ].join('\n');
@@ -77,7 +78,7 @@ describe('parseOrlReport', () => {
   });
 
   it('coerces FAILSAFE numeric scalars to integers', () => {
-    const report = 'type: Report\nspec:\n  fixes: 3';
+    const report = 'type: Report\nversion: v1\nspec:\n  fixes: 3';
 
     const parsed = parseOrlReport(report);
 
@@ -88,6 +89,7 @@ describe('parseOrlReport', () => {
   it('parses finding_locations on report rules', () => {
     const report = [
       'type: Report',
+      'version: v1',
       'spec:',
       '  rules:',
       '    - name: gomboc-ai/test_rule000',

@@ -107,6 +107,7 @@ describe('orlResultConverter helpers', () => {
   it('builds finding-centric remediations from report findingLocations', () => {
     const report = [
       'type: Report',
+      'version: v1',
       'metadata:',
       '  name: report-name',
       '  display_name: Report Name',
@@ -169,6 +170,7 @@ describe('orlResultConverter helpers', () => {
   it('coerces FAILSAFE numeric fields when casting into SDK report input', () => {
     const report = [
       'type: Report',
+      'version: v1',
       'spec:',
       '  rules:',
       '    - name: gomboc-ai/test_rule000',
@@ -194,6 +196,7 @@ describe('orlResultConverter helpers', () => {
   it('extracts appliedRules from sdk report conversion', () => {
     const report = {
       type: 'Report',
+      version: 'v1',
       metadata: {
         name: 'report-name',
         display_name: 'Report Name',

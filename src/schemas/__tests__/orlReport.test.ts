@@ -4,7 +4,7 @@ import {
   selectScanDiagnosticLocation,
   toExtensionLine,
 } from '../orlReport';
-import type { FindingLocationRow, OrlReport } from '../orlReport';
+import type { FindingLocationRow } from '../orlReport';
 
 describe('orlReport location helpers', () => {
   it('selectScanDiagnosticLocation returns originalLocation by default', () => {
@@ -54,9 +54,49 @@ describe('orlReport location helpers', () => {
     expect(toExtensionLine(Number.NaN)).toBe(1);
   });
 
+  it('parseOrlReportPayload accepts FAILSAFE null priority on rule metadata', () => {
+    const report = {
+      type: 'Report',
+      version: 'v1',
+      spec: {
+        rules: [
+          {
+            name: 'gomboc-ai/cloudformation-yaml/aws/aws-s3-bucket/s3-block-public-acls000',
+            metadata: {
+              name: 'gomboc-ai/cloudformation-yaml/aws/aws-s3-bucket/s3-block-public-acls000',
+              priority: 'null',
+            },
+            finding_locations: [
+              {
+                id: 'finding-1',
+                original_location: {
+                  file_path: 'cfngoat.yaml',
+                  start_line: 1078,
+                  start_column: 0,
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const parsed = parseOrlReportPayload(report);
+    expect(parsed?.spec.rules).toHaveLength(1);
+    expect(parsed?.spec.rules?.[0]?.metadata?.priority).toBeUndefined();
+    expect(parsed?.spec.rules?.[0]?.findingLocations?.[0]?.originalLocation)
+      .toEqual(
+        expect.objectContaining({
+          filePath: 'cfngoat.yaml',
+          startLine: 1078,
+        }),
+      );
+  });
+
   it('extractFindingLocationsFromReport reads snake_case finding_locations', () => {
     const report = {
       type: 'Report',
+      version: 'v1',
       spec: {
         rules: [
           {
@@ -77,7 +117,7 @@ describe('orlReport location helpers', () => {
           },
         ],
       },
-    } as OrlReport;
+    };
 
     const rows = extractFindingLocationsFromReport({
       report: parseOrlReportPayload(report),
@@ -103,34 +143,37 @@ describe('orlReport location helpers', () => {
   it('extractFindingLocationsFromReport flattens rules and resolves paths', () => {
     const report = {
       type: 'Report',
-      rules: [
-        {
-          name: 'gomboc-ai/ensure_encryption000',
-          finding_locations: [
-            {
-              id: 'finding-1',
-              original_location: {
+      version: 'v1',
+      spec: {
+        rules: [
+          {
+            name: 'gomboc-ai/ensure_encryption000',
+            finding_locations: [
+              {
                 id: 'finding-1',
-                file_path: '/workspace/main.tf',
-                start_line: 4,
-                start_column: 2,
-                end_line: 4,
-                end_column: 18,
+                original_location: {
+                  id: 'finding-1',
+                  file_path: '/workspace/main.tf',
+                  start_line: 4,
+                  start_column: 2,
+                  end_line: 4,
+                  end_column: 18,
+                },
               },
-            },
-            {
-              id: 'finding-deleted',
-              resolution_status: 'deleted',
-              original_location: {
+              {
                 id: 'finding-deleted',
-                file_path: '/workspace/main.tf',
-                start_line: 9,
-                start_column: 0,
+                resolution_status: 'deleted',
+                original_location: {
+                  id: 'finding-deleted',
+                  file_path: '/workspace/main.tf',
+                  start_line: 9,
+                  start_column: 0,
+                },
               },
-            },
-          ],
-        },
-      ],
+            ],
+          },
+        ],
+      },
     };
 
     const rows = extractFindingLocationsFromReport({

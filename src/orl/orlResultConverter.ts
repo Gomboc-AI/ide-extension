@@ -427,9 +427,9 @@ export class OrlResultConverter {
         'gomboc-ai/description_plain',
       ];
 
-      const annotations =
-        (metadataRecord.annotations as Record<string, unknown> | undefined) ||
-        (metadataRecord.annotation as Record<string, unknown> | undefined);
+      const annotations = metadataRecord.annotations as
+        | Record<string, unknown>
+        | undefined;
 
       if (annotations) {
         for (const k of annotationKeys) {
@@ -440,16 +440,7 @@ export class OrlResultConverter {
         }
       }
 
-      // Sometimes the report may flatten annotation keys onto metadata directly.
-      for (const k of annotationKeys) {
-        const v = coerceString(metadataRecord[k]);
-        if (v) {
-          return v;
-        }
-      }
-
-      // Backwards-compatible fallback (old location).
-      return coerceString(metadataRecord.description);
+      return undefined;
     };
 
     for (const r of rules) {
@@ -506,11 +497,9 @@ export class OrlResultConverter {
         continue;
       }
       const displayName: string | undefined =
-        (typeof rule?.metadata?.display_name === 'string' &&
-          rule.metadata.display_name) ||
-        (typeof rule?.metadata?.displayName === 'string' &&
-          rule.metadata.displayName) ||
-        undefined;
+        typeof rule?.metadata?.display_name === 'string'
+          ? rule.metadata.display_name
+          : undefined;
       if (displayName?.trim()) {
         displayNameByRule[ruleName] = displayName.trim();
       }
@@ -805,10 +794,10 @@ export class OrlResultConverter {
           },
           fixes,
           findingLocation: {
-            id: finding.location.id,
-            filePath: finding.location.filePath,
-            startLine: finding.location.startLine,
-            startColumn: finding.location.startColumn,
+            id: finding.findingId,
+            filePath: finding.location.filePath ?? finding.actualFilePath,
+            startLine: toExtensionLine(finding.location.startLine),
+            startColumn: finding.location.startColumn ?? 0,
             endLine: finding.location.endLine,
             endColumn: finding.location.endColumn,
           },

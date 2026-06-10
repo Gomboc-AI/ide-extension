@@ -97,7 +97,6 @@ export type {
   FindingLocation,
   FindingLocationRow,
   OrlReport,
-  OrlReportContent,
   OrlReportSpec,
   OrlRule,
   OrlRuleAnnotations,

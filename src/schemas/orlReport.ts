@@ -1,185 +1,229 @@
 import { z } from 'zod';
-import { PathConverter } from '../utils/pathConverter';
 
-/** FAILSAFE YAML loads unquoted numbers as strings (e.g. fixes: "3"). */
-const zOrlCount = z.coerce.number().int().min(0);
-const zOrlLineIndex = z.coerce.number().int().min(0);
-const zOrlPriority = z.coerce.number().int();
+/** FAILSAFE_SCHEMA parses YAML booleans as strings; coerce those explicitly. */
+const zOrlBoolean = z
+  .union([z.boolean(), z.string(), z.number()])
+  .transform((value): boolean => {
+    if (typeof value === 'boolean') {
+      return value;
+    }
+    if (typeof value === 'number') {
+      return value !== 0;
+    }
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true' || normalized === '1') {
+      return true;
+    }
+    if (normalized === 'false' || normalized === '0') {
+      return false;
+    }
+    return Boolean(value);
+  });
 
-/**
- * FAILSAFE YAML loads booleans as strings too (e.g. skip: "false").
- * Do not use z.coerce.boolean() here — it treats any non-empty string as true.
- */
-const zOrlBoolean = z.union([z.boolean(), z.string()]).transform(value => {
-  if (typeof value === 'boolean') {
-    return value;
+/** FAILSAFE_SCHEMA represents YAML null as the string "null", not JavaScript null. */
+const nullishToUndefined = (value: unknown): unknown => {
+  if (value === null || value === undefined) {
+    return undefined;
   }
-  const normalized = value.trim().toLowerCase();
-  return normalized === 'true' || normalized === '1' || normalized === 'yes';
+  if (typeof value === 'string' && value.trim().toLowerCase() === 'null') {
+    return undefined;
+  }
+  return value;
+};
+
+const zOrlCount = z.preprocess(
+  nullishToUndefined,
+  z.coerce.number().int().nonnegative().optional(),
+);
+
+const zOrlPriority = z.preprocess(
+  nullishToUndefined,
+  z.coerce.number().int().optional(),
+);
+
+const zOrlHookInvocation = z.object({
+  command_path: z.string().optional(),
+  args: z.array(z.union([z.string(), z.number()])).optional(),
+  stdout: z.string().optional(),
+  stderr: z.string().optional(),
+  exit_code: z.coerce.number().int().optional(),
 });
 
-const zResolutionStatus = z.enum([
-  'unchanged',
-  'shifted',
-  'deleted',
-  'invalidated',
-]);
+const zOrlHooks = z.record(z.string(), zOrlHookInvocation);
 
-const zFindingLocationShape = z.object({
-  id: z.string(),
-  filePath: z.string().min(1),
-  startLine: zOrlLineIndex,
-  endLine: zOrlLineIndex.optional(),
-  startColumn: zOrlLineIndex,
-  endColumn: zOrlLineIndex.optional(),
-});
-export type FindingLocation = z.infer<typeof zFindingLocationShape>;
-
-/** ORL emits snake_case location fields; normalize to camelCase for extension code. */
-const zFindingLocationSnake = z
-  .object({
-    id: z.string(),
-    file_path: z.string(),
-    start_line: zOrlLineIndex.optional(),
-    end_line: zOrlLineIndex.optional(),
-    start_column: zOrlLineIndex.optional(),
-    end_column: zOrlLineIndex.optional(),
-  })
-  .transform(row => ({
-    id: row.id,
-    filePath: row.file_path,
-    startLine: row.start_line ?? 0,
-    startColumn: row.start_column ?? 0,
-    ...(row.end_line !== undefined ? { endLine: row.end_line } : {}),
-    ...(row.end_column !== undefined ? { endColumn: row.end_column } : {}),
-  }))
-  .pipe(zFindingLocationShape);
-
-const zFindingLocationRowShape = z.object({
-  id: z.string(),
-  originalLocation: zFindingLocationShape.optional(),
-  resolvedLocation: zFindingLocationShape.optional(),
-  resolutionStatus: zResolutionStatus.optional(),
-});
-export type FindingLocationRow = z.infer<typeof zFindingLocationRowShape>;
-
-/** ORL emits snake_case finding-location rows; normalize to camelCase for extension code. */
-export const zFindingLocationRow = z
-  .object({
-    id: z.string(),
-    original_location: zFindingLocationSnake.optional(),
-    resolved_location: zFindingLocationSnake.optional(),
-    resolution_status: zResolutionStatus.optional(),
-  })
-  .transform(row => ({
-    id: row.id,
-    ...(row.original_location
-      ? { originalLocation: row.original_location }
-      : {}),
-    ...(row.resolved_location
-      ? { resolvedLocation: row.resolved_location }
-      : {}),
-    ...(row.resolution_status
-      ? { resolutionStatus: row.resolution_status }
-      : {}),
-  }))
-  .pipe(zFindingLocationRowShape);
-
-export const zOrlRuleAnnotations = z.record(z.string(), z.string());
-export type OrlRuleAnnotations = z.infer<typeof zOrlRuleAnnotations>;
-
-export const zOrlRuleFile = z.object({
+const zOrlFileRef = z.object({
   path: z.string(),
 });
-export type OrlRuleFile = z.infer<typeof zOrlRuleFile>;
 
-export const zOrlRuleMetadata = z.object({
+const zOrlRuleAnnotations = z.record(z.string(), z.string());
+
+const zOrlRuleMetadata = z.object({
   name: z.string().optional(),
+  display_name: z.string().optional(),
   description: z.string().optional(),
   priority: zOrlPriority.optional(),
   skip: zOrlBoolean.optional(),
-  required_contexts: z.array(z.string()).optional(),
   annotations: zOrlRuleAnnotations.optional(),
   classifications: z.array(z.string()).optional(),
-  // Legacy report fields still emitted by some ORL versions.
-  display_name: z.string().optional(),
-  displayName: z.string().optional(),
-  annotation: z.record(z.string(), z.unknown()).optional(),
 });
+
 export type OrlRuleMetadata = z.infer<typeof zOrlRuleMetadata>;
 
+const zFindingLocationSnake = z.object({
+  id: z.string().optional(),
+  file_path: z.string().optional(),
+  start_line: zOrlCount.optional(),
+  end_line: zOrlCount.optional(),
+  start_column: zOrlCount.optional(),
+  end_column: zOrlCount.optional(),
+});
+
+export type FindingLocation = {
+  id?: string;
+  filePath?: string;
+  startLine?: number;
+  endLine?: number;
+  startColumn?: number;
+  endColumn?: number;
+};
+
+const zFindingLocationRowSnake = z.object({
+  id: z.string().optional(),
+  original_location: zFindingLocationSnake.optional(),
+  resolved_location: zFindingLocationSnake.optional(),
+  resolution_status: z.string().optional(),
+});
+
+export type FindingLocationRow = {
+  id?: string;
+  originalLocation?: FindingLocation;
+  resolvedLocation?: FindingLocation;
+  resolutionStatus?: string;
+};
+
+const toFindingLocation = (
+  loc: z.infer<typeof zFindingLocationSnake> | undefined,
+): FindingLocation | undefined => {
+  if (!loc) {
+    return undefined;
+  }
+  return {
+    id: loc.id,
+    filePath: loc.file_path,
+    startLine: loc.start_line,
+    endLine: loc.end_line,
+    startColumn: loc.start_column,
+    endColumn: loc.end_column,
+  };
+};
+
+const toFindingLocationRow = (
+  row: z.infer<typeof zFindingLocationRowSnake>,
+): FindingLocationRow => ({
+  id: row.id,
+  originalLocation: toFindingLocation(row.original_location),
+  resolvedLocation: toFindingLocation(row.resolved_location),
+  resolutionStatus: row.resolution_status,
+});
+
 const zOrlRuleSnake = z.object({
-  metadata: zOrlRuleMetadata.optional(),
   name: z.string().optional(),
+  metadata: zOrlRuleMetadata.optional(),
   findings: zOrlCount.optional(),
   fixes: zOrlCount.optional(),
   changes: zOrlCount.optional(),
+  skipped: zOrlBoolean.optional(),
+  error_count: zOrlCount.optional(),
   errors: z.array(z.unknown()).optional(),
-  files: z.array(zOrlRuleFile).optional(),
-  finding_locations: z.array(zFindingLocationRow).optional(),
-  files_changed: z.record(z.unknown()).optional(),
+  duration: z.string().optional(),
+  files: z.array(zOrlFileRef).optional(),
+  file_count: zOrlCount.optional(),
+  paths_with_findings: z.record(z.string(), z.unknown()).optional(),
+  files_changed: z.record(z.string(), z.unknown()).optional(),
+  hooks: zOrlHooks.optional(),
+  finding_locations: z.array(zFindingLocationRowSnake).optional(),
 });
 
-export type OrlRule = Omit<
-  z.infer<typeof zOrlRuleSnake>,
-  'finding_locations'
-> & {
+export type OrlRule = {
+  name?: string;
+  metadata?: OrlRuleMetadata;
+  findings?: number;
+  fixes?: number;
+  changes?: number;
+  skipped?: boolean;
+  error_count?: number;
+  errors?: unknown[];
+  duration?: string;
+  files?: { path: string }[];
+  file_count?: number;
+  paths_with_findings?: Record<string, unknown>;
+  files_changed?: Record<string, unknown>;
+  hooks?: Record<string, z.infer<typeof zOrlHookInvocation>>;
   findingLocations?: FindingLocationRow[];
 };
 
-export const zOrlRule = zOrlRuleSnake
-  .passthrough()
-  .transform((rule): OrlRule => {
-    const { finding_locations, ...rest } = rule;
-    const output: OrlRule = rest;
-    if (finding_locations?.length) {
-      output.findingLocations = finding_locations;
-    }
-    return output;
-  });
-
-/** Canonical name aligned with ORL report producer schema. */
-export const zORLReportRule = zOrlRule;
-export type ORLReportRule = OrlRule;
+const zOrlRule = zOrlRuleSnake.transform(
+  (rule): OrlRule => ({
+    name: rule.name,
+    metadata: rule.metadata,
+    findings: rule.findings,
+    fixes: rule.fixes,
+    changes: rule.changes,
+    skipped: rule.skipped,
+    error_count: rule.error_count,
+    errors: rule.errors,
+    duration: rule.duration,
+    files: rule.files,
+    file_count: rule.file_count,
+    paths_with_findings: rule.paths_with_findings,
+    files_changed: rule.files_changed,
+    hooks: rule.hooks,
+    findingLocations: rule.finding_locations?.map(toFindingLocationRow),
+  }),
+);
 
 export const zOrlReportMetadata = z.object({
   name: z.string().optional(),
   description: z.string().optional(),
   priority: zOrlPriority.optional(),
   skip: zOrlBoolean.optional(),
-  required_contexts: z.array(z.string()).optional(),
-  annotations: zOrlRuleAnnotations.optional(),
+  annotations: z.record(z.string(), z.string()).optional(),
 });
+
 export type OrlReportMetadata = z.infer<typeof zOrlReportMetadata>;
 
-const zOrlReportBody = z.object({
-  version: z.literal('v1').optional(),
-  metadata: zOrlReportMetadata.optional(),
+export const zOrlReportSpec = z.object({
   workspace: z.string().optional(),
   language: z.string().optional(),
-  rules_applied: zOrlCount.optional(),
+  duration: z.string().optional(),
+  error_count: zOrlCount.optional(),
+  errors: z.array(z.unknown()).optional(),
+  files_changed: z.record(z.string(), z.unknown()).optional(),
   findings: zOrlCount.optional(),
   fixes: zOrlCount.optional(),
   changes: zOrlCount.optional(),
-  errors: z.array(z.unknown()).optional(),
+  hooks: zOrlHooks.optional(),
+  resolved_location_count: zOrlCount.optional(),
+  rules_applied: zOrlCount.optional(),
+  rules_skipped: zOrlCount.optional(),
   rules: z.array(zOrlRule).optional(),
 });
 
-export const zORLReportContent = zOrlReportBody.extend({
-  type: z.literal('Report'),
-});
-export type OrlReportContent = z.infer<typeof zORLReportContent>;
-
-/** Legacy nested shape: fields under `spec` instead of the report root. */
-export const zOrlReportSpec = zOrlReportBody.passthrough();
 export type OrlReportSpec = z.infer<typeof zOrlReportSpec>;
 
-export const zOrlReport = zORLReportContent
-  .extend({
-    spec: zOrlReportSpec.optional(),
-  })
-  .passthrough();
+export const zOrlReport = z.object({
+  type: z.literal('Report'),
+  version: z.literal('v1'),
+  metadata: zOrlReportMetadata.optional(),
+  spec: zOrlReportSpec,
+});
+
 export type OrlReport = z.output<typeof zOrlReport>;
+
+/** @deprecated Use OrlRule */
+export type ORLReportRule = OrlRule;
+
+export type OrlRuleAnnotations = OrlRuleMetadata['annotations'];
 
 export const zCheckovEvidence = z.object({
   ruleName: z.string(),
@@ -188,31 +232,18 @@ export const zCheckovEvidence = z.object({
 });
 export type CheckovEvidence = z.infer<typeof zCheckovEvidence>;
 
-/** Returns rules from the flat v1 report body or legacy `spec.rules`. */
 export function getOrlReportRules(report: OrlReport): OrlRule[] {
-  if (Array.isArray(report.rules)) {
-    return report.rules;
-  }
-  if (Array.isArray(report.spec?.rules)) {
-    return report.spec.rules;
-  }
-  return [];
+  return report.spec.rules ?? [];
 }
 
 export function parseOrlReportPayload(payload: unknown): OrlReport | null {
   const parsed = zOrlReport.safeParse(payload);
-  return parsed.success ? parsed.data : null;
+  if (!parsed.success) {
+    return null;
+  }
+  return parsed.data;
 }
 
-/** Flattened finding row with resolved local file path. */
-export type ReportFindingLocation = {
-  ruleName: string;
-  findingId: string;
-  location: FindingLocation;
-  actualFilePath: string;
-};
-
-/** Returns `originalLocation` for scan diagnostics; skips only `deleted` rows. */
 export function selectScanDiagnosticLocation(
   row: FindingLocationRow,
 ): FindingLocation | undefined {
@@ -222,47 +253,66 @@ export function selectScanDiagnosticLocation(
   return row.originalLocation;
 }
 
-/** ORL report line numbers are already 1-based; clamp to a valid editor line. */
-export function toExtensionLine(line1Based: number): number {
-  if (!Number.isFinite(line1Based)) {
+export function toExtensionLine(line: number | undefined): number {
+  if (typeof line !== 'number' || !Number.isFinite(line) || line < 1) {
     return 1;
   }
-  return Math.max(1, Math.floor(line1Based));
+  return line;
 }
 
-/** Extracts scannable finding locations from a parsed ORL report. */
+export type ExtractedFindingLocation = {
+  ruleName: string;
+  findingId: string;
+  actualFilePath: string;
+  location: FindingLocation;
+};
+
 export function extractFindingLocationsFromReport(args: {
   report: OrlReport | null | undefined;
   currentFilePath: string;
-}): ReportFindingLocation[] {
-  const report = args.report;
+}): ExtractedFindingLocation[] {
+  const { report, currentFilePath } = args;
   if (!report) {
     return [];
   }
 
-  const out: ReportFindingLocation[] = [];
+  const out: ExtractedFindingLocation[] = [];
   for (const rule of getOrlReportRules(report)) {
-    const ruleName =
-      (typeof rule.name === 'string' && rule.name.trim()) ||
-      (typeof rule.metadata?.name === 'string' && rule.metadata.name.trim()) ||
-      '';
+    const ruleName = rule.name?.trim();
     if (!ruleName) {
       continue;
     }
 
-    for (const row of rule.findingLocations || []) {
+    const rows = rule.findingLocations ?? [];
+    for (const row of rows) {
       const location = selectScanDiagnosticLocation(row);
-      if (!location) {
+      if (!location?.filePath) {
         continue;
       }
+
+      const findingId = row.id?.trim() || location.id?.trim();
+      if (!findingId) {
+        continue;
+      }
+
+      const normalizedReportPath = location.filePath.replace(/\\/g, '/');
+      const normalizedCurrentPath = currentFilePath.replace(/\\/g, '/');
+      const reportBasename = normalizedReportPath.split('/').pop() ?? '';
+      const currentBasename = normalizedCurrentPath.split('/').pop() ?? '';
+      const pathsMatch =
+        normalizedReportPath === normalizedCurrentPath ||
+        normalizedReportPath.endsWith(`/${currentBasename}`) ||
+        normalizedCurrentPath.endsWith(`/${reportBasename}`);
+
+      if (!pathsMatch) {
+        continue;
+      }
+
       out.push({
         ruleName,
-        findingId: row.id,
+        findingId,
+        actualFilePath: currentFilePath,
         location,
-        actualFilePath: PathConverter.convertOrlPathToActualPath(
-          location.filePath,
-          args.currentFilePath,
-        ),
       });
     }
   }
