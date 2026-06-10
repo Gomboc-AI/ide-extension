@@ -735,31 +735,6 @@ export class OrlClient {
     };
   }
 
-  /** Writes the latest ORL report to `<workspace>/.orl/report.yaml`. */
-  private async persistReportYaml(args: {
-    workspacePath: string;
-    reportText?: string;
-  }): Promise<void> {
-    const { workspacePath, reportText } = args;
-    if (!reportText?.trim()) {
-      return;
-    }
-    try {
-      const outPath = path.join(workspacePath, '.orl', 'report.yaml');
-      await this.storageClient.mkdir({
-        path: path.dirname(outPath),
-        opts: { recursive: true },
-      });
-      await this.storageClient.writeText({
-        path: outPath,
-        content: reportText,
-      });
-      logger.info('Persisted ORL report', { outPath });
-    } catch (e) {
-      logger.warn('Failed to persist ORL report (ignored)', { e });
-    }
-  }
-
   private async persistDiagnosticsArtifacts(
     workspacePath: string,
     tempDir: string,
@@ -1024,10 +999,6 @@ export class OrlClient {
 
               if (changedRuleNames.length === 0) {
                 // No changes: return early (no need for pass 2).
-                await this.persistReportYaml({
-                  workspacePath,
-                  reportText: reportTextDiscovery,
-                });
                 prof.end({
                   success: true,
                   exitCode: execDiscovery.exitCode ?? 0,
@@ -1135,10 +1106,6 @@ export class OrlClient {
                 modifiedFileCount: Object.keys(modifiedFiles).length,
               });
 
-              await this.persistReportYaml({
-                workspacePath,
-                reportText,
-              });
               await this.persistDiagnosticsArtifacts(
                 workspacePath,
                 tempDir,
@@ -1282,10 +1249,6 @@ export class OrlClient {
           modifiedFileCount: Object.keys(modifiedFiles).length,
         });
 
-        await this.persistReportYaml({
-          workspacePath,
-          reportText,
-        });
         await this.persistDiagnosticsArtifacts(
           workspacePath,
           tempDir,
