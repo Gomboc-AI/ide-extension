@@ -84,4 +84,30 @@ describe('parseOrlReport', () => {
     expect(parsed?.spec?.fixes).toBe(3);
     expect(typeof parsed?.spec?.fixes).toBe('number');
   });
+
+  it('parses findingLocations on report rules', () => {
+    const report = [
+      'type: Report',
+      'spec:',
+      '  rules:',
+      '    - name: gomboc-ai/test_rule000',
+      '      findingLocations:',
+      '        - id: finding-1',
+      '          originalLocation:',
+      '            id: finding-1',
+      '            filePath: /workspace/main.tf',
+      '            startLine: 4',
+      '            startColumn: 2',
+    ].join('\n');
+
+    const parsed = parseOrlReport(report);
+
+    expect(parsed?.spec?.rules?.[0]?.findingLocations?.[0]?.id).toBe(
+      'finding-1',
+    );
+    expect(
+      parsed?.spec?.rules?.[0]?.findingLocations?.[0]?.originalLocation
+        ?.startLine,
+    ).toBe(4);
+  });
 });

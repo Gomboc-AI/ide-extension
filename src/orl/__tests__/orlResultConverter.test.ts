@@ -1,12 +1,19 @@
-import { chooseLanguageImplementation } from '@gomboc-ai/gomboc-node-sdk';
 import { makeIacScanReport } from '@gomboc-ai/gomboc-node-sdk';
 import {
+  OrlResultConverter,
   attributeRulesToDiff,
   buildFileToRulesMap,
   normalizeRuleName,
   pickBestRuleDescription,
 } from '../orlResultConverter';
 import { parseOrlReport } from '../../utils/orlReportParser';
+
+jest.mock('../../utils/logger', () => ({
+  info: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn(),
+  debug: jest.fn(),
+}));
 
 describe('orlResultConverter helpers', () => {
   it('normalizes rule names', () => {
@@ -58,89 +65,105 @@ describe('orlResultConverter helpers', () => {
   });
 
   it('attributes rules with correct fallback ordering', () => {
-    const handler = {
-      matchRulesToDiff: jest.fn().mockImplementation(({ allFileRules }) => {
-        return allFileRules.includes('handler-rule') ? ['handler-rule'] : [];
-      }),
-    } as unknown as ReturnType<typeof chooseLanguageImplementation>;
-
     const reportAttributed = attributeRulesToDiff({
-      resourceName: 'Resource',
-      resourceInstanceName: null,
       allFileRules: ['file-rule'],
       reportFileRules: ['report-rule'],
-      diffLine: 10,
-      diffContent: 'x = y',
-      properties: [],
-      handler,
       diagnosticRules: ['diag-rule'],
     });
     expect(reportAttributed).toEqual(['report-rule']);
 
-    const handlerAttributed = attributeRulesToDiff({
-      resourceName: 'aws_s3_bucket',
-      resourceInstanceName: 'example',
+    const fileAttributed = attributeRulesToDiff({
       allFileRules: ['handler-rule', 'other-rule'],
       reportFileRules: [],
-      diffLine: 10,
-      diffContent: 'x = y',
-      properties: ['acl'],
-      handler,
       diagnosticRules: ['diag-rule'],
     });
-    expect(handlerAttributed).toEqual(['handler-rule']);
+    expect(fileAttributed).toEqual(['handler-rule', 'other-rule']);
   });
 
   it('falls back to diagnostics rules when file-level rules are absent', () => {
-    const handler = {
-      matchRulesToDiff: jest.fn().mockImplementation(({ allFileRules }) => {
-        return allFileRules.includes('diag-priority') ? ['diag-priority'] : [];
-      }),
-    } as unknown as ReturnType<typeof chooseLanguageImplementation>;
-
     const attributed = attributeRulesToDiff({
-      resourceName: 'aws_security_group',
-      resourceInstanceName: 'sg',
       allFileRules: [],
       reportFileRules: [],
-      diffLine: 4,
-      diffContent: 'ingress = []',
-      properties: [],
-      handler,
       diagnosticRules: ['diag-priority', 'diag-other'],
     });
-    expect(attributed).toEqual(['diag-priority']);
+    expect(attributed).toEqual(['diag-other', 'diag-priority']);
   });
 
   it('uses deterministic rule ordering regardless of input order', () => {
-    const handler = {
-      matchRulesToDiff: jest.fn().mockReturnValue([]),
-    } as unknown as ReturnType<typeof chooseLanguageImplementation>;
-
     const first = attributeRulesToDiff({
-      resourceName: 'aws_s3_bucket',
-      resourceInstanceName: 'b',
       allFileRules: ['z-rule', 'a-rule', 'm-rule'],
       reportFileRules: [],
-      diffLine: 2,
-      diffContent: 'acl = "private"',
-      properties: [],
-      handler,
       diagnosticRules: [],
     });
     const second = attributeRulesToDiff({
-      resourceName: 'aws_s3_bucket',
-      resourceInstanceName: 'b',
       allFileRules: ['m-rule', 'z-rule', 'a-rule'],
       reportFileRules: [],
-      diffLine: 2,
-      diffContent: 'acl = "private"',
-      properties: [],
-      handler,
       diagnosticRules: [],
     });
     expect(first).toEqual(['a-rule', 'm-rule', 'z-rule']);
     expect(second).toEqual(['a-rule', 'm-rule', 'z-rule']);
+  });
+
+  it('builds finding-centric remediations from report findingLocations', () => {
+    const report = [
+      'type: Report',
+      'metadata:',
+      '  name: report-name',
+      '  display_name: Report Name',
+      'spec:',
+      '  language: terraform',
+      '  errors: []',
+      '  rules:',
+      '    - name: gomboc-ai/ensure_encryption000',
+      '      findings: 1',
+      '      fixes: 1',
+      '      changes: 1',
+      '      errors: []',
+      '      files:',
+      '        - path: /workspace/main.tf',
+      '      files_changed:',
+      '        /workspace/main.tf: true',
+      '      metadata:',
+      '        name: gomboc-ai/ensure_encryption000',
+      '        display_name: Ensure encryption',
+      '        annotations:',
+      '          gomboc-ai/description-plain: Ensure encryption',
+      '      findingLocations:',
+      '        - id: finding-1',
+      '          originalLocation:',
+      '            id: finding-1',
+      '            filePath: /workspace/main.tf',
+      '            startLine: 4',
+      '            startColumn: 2',
+      '            endLine: 4',
+      '            endColumn: 18',
+    ].join('\n');
+
+    const payload = OrlResultConverter.buildPayload({
+      result: {
+        success: true,
+        modifiedFiles: {},
+        report,
+      },
+      filetype: 'tf',
+      currentFilePath: '/repo/main.tf',
+      originalFileContents: {},
+    });
+
+    expect(payload.individualFixes).toHaveLength(1);
+    expect(payload.individualFixes[0].findingLocation).toEqual(
+      expect.objectContaining({
+        id: 'finding-1',
+        startLine: 4,
+        startColumn: 2,
+      }),
+    );
+    expect(payload.individualFixes[0].codeObservation.codeResourceInstance.line).toBe(
+      5,
+    );
+    expect(payload.individualFixes[0].rule.id).toBe(
+      'orl-rule:gomboc-ai/ensure_encryption000',
+    );
   });
 
   it('coerces FAILSAFE numeric fields when casting into SDK report input', () => {

@@ -3,44 +3,23 @@ import * as path from 'path';
 import { z } from 'zod';
 import logger from '../utils/logger';
 import { PathConverter } from '../utils/pathConverter';
-import { FileDiffAnalyzer, Difference } from '../utils/fileDiffAnalyzer';
-import { DiffContentAnalyzer } from '../utils/diffContentAnalyzer';
+import { FileDiffAnalyzer } from '../utils/fileDiffAnalyzer';
 import { parseOrlReport } from '../utils/orlReportParser';
 import {
-  buildLanguageDiagnosticContextWithFallback,
   chooseLanguageImplementation,
   makeIacScanReport,
 } from '@gomboc-ai/gomboc-node-sdk';
-import type { ScanRemediationPayload } from '../schemas/scanRemediation';
-import { zOrlReport } from '../schemas/orlReport';
+import type {
+  RemediationFix,
+  ScanRemediationPayload,
+} from '../schemas/scanRemediation';
+import {
+  extractFindingLocationsFromReport,
+  getOrlReportRules,
+  toExtensionLine,
+  zOrlReport,
+} from '../schemas/orlReport';
 
-const zOrlDiagnosticFileResource = z
-  .object({
-    type: z.string().optional(),
-    name: z.string().optional(),
-    startLine: z.number().optional(),
-    endLine: z.number().optional(),
-  })
-  .passthrough();
-
-const zOrlDiagnosticRuleFile = z
-  .object({
-    path: z.string(),
-    hunks: z
-      .array(
-        z.object({
-          startLine: z.number(),
-          lineCount: z.number(),
-          type: z.string().optional(),
-        }),
-      )
-      .optional(),
-    resources: z.array(zOrlDiagnosticFileResource).optional(),
-  })
-  .passthrough();
-type OrlDiagnosticRuleFile = z.infer<typeof zOrlDiagnosticRuleFile>;
-type OrlDiagnosticFileResource = z.infer<typeof zOrlDiagnosticFileResource>;
-type LanguageHandler = ReturnType<typeof chooseLanguageImplementation>;
 type MakeScanReportInput = Parameters<typeof makeIacScanReport>[0];
 
 export interface OrlResult {
@@ -240,79 +219,89 @@ export function pickBestRuleDescription(
 }
 
 /**
- * Attributes a diff to rules using a deterministic fallback waterfall.
+ * Attributes a diff to rules using report file mapping, then hook diagnostics.
  */
 export function attributeRulesToDiff(args: {
-  resourceName: string;
-  resourceInstanceName: string | null;
   allFileRules: string[];
   reportFileRules: string[];
-  diffLine: number;
-  diffContent: string;
-  properties: string[];
-  handler: LanguageHandler;
   diagnosticRules: string[];
 }): string[] {
   const dedupe = (rules: string[]): string[] =>
     Array.from(new Set(rules)).sort((a, b) => a.localeCompare(b));
 
-  // Stage 1: when no concrete resource was identified, trust report changed-file attribution.
-  if (args.resourceName === 'Resource' && args.reportFileRules.length > 0) {
+  if (args.reportFileRules.length > 0) {
     return dedupe(args.reportFileRules).slice(0, 20);
   }
-
-  if (args.resourceName !== 'Resource' && args.allFileRules.length > 0) {
-    // Stage 2: language-aware matching on the current resource.
-    const matched = args.handler.matchRulesToDiff({
-      blockType: args.resourceName,
-      blockName: args.resourceInstanceName,
-      allFileRules: args.allFileRules,
-      diffLine: args.diffLine,
-      diffContent: args.diffContent,
-      properties: args.properties,
-    });
-    if (matched.length > 0) {
-      return dedupe(matched);
-    }
-  }
-
-  if (args.resourceName !== 'Resource' && args.allFileRules.length > 0) {
-    // Stage 3: if handler cannot narrow further, use file-level rule attribution.
+  if (args.allFileRules.length > 0) {
     return dedupe(args.allFileRules);
   }
-
-  if (args.diagnosticRules.length > 0) {
-    // Stage 4: final handler attempt against diagnostics-only rules.
-    const matched = args.handler.matchRulesToDiff({
-      blockType: args.resourceName,
-      blockName: args.resourceInstanceName,
-      allFileRules: args.diagnosticRules,
-      diffLine: args.diffLine,
-      diffContent: args.diffContent,
-      properties: args.properties,
-    });
-    if (matched.length > 0) {
-      return dedupe(matched);
-    }
-  }
-
-  // Stage 5: ultimate fallback when no stronger signal is available.
   return dedupe(args.diagnosticRules).slice(0, 20);
 }
+
+const buildMatchKeys = (args: {
+  orlFilePath: string;
+  actualFilePath: string;
+}): string[] => {
+  const orlNorm = args.orlFilePath.replace(/^\/workspace\/+/, '');
+  return [
+    args.orlFilePath,
+    orlNorm,
+    path.basename(orlNorm),
+    args.actualFilePath,
+    path.basename(args.actualFilePath),
+  ];
+};
+
+const collectRulesForFileKeys = (args: {
+  matchKeys: string[];
+  fileToRules: Record<string, string[]>;
+}): string[] => {
+  const rules: string[] = [];
+  for (const key of args.matchKeys) {
+    const fileRules = args.fileToRules[key];
+    if (!fileRules) {
+      continue;
+    }
+    for (const ruleName of fileRules) {
+      if (!rules.includes(ruleName)) {
+        rules.push(ruleName);
+      }
+    }
+  }
+  return rules;
+};
+
+const ruleFileRemediationKey = (ruleName: string, filePath: string): string =>
+  `${ruleName}::${filePath}`;
+
+const buildRuleDescriptionText = (args: {
+  ruleName: string;
+  ruleDescriptions: Record<string, string>;
+  ruleShortNames: Record<string, string>;
+}): string => {
+  return (
+    pickBestRuleDescription(args.ruleName, args.ruleDescriptions) ||
+    args.ruleShortNames[args.ruleName] ||
+    stripOrlInstanceSuffix(args.ruleName)
+  );
+};
+
+const resolveCodeResourceType = (args: {
+  filePath: string;
+  content: string;
+  filetype: string;
+}): string => {
+  const handler = chooseLanguageImplementation({
+    filePath: args.filePath,
+    content: args.content,
+  });
+  return handler.codeResourceType || args.filetype;
+};
 
 /**
  * Utility class for converting ORL results to VS Code scan response format
  */
 export class OrlResultConverter {
-  private static getRuleFileResources(
-    ruleFile: OrlDiagnosticRuleFile | undefined,
-  ): OrlDiagnosticFileResource[] {
-    const parsed = zOrlDiagnosticRuleFile.safeParse(ruleFile);
-    if (!parsed.success) {
-      return [];
-    }
-    return parsed.data.resources || [];
-  }
   /**
    * Best-effort extraction of per-rule changed file paths from the ORL YAML report.
    *
@@ -334,8 +323,8 @@ export class OrlResultConverter {
     } catch {
       return out;
     }
-    const rules = reportPayload.spec?.rules;
-    if (!Array.isArray(rules)) {
+    const rules = getOrlReportRules(reportPayload);
+    if (rules.length === 0) {
       return out;
     }
 
@@ -411,8 +400,8 @@ export class OrlResultConverter {
       return out;
     }
     const reportPayload = parsed;
-    const rules = reportPayload.spec?.rules;
-    if (!Array.isArray(rules)) {
+    const rules = getOrlReportRules(reportPayload);
+    if (rules.length === 0) {
       return out;
     }
 
@@ -505,9 +494,7 @@ export class OrlResultConverter {
       return out;
     }
     const reportPayload = parsed;
-    const rules = Array.isArray(reportPayload.spec?.rules)
-      ? reportPayload.spec.rules
-      : [];
+    const rules = getOrlReportRules(reportPayload);
 
     const displayNameByRule: Record<string, string> = {};
     for (const rule of rules) {
@@ -600,79 +587,34 @@ export class OrlResultConverter {
     currentFilePath: string;
     originalFileContents: Record<string, string>;
   }): ScanResponse {
-    const { result, currentFilePath, originalFileContents } = args;
-    // Create individual fixes based on actual differences between original and modified files
-    const individualFixes: any[] = [];
-    const groupedFixes: any[] = [];
+    const { result, filetype, currentFilePath, originalFileContents } = args;
+    const individualFixes: ScanRemediationPayload['individualFixes'] = [];
+    const groupedFixes: ScanRemediationPayload['groupedFixes'] = [];
 
-    // Build mapping: file -> rules, and file -> resource instances -> rules
-    const fileToResourceInstances: Record<
-      string,
-      Array<{ type: string; name: string; startLine: number; endLine: number }>
-    > = {};
-    const resourceInstanceToRules: Record<string, string[]> = {};
+    const parsedReport = parseOrlReport(result.report);
+    const findingRows = extractFindingLocationsFromReport({
+      report: parsedReport,
+      currentFilePath,
+    });
+    const hasFindingLocations = findingRows.length > 0;
 
-    // Pull per-rule changed files from the report (if present) as a reliable attribution source.
-    // This avoids depending solely on hook diagnostics for file mapping.
     const reportRuleToChangedFiles =
       OrlResultConverter.extractChangedFilesByRuleFromReport(result.report);
+    const diagnosticRuleNames = (result.diagnostics?.rules || []).map(
+      r => r.ruleName,
+    );
     const { fileToRules, fileToReportRules } = buildFileToRulesMap({
       diagnostics: result.diagnostics,
       reportRuleToChangedFiles: reportRuleToChangedFiles,
     });
 
-    logger.debug('Processing diagnostics', {
-      hasDiagnostics: !!result.diagnostics,
-      rulesCount: result.diagnostics?.rules?.length || 0,
-      reportRuleChangedFilesCount: Object.keys(reportRuleToChangedFiles).length,
-      sampleRules: result.diagnostics?.rules?.slice(0, 3).map(r => ({
-        ruleName: r.ruleName,
-        filesCount: r.files?.length || 0,
-        filePaths: (r.files || []).map(f => f.path).slice(0, 3),
-      })),
-    });
-
-    if (result.diagnostics?.rules?.length) {
-      logger.debug('Built fileToRules mapping', {
-        totalRules: result.diagnostics.rules.length,
-        fileToRulesKeys: Object.keys(fileToRules),
-        sampleMapping: Object.entries(fileToRules)
-          .slice(0, 5)
-          .map(([key, rules]) => ({
-            file: key,
-            rules: rules.slice(0, 2),
-          })),
-        diagnosticsFilePaths: result.diagnostics.rules
-          .flatMap(r => (r.files || []).map(f => f.path))
-          .slice(0, 5),
-      });
-    }
-
-    logger.debug('Resource instance mapping', {
-      fileToResourceInstances: Object.keys(fileToResourceInstances).length,
-      resourceInstanceToRules: Object.keys(resourceInstanceToRules).length,
-      resourceInstanceDetails: Object.entries(resourceInstanceToRules).map(
-        ([key, rules]) => ({
-          key,
-          rules,
-        }),
-      ),
-    });
-
-    // Extract rule descriptions from ORL YAML report
     const ruleDescriptions =
       OrlResultConverter.extractRuleDescriptionsFromReport(result.report);
     const ruleShortNames = OrlResultConverter.extractRuleShortNamesFromReport(
       result.report,
     );
 
-    logger.info('Rule descriptions extracted', {
-      count: Object.keys(ruleDescriptions).length,
-      sampleRules: Object.keys(ruleDescriptions).slice(0, 5),
-      allRuleNames: Object.keys(ruleDescriptions),
-      hasReport: !!result.report,
-      reportLength: result.report?.length || 0,
-    });
+    const diffFixesByRuleFile = new Map<string, RemediationFix[]>();
 
     for (const [orlFilePath, modifiedContent] of Object.entries(
       result.modifiedFiles,
@@ -684,294 +626,27 @@ export class OrlResultConverter {
       );
 
       const originalText = originalFileContents[actualFilePath] || '';
-
-      // Resolve the language handler once per file
-      const handler = chooseLanguageImplementation({
-        filePath: actualFilePath,
-        content: originalText,
-      });
-
-      // Find the differences between original and modified content.
-      // Keep this as debug to avoid heavy string splitting on large scans.
-      logger.debug('File content comparison', {
-        file: actualFilePath,
-        originalLength: originalText.length,
-        modifiedLength: (modifiedContent as string).length,
-      });
-
       const differences = FileDiffAnalyzer.findDifferences(
         originalText,
         modifiedContent as string,
       );
-
-      if (differences.length === 0) {
-        logger.info('No differences found for file', { file: actualFilePath });
-        continue;
-      }
-
-      logger.debug('Found differences in file', {
-        file: actualFilePath,
-        differenceCount: differences.length,
-        differences: differences.map((d: Difference) => ({
-          line: d.targetLine,
-          type: d.type,
-          newLinesCount: d.newLines.length,
-          newLines: d.newLines.slice(0, 3), // Show first 3 lines of changes
-        })),
+      const matchKeys = buildMatchKeys({ orlFilePath, actualFilePath });
+      const allFileRules = collectRulesForFileKeys({
+        matchKeys,
+        fileToRules,
+      });
+      const reportFileRules = collectRulesForFileKeys({
+        matchKeys,
+        fileToRules: fileToReportRules,
       });
 
-      // Create individual fixes for each difference found
-      // This ensures we always create the correct number of fixes
-      for (let i = 0; i < differences.length; i++) {
-        const diff = differences[i];
-
-        // Resolve resource context through the centralized language handler stack.
-        let resourceName = 'Resource';
-        let resourceInstanceName: string | null = null;
-        const baseName = path.basename(actualFilePath).toLowerCase();
-        let resourceStartLine = -1;
-        let resourceEndLine = -1;
-        const languageDiagnosticContext =
-          buildLanguageDiagnosticContextWithFallback({
-            filePath: actualFilePath,
-            originalContent: originalText,
-            modifiedContent: modifiedContent as string,
-            line: diff.targetLine,
-            newLines: diff.newLines,
-          });
-        const selectedResource =
-          languageDiagnosticContext.block ||
-          languageDiagnosticContext.nearestBlock;
-        if (selectedResource) {
-          resourceName = selectedResource.type;
-          resourceInstanceName = selectedResource.name || null;
-          resourceStartLine = selectedResource.startLine - 1;
-          resourceEndLine = selectedResource.endLine - 1;
-        } else {
-          // Delegate block description to the language handler
-          const blockDesc = handler.describeBlock({
-            filePath: actualFilePath,
-            content: originalText,
-            line: diff.targetLine,
-          });
-          resourceName = blockDesc.blockType;
-          resourceInstanceName = blockDesc.blockName;
-          resourceStartLine = blockDesc.blockStartLine;
-          resourceEndLine = blockDesc.blockEndLine;
-        }
-
-        logger.debug('Identified resource for diff', {
-          languageId: languageDiagnosticContext.languageId,
-          resourceType: resourceName,
-          resourceInstance: resourceInstanceName,
-          diffLine: diff.targetLine,
-          resourceStartLine:
-            resourceStartLine >= 0 ? resourceStartLine + 1 : null,
-          resourceEndLine: resourceEndLine >= 0 ? resourceEndLine + 1 : null,
-        });
-
-        // Prefer anchoring diagnostics at the start of the resource block.
-        // This improves UX vs highlighting the closing brace or the very bottom of a block.
-        const diagnosticAnchorLine =
-          languageDiagnosticContext?.diagnosticAnchorLine &&
-          languageDiagnosticContext.diagnosticAnchorLine > 0
-            ? languageDiagnosticContext.diagnosticAnchorLine
-            : resourceStartLine >= 0
-              ? resourceStartLine + 1
-              : diff.targetLine;
-
-        // Keep language-specific fallback behavior in handlers.
-        const resourceHeader = (() => {
-          if (languageDiagnosticContext?.blockHeader) {
-            return languageDiagnosticContext.blockHeader;
-          }
-          if (
-            resourceName &&
-            resourceName !== 'Resource' &&
-            resourceInstanceName &&
-            resourceInstanceName.trim()
-          ) {
-            return `resource "${resourceName}" "${resourceInstanceName}"`;
-          }
-          if (resourceName && resourceName !== 'Resource') {
-            return resourceInstanceName
-              ? `${resourceName}.${resourceInstanceName}`
-              : resourceName;
-          }
-          return path.basename(actualFilePath);
-        })();
-
-        // Analyze the diff content to extract meaningful information
-        // This can help identify which attributes were changed, which might help
-        // narrow down which rules applied (though we're still limited by file-level hooks)
-        const analysis = DiffContentAnalyzer.analyzeDiffContent(diff);
-
-        // Note: We could potentially use analysis.properties to further filter rules,
-        // but without instance-level tracking from hooks, we can't be 100% accurate
-        // when multiple resources of the same type exist in the same file.
-
-        // Attribute to rules using file-level mapping from diagnostics
-        // Since hooks provide file paths (not hunks), we attribute all diffs in a file to rules that touched it
-        const matchKeys: string[] = [];
-        // Keys to try: ORL path, actual path, basename, ORL path without /workspace prefix
-        const orlNorm = (orlFilePath as string).replace(/^\/workspace\/+/, '');
-        matchKeys.push(
-          orlFilePath as string,
-          orlNorm,
-          path.basename(orlNorm),
-          actualFilePath,
-          path.basename(actualFilePath),
-        );
-
-        // Find all rules that touched this file
-        const allFileRules: string[] = [];
-        for (const key of matchKeys) {
-          const rules = fileToRules[key];
-          if (rules) {
-            for (const ruleName of rules) {
-              if (!allFileRules.includes(ruleName)) {
-                allFileRules.push(ruleName);
-              }
-            }
-          }
-        }
-
-        // Rules that (per the ORL report) actually changed this file.
-        // This is the strongest signal for attribution, and it avoids relying on rule-name substrings.
-        const reportFileRules: string[] = [];
-        for (const key of matchKeys) {
-          const rules = fileToReportRules[key];
-          if (rules) {
-            for (const ruleName of rules) {
-              if (!reportFileRules.includes(ruleName)) {
-                reportFileRules.push(ruleName);
-              }
-            }
-          }
-        }
-
-        logger.debug('File-to-rules matching attempt', {
-          file: actualFilePath,
-          orlPath: orlFilePath,
-          matchKeys,
-          allFileRules,
-          allFileRulesCount: allFileRules.length,
-          availableFileToRulesKeys: Object.keys(fileToRules).slice(0, 10),
-          foundMatches: matchKeys
-            .filter(k => fileToRules[k])
-            .map(k => ({
-              key: k,
-              rules: fileToRules[k],
-            })),
-        });
-
-        const diffLine = diff.targetLine;
-
-        logger.debug('Starting rule matching', {
-          file: actualFilePath,
-          resourceName,
-          resourceInstanceName,
-          resourceStartLine,
-          resourceEndLine,
-          diffLine,
-          allFileRulesCount: allFileRules.length,
-          allFileRules: allFileRules.slice(0, 3),
-        });
-
+      for (const diff of differences) {
         const matchingRules = attributeRulesToDiff({
-          resourceName,
-          resourceInstanceName,
           allFileRules,
           reportFileRules,
-          diffLine,
-          diffContent: diff.newLines.join('\n'),
-          properties: analysis.properties || [],
-          handler,
-          diagnosticRules: (result.diagnostics?.rules || []).map(
-            r => r.ruleName,
-          ),
+          diagnosticRules: diagnosticRuleNames,
         });
-
-        // Get rule descriptions
-        let aggregatedDescriptions: string[] = [];
-        let primaryRule = 'ORL_REMEDIATION';
-        if (matchingRules.length > 0) {
-          primaryRule = matchingRules[0];
-          const descs: string[] = [];
-
-          for (const ruleName of matchingRules) {
-            const d = pickBestRuleDescription(ruleName, ruleDescriptions);
-
-            if (d && !descs.includes(d)) {
-              descs.push(d);
-            }
-          }
-          aggregatedDescriptions = descs;
-
-          // Debug logging
-          if (aggregatedDescriptions.length === 0) {
-            const sampleRule = matchingRules[0] || '';
-            logger.warn('No descriptions found for matching rules', {
-              matchingRules: matchingRules.slice(0, 5),
-              matchingRulesCount: matchingRules.length,
-              availableRuleNames: Object.keys(ruleDescriptions),
-              availableRuleNamesCount: Object.keys(ruleDescriptions).length,
-              sampleDiagnosticRule: sampleRule,
-              normalizedSample: normalizeRuleName(sampleRule),
-              normalizedAvailable: Object.keys(ruleDescriptions).map(n => ({
-                original: n,
-                normalized: normalizeRuleName(n),
-              })),
-              // Try to find any partial matches for debugging
-              partialMatches: Object.keys(ruleDescriptions).filter(rn => {
-                const normRn = normalizeRuleName(rn);
-                const normSample = normalizeRuleName(sampleRule);
-                return (
-                  normRn.includes(normSample) || normSample.includes(normRn)
-                );
-              }),
-            });
-          } else {
-            logger.debug('Successfully matched rule descriptions', {
-              matchingRules: matchingRules.slice(0, 3),
-              descriptionsCount: aggregatedDescriptions.length,
-              sampleDescription: aggregatedDescriptions[0]?.substring(0, 100),
-            });
-          }
-        }
-
-        // Format: Resource Name followed by descriptions
-        // Use Markdown formatting for better structure and sections
-        let descriptionText: string;
-        const displayResourceName = handler.formatBlockDisplayName({
-          blockType: resourceName,
-          blockName: resourceInstanceName,
-          filePath: actualFilePath,
-        });
-        if (aggregatedDescriptions.length > 0) {
-          // Format as: Resource Name\nDescription1\nDescription2 (single newlines, no extra spacing)
-          const descriptions = aggregatedDescriptions.slice(0, 5).join('\n');
-          descriptionText = `${displayResourceName}\n${descriptions}`;
-        } else {
-          // Fallback if no descriptions found
-          descriptionText = `${displayResourceName}\n${analysis.description || 'Update configuration for resource'}`;
-        }
-
-        // Note: VS Code Diagnostic messages support MarkdownString for rich formatting
-        // You can use MarkdownString to create sections like:
-        // const markdown = new vscode.MarkdownString();
-        // markdown.appendMarkdown(`### ${resourceName}\n\n`);
-        // markdown.appendMarkdown(`**Rules Applied:**\n`);
-        // descriptions.forEach(desc => markdown.appendMarkdown(`- ${desc}\n`));
-        // markdown.appendMarkdown(`\n**Additional Info:**\n...`);
-        // Then use markdown.value as the message
-
-        const ruleIdentifier =
-          matchingRules.length > 1
-            ? 'orl-rule:multiple'
-            : `orl-rule:${primaryRule}`;
-
-        const fix = {
+        const fix: RemediationFix = {
           filepath: actualFilePath,
           oldLine: diff.originalLine,
           newLine: diff.newLines,
@@ -982,58 +657,25 @@ export class OrlResultConverter {
           lineOffset: 0,
           fixType: diff.type,
         };
-
-        // Create individual fix for this specific difference using rule-centric remediation shape
-        const individualFix = {
-          rule: {
-            id: ruleIdentifier,
-            identifier: ruleIdentifier,
-            // Prefer rule metadata.annotations["gomboc-ai/description-plain"] (fallback: metadata.description)
-            name: descriptionText,
-            description: descriptionText,
-            // Not part of the GraphQL schema; used internally for analytics attribution.
-            orlRuleNames: matchingRules,
-          },
-          fixes: [fix],
-          codeObservation: {
-            codeResourceInstance: {
-              name: resourceHeader,
-              type: handler.codeResourceType,
-              filepath: actualFilePath,
-              line: diagnosticAnchorLine,
-            },
-            disposition: 'NonCompliant' as const,
-          },
-        };
-
-        individualFixes.push(individualFix);
+        for (const ruleName of matchingRules) {
+          const key = ruleFileRemediationKey(ruleName, actualFilePath);
+          const existing = diffFixesByRuleFile.get(key) || [];
+          existing.push(fix);
+          diffFixesByRuleFile.set(key, existing);
+        }
       }
 
-      // Create grouped fix for the entire file
-      // Heuristic: aggregate rule descriptions across all hunks in this file
-      const diffs = differences;
+      if (differences.length === 0) {
+        continue;
+      }
+
+      const fileRules = collectRulesForFileKeys({ matchKeys, fileToRules });
       const counts: Record<string, number> = {};
-      const orlNorm = (orlFilePath as string).replace(/^\/workspace\/+/, '');
-      const keys = [
-        orlFilePath as string,
-        orlNorm,
-        path.basename(orlNorm),
-        actualFilePath,
-        path.basename(actualFilePath),
-      ];
-      // Count rules that touched this file (file-level attribution)
-      for (const key of keys) {
-        const rules = fileToRules[key];
-        if (!rules) {
-          continue;
-        }
-        for (const ruleName of rules) {
-          // Count each diff as 1 for this rule (simple file-level attribution)
-          counts[ruleName] = (counts[ruleName] || 0) + diffs.length;
-        }
+      for (const ruleName of fileRules) {
+        counts[ruleName] = (counts[ruleName] || 0) + differences.length;
       }
       const sortedWinners = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-      let groupedDescriptionText: string | undefined = undefined;
+      let groupedDescriptionText: string | undefined;
       let groupedId = 'orl-rule:multiple';
       if (sortedWinners.length > 0) {
         const descs: string[] = [];
@@ -1048,64 +690,149 @@ export class OrlResultConverter {
           groupedId = `orl-rule:${sortedWinners[0][0]}`;
         }
       }
-      const groupedFix = {
+
+      const findingsForFile = findingRows.filter(
+        f => f.actualFilePath === actualFilePath,
+      );
+
+      groupedFixes.push({
         path: actualFilePath,
         content: Buffer.from(modifiedContent as string, 'utf8').toString(
           'base64',
         ),
-        comments: differences.map((diff: Difference, i: number) => {
-          const analysis = DiffContentAnalyzer.analyzeDiffContent(diff);
-          // Per-diff aggregation (to keep comment consistent with individual fix)
-          // Use file-level attribution (all rules that touched this file)
-          const localCounts: Record<string, number> = {};
-          for (const key of keys) {
-            const rules = fileToRules[key];
-            if (!rules) {
-              continue;
-            }
-            for (const ruleName of rules) {
-              localCounts[ruleName] = (localCounts[ruleName] || 0) + 1;
-            }
-          }
-          const localSorted = Object.entries(localCounts).sort(
-            (a, b) => b[1] - a[1],
-          );
-          let localName = analysis.description;
-          let localId = 'orl-rule:multiple';
-          if (localSorted.length > 0) {
-            const descs: string[] = [];
-            for (const [r] of localSorted) {
-              const d = ruleDescriptions[r] || r;
-              if (!descs.includes(d)) {
-                descs.push(d);
-              }
-            }
-            localName = descs.slice(0, 3).join(' | ') || analysis.description;
-            if (localSorted.length === 1) {
-              localId = `orl-rule:${localSorted[0][0]}`;
-            }
+        comments: differences.map((diff, index) => {
+          const finding = findingsForFile[index];
+          const line = finding
+            ? toExtensionLine(finding.location.startLine)
+            : diff.targetLine;
+          const column = finding?.location.startColumn ?? 0;
+          const localSorted = sortedWinners;
+          let localName = groupedDescriptionText || 'Apply all fixes';
+          let localId = groupedId;
+          if (localSorted.length === 1) {
+            localId = `orl-rule:${localSorted[0][0]}`;
+            localName = ruleDescriptions[localSorted[0][0]] || localSorted[0][0];
           }
           return {
-            position: {
-              line: diff.targetLine,
-              column: 0,
-            },
+            position: { line, column },
             rule: {
-              id: groupedId || localId,
-              name: groupedDescriptionText || localName || analysis.description,
-              // Not part of the GraphQL schema; used internally for analytics attribution.
+              id: localId,
+              name: localName,
               orlRuleNames: localSorted.map(([r]) => r).slice(0, 20),
             },
           };
         }),
-      };
+      });
 
-      groupedFixes.push(groupedFix);
+      if (!hasFindingLocations) {
+        for (const diff of differences) {
+          const matchingRules = attributeRulesToDiff({
+            allFileRules,
+            reportFileRules,
+            diagnosticRules: diagnosticRuleNames,
+          });
+          const primaryRule = matchingRules[0] || 'ORL_REMEDIATION';
+          const descriptionText = buildRuleDescriptionText({
+            ruleName: primaryRule,
+            ruleDescriptions,
+            ruleShortNames,
+          });
+          const ruleIdentifier =
+            matchingRules.length > 1
+              ? 'orl-rule:multiple'
+              : `orl-rule:${primaryRule}`;
+
+          individualFixes.push({
+            rule: {
+              id: ruleIdentifier,
+              identifier: ruleIdentifier,
+              name: descriptionText,
+              description: descriptionText,
+              orlRuleNames: matchingRules,
+            },
+            fixes: [
+              {
+                filepath: actualFilePath,
+                oldLine: diff.originalLine,
+                newLine: diff.newLines,
+                codePosition: {
+                  line: diff.targetLine,
+                  column: 0,
+                },
+                lineOffset: 0,
+                fixType: diff.type,
+              },
+            ],
+            codeObservation: {
+              codeResourceInstance: {
+                name: path.basename(actualFilePath),
+                type: resolveCodeResourceType({
+                  filePath: actualFilePath,
+                  content: originalText,
+                  filetype,
+                }),
+                filepath: actualFilePath,
+                line: diff.targetLine,
+              },
+              disposition: 'NonCompliant',
+            },
+          });
+        }
+      }
+    }
+
+    if (hasFindingLocations) {
+      for (const finding of findingRows) {
+        const descriptionText = buildRuleDescriptionText({
+          ruleName: finding.ruleName,
+          ruleDescriptions,
+          ruleShortNames,
+        });
+        const ruleIdentifier = `orl-rule:${finding.ruleName}`;
+        const fixes =
+          diffFixesByRuleFile.get(
+            ruleFileRemediationKey(finding.ruleName, finding.actualFilePath),
+          ) || [];
+
+        individualFixes.push({
+          rule: {
+            id: ruleIdentifier,
+            identifier: ruleIdentifier,
+            name: descriptionText,
+            description: descriptionText,
+            orlRuleNames: [finding.ruleName],
+          },
+          fixes,
+          findingLocation: {
+            id: finding.location.id,
+            filePath: finding.location.filePath,
+            startLine: finding.location.startLine,
+            startColumn: finding.location.startColumn,
+            endLine: finding.location.endLine,
+            endColumn: finding.location.endColumn,
+          },
+          codeObservation: {
+            codeResourceInstance: {
+              name: path.basename(finding.actualFilePath),
+              type: resolveCodeResourceType({
+                filePath: finding.actualFilePath,
+                content:
+                  originalFileContents[finding.actualFilePath] || '',
+                filetype,
+              }),
+              filepath: finding.actualFilePath,
+              line: toExtensionLine(finding.location.startLine),
+            },
+            disposition: 'NonCompliant',
+          },
+        });
+      }
     }
 
     logger.info('Created fixes', {
       individualFixesCount: individualFixes.length,
       groupedFixesCount: groupedFixes.length,
+      findingLocationsCount: findingRows.length,
     });
 
     return {

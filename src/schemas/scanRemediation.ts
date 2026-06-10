@@ -20,6 +20,18 @@ export const zCodePosition = z.object({
   column: z.number().int().nonnegative(),
 });
 
+export const zRemediationFindingLocation = z.object({
+  id: z.string(),
+  filePath: z.string(),
+  startLine: z.number().int().nonnegative(),
+  startColumn: z.number().int().nonnegative(),
+  endLine: z.number().int().nonnegative().optional(),
+  endColumn: z.number().int().nonnegative().optional(),
+});
+export type RemediationFindingLocation = z.infer<
+  typeof zRemediationFindingLocation
+>;
+
 export const zRemediationFix = z.object({
   filepath: z.string(),
   oldLine: z.union([z.number(), z.string(), z.array(z.string())]).optional(),
@@ -33,6 +45,7 @@ export type RemediationFix = z.infer<typeof zRemediationFix>;
 export const zIndividualFixesRemediation = z.object({
   rule: zOrlRule,
   fixes: z.array(zRemediationFix),
+  findingLocation: zRemediationFindingLocation.optional(),
   codeObservation: z.object({
     codeResourceInstance: z.object({
       name: z.string().optional(),

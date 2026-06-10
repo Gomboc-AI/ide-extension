@@ -10,9 +10,11 @@ import {
   GroupedFixesRemediation,
   IndividualFixesRemediation,
   OrlRule as ScanRemediationOrlRule,
+  RemediationFindingLocation,
   ScanRemediationPayload,
   parseScanRemediationPayload,
 } from '../schemas/scanRemediation';
+import { toExtensionLine } from '../schemas/orlReport';
 import { DiagnosticCollectionManager } from '../diagnosticCollectionManager';
 import { vsCodeIntegrationsService } from '../utils/integrationsService';
 import { createOrlClient } from '../orl/orlClient';
@@ -358,6 +360,72 @@ export class ScanResultsProvider {
     return lines.map(line =>
       line.length > 0 ? `${indentation}${line}` : line,
     );
+  }
+
+  private resolveOrlDiagnosticAnchor(args: {
+    remediation: IndividualFixesRemediation;
+    fileContent: string | undefined;
+    fileHandler: ILanguage;
+  }): { line: number; character: number } {
+    const findingLocation = args.remediation.findingLocation;
+    if (findingLocation) {
+      return {
+        line: toExtensionLine(findingLocation.startLine),
+        character: Math.max(0, Math.floor(findingLocation.startColumn)),
+      };
+    }
+
+    const operationAnchor = this.pickOperationDiagnosticAnchor(
+      args.remediation,
+    );
+    let line: number = operationAnchor.line;
+    if (!Number.isFinite(line) || line <= 0) {
+      line = 1;
+    }
+    const resolvedAnchor = args.fileHandler.resolveDiagnosticAnchorLine({
+      content: args.fileContent ?? '',
+      suggestedLine: line,
+      fromFixOperation: operationAnchor.fromFixOperation,
+    });
+    return {
+      line: resolvedAnchor.line,
+      character: resolvedAnchor.character,
+    };
+  }
+
+  private buildLocationDiagnosticRange(args: {
+    findingLocation?: RemediationFindingLocation;
+    line1Based: number;
+    character: number;
+    content?: string;
+    uniqueOffset?: number;
+    handler?: ILanguage;
+  }): vscode.Range {
+    if (args.findingLocation) {
+      const startLine0 = Math.max(0, Math.floor(args.findingLocation.startLine));
+      const startCol = Math.max(0, Math.floor(args.findingLocation.startColumn));
+      const endLine0 = Number.isFinite(args.findingLocation.endLine)
+        ? Math.max(startLine0, Math.floor(args.findingLocation.endLine as number))
+        : startLine0;
+      const endCol = Number.isFinite(args.findingLocation.endColumn)
+        ? Math.max(
+            startCol + 1,
+            Math.floor(args.findingLocation.endColumn as number),
+          )
+        : 999;
+      return new vscode.Range(
+        new vscode.Position(startLine0, startCol),
+        new vscode.Position(endLine0, endCol),
+      );
+    }
+
+    return this.buildCompactDiagnosticRange({
+      line1Based: args.line1Based,
+      content: args.content,
+      uniqueOffset: args.uniqueOffset,
+      handler: args.handler,
+      anchorCharacter: args.character,
+    });
   }
 
   private pickOperationDiagnosticAnchor(
@@ -1008,7 +1076,13 @@ export class ScanResultsProvider {
     for (const remediation of this.individualRemediations) {
       const filepath =
         remediation.codeObservation.codeResourceInstance.filepath;
-      if (remediation.fixes.length === 0) {
+      const isOrlRuleRemediation =
+        typeof remediation.rule?.id === 'string' &&
+        remediation.rule.id.startsWith('orl-rule:');
+      if (
+        remediation.fixes.length === 0 &&
+        !(isOrlRuleRemediation && remediation.findingLocation)
+      ) {
         continue;
       }
       const existingData = existingResourceRuleFixes[filepath];
@@ -1068,26 +1142,18 @@ export class ScanResultsProvider {
             line: number;
             character: number;
             resourceHeader?: string;
+            findingLocation?: RemediationFindingLocation;
           }
         >();
         for (const remediation of currentRemediation) {
           const rule = remediation.rule;
           const ruleNames = this.getRenderableOrlRuleNames(rule);
-          // Keep ORL diagnostics anchored to the actionable fix location
-          // (UPDATE/DELETE line, or previous line for ADD) so Problems points
-          // near where edits will happen.
-          const operationAnchor =
-            this.pickOperationDiagnosticAnchor(remediation);
-          let line: number = operationAnchor.line;
-          if (!Number.isFinite(line) || line <= 0) {
-            line = 1;
-          }
-          const resolvedAnchor = fileHandler.resolveDiagnosticAnchorLine({
-            content: fileContent ?? '',
-            suggestedLine: line,
-            fromFixOperation: operationAnchor.fromFixOperation,
+          const anchor = this.resolveOrlDiagnosticAnchor({
+            remediation,
+            fileContent,
+            fileHandler,
           });
-          line = resolvedAnchor.line;
+          const line = anchor.line;
 
           const resourceHeader: string | undefined =
             typeof remediation?.codeObservation?.codeResourceInstance?.name ===
@@ -1097,16 +1163,19 @@ export class ScanResultsProvider {
 
           for (const rn of ruleNames) {
             const baseRuleName = this.stripOrlInstanceSuffix(rn);
-            const normalizedResourceHeader = resourceHeader?.trim();
-            const ruleResourceKey = normalizedResourceHeader
-              ? `${baseRuleName}::resource::${normalizedResourceHeader}`
-              : `${baseRuleName}::line::${line}`;
+            const findingId = remediation.findingLocation?.id?.trim();
+            const ruleResourceKey = findingId
+              ? `${baseRuleName}::finding::${findingId}`
+              : resourceHeader?.trim()
+                ? `${baseRuleName}::resource::${resourceHeader.trim()}`
+                : `${baseRuleName}::line::${line}`;
             if (!ruleToMeta.has(ruleResourceKey)) {
               ruleToMeta.set(ruleResourceKey, {
                 ruleName: rn,
                 line,
-                character: resolvedAnchor.character,
+                character: anchor.character,
                 resourceHeader,
+                findingLocation: remediation.findingLocation,
               });
             }
           }
@@ -1119,12 +1188,13 @@ export class ScanResultsProvider {
           const line = meta.line;
           // Keep each ORL range compact and slightly unique so Problems selection
           // can still produce a single-action lightbulb menu.
-          const range = this.buildCompactDiagnosticRange({
+          const range = this.buildLocationDiagnosticRange({
+            findingLocation: meta.findingLocation,
             line1Based: line,
             content: fileContent,
             uniqueOffset: orlIdx,
             handler: fileHandler,
-            anchorCharacter: meta.character,
+            character: meta.character,
           });
           const baseRuleName = this.stripOrlInstanceSuffix(ruleName);
           const shortNameRaw =

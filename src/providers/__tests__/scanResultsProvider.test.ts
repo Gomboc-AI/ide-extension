@@ -624,6 +624,54 @@ describe('ScanResultsProvider branch deltas', () => {
     );
   });
 
+  it('anchors ORL diagnostics to findingLocation when present', () => {
+    const { provider, diagnosticCollectionManager } = createProviderHarness();
+    (
+      provider as unknown as { individualRemediations: unknown[] }
+    ).individualRemediations = [
+      {
+        rule: {
+          id: 'orl-rule:gomboc-ai/test_rule000',
+          name: 'Test rule',
+          shortName: 'Test rule',
+          orlRuleNames: ['gomboc-ai/test_rule000'],
+        },
+        findingLocation: {
+          id: 'finding-1',
+          filePath: '/workspace/main.tf',
+          startLine: 4,
+          startColumn: 2,
+          endLine: 4,
+          endColumn: 18,
+        },
+        codeObservation: {
+          codeResourceInstance: {
+            filepath: '/repo/main.tf',
+            line: 5,
+            type: 'tf',
+          },
+          disposition: 'NonCompliant',
+        },
+        fixes: [],
+      },
+    ];
+    (
+      provider as unknown as { groupedRemediations: unknown[] }
+    ).groupedRemediations = [
+      { path: '/repo/main.tf', content: '', comments: [] },
+    ];
+
+    provider.createDiagnostic();
+
+    const calls = (
+      diagnosticCollectionManager.updateDiagnosticCollection as jest.Mock
+    ).mock.calls;
+    const diagnostics = calls[0][1] as Array<{ range: vscode.Range }>;
+    expect(diagnostics[0].range.start.line).toBe(4);
+    expect(diagnostics[0].range.start.character).toBe(2);
+    expect(diagnostics[0].range.end.character).toBe(18);
+  });
+
   it('anchors UPDATE diagnostics to the update line', () => {
     const { provider, diagnosticCollectionManager } = createProviderHarness();
     setRemediations(provider, {

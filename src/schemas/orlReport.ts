@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PathConverter } from '../utils/pathConverter';
 
 /** Coerces YAML FAILSAFE numeric scalars (often strings) into non-negative integers. */
 const zOrlCount = z
@@ -36,13 +37,24 @@ const zOrlBoolean = z
   })
   .pipe(z.boolean());
 
+const zOrlLineIndex = z
+  .union([z.string(), z.number()])
+  .transform((value) => {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return Math.max(0, Math.floor(value));
+    }
+    const parsed = parseInt(String(value), 10);
+    return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+  })
+  .pipe(z.number().int().min(0));
+
 export const zFindingLocation = z.object({
   id: z.string(),
   filePath: z.string(),
-  startLine: z.number().int().min(0),
-  endLine: z.number().int().min(0).optional(),
-  startColumn: z.number().int().min(0),
-  endColumn: z.number().int().min(0).optional(),
+  startLine: zOrlLineIndex,
+  endLine: zOrlLineIndex.optional(),
+  startColumn: zOrlLineIndex,
+  endColumn: zOrlLineIndex.optional(),
 });
 export type FindingLocation = z.infer<typeof zFindingLocation>;
 
@@ -157,4 +169,70 @@ export function getOrlReportRules(report: OrlReport): OrlRule[] {
 export function parseOrlReportPayload(payload: unknown): OrlReport | null {
   const parsed = zOrlReport.safeParse(payload);
   return parsed.success ? parsed.data : null;
+}
+
+/** Flattened finding row with resolved local file path. */
+export type ReportFindingLocation = {
+  ruleName: string;
+  findingId: string;
+  location: FindingLocation;
+  actualFilePath: string;
+};
+
+/** Returns `originalLocation` for scan diagnostics; skips only `deleted` rows. */
+export function selectScanDiagnosticLocation(
+  row: FindingLocationRow,
+): FindingLocation | undefined {
+  if (row.resolutionStatus === 'deleted') {
+    return undefined;
+  }
+  return row.originalLocation;
+}
+
+/** Converts ORL 0-based line index to extension 1-based line numbers. */
+export function toExtensionLine(line0Based: number): number {
+  if (!Number.isFinite(line0Based)) {
+    return 1;
+  }
+  return Math.max(1, Math.floor(line0Based) + 1);
+}
+
+/** Extracts scannable finding locations from a parsed ORL report. */
+export function extractFindingLocationsFromReport(args: {
+  report: OrlReport | null | undefined;
+  currentFilePath: string;
+}): ReportFindingLocation[] {
+  const report = args.report;
+  if (!report) {
+    return [];
+  }
+
+  const out: ReportFindingLocation[] = [];
+  for (const rule of getOrlReportRules(report)) {
+    const ruleName =
+      (typeof rule.name === 'string' && rule.name.trim()) ||
+      (typeof rule.metadata?.name === 'string' && rule.metadata.name.trim()) ||
+      '';
+    if (!ruleName) {
+      continue;
+    }
+
+    for (const row of rule.findingLocations || []) {
+      const location = selectScanDiagnosticLocation(row);
+      if (!location) {
+        continue;
+      }
+      out.push({
+        ruleName,
+        findingId: row.id,
+        location,
+        actualFilePath: PathConverter.convertOrlPathToActualPath(
+          location.filePath,
+          args.currentFilePath,
+        ),
+      });
+    }
+  }
+
+  return out;
 }

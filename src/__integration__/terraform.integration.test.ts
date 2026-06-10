@@ -122,7 +122,7 @@ describe('Terraform integration — DAX SSE rule', () => {
       0,
     );
     expect(firstFix.rule.id).toContain('orl-rule:');
-    expect(firstFix.rule.name).toContain('aws_dax_cluster');
+    expect(firstFix.rule.name.toLowerCase()).toMatch(/dax|encryption/);
     expect(firstFix.fixes.length).toBeGreaterThan(0);
     expect(firstFix.fixes[0].filepath).toContain('dax-no-sse.tf');
     expect(firstFix.fixes[0].newLine.join('\n')).toContain(
