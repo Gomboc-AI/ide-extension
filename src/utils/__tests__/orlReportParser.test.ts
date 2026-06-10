@@ -76,12 +76,12 @@ describe('parseOrlReport', () => {
     expect(parseOrlReport(report)).toBeNull();
   });
 
-  it('keeps numeric scalars as strings under FAILSAFE_SCHEMA', () => {
+  it('coerces FAILSAFE numeric scalars to integers', () => {
     const report = 'type: Report\nspec:\n  fixes: 3';
 
     const parsed = parseOrlReport(report);
 
-    expect(parsed?.spec?.fixes).toBe('3');
-    expect(typeof parsed?.spec?.fixes).toBe('string');
+    expect(parsed?.spec?.fixes).toBe(3);
+    expect(typeof parsed?.spec?.fixes).toBe('number');
   });
 });

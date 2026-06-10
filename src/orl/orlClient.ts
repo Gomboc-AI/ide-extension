@@ -203,7 +203,7 @@ export interface OrlConfig {
 // to ensure consistent behavior across environments and easier support/debugging.
 // For local dev with XML/Gradle support, switch to 'orl-dev:local'
 // (rebuild via: /path/to/orl/reload-dev-image.sh)
-const ORL_CONTAINER_IMAGE = 'gombocai/orl:v1.3.6';
+const ORL_CONTAINER_IMAGE = 'gombocai/orl:v1.3.9-latest';
 
 export interface OrlResult {
   success: boolean;
@@ -1556,6 +1556,10 @@ export class OrlClient {
     }
 
     dockerArgs.push(containerImage, 'remediate', '/workspace');
+
+
+    dockerArgs.push('--include-location-info');
+    dockerArgs.push('--report-format', 'findings-only');
 
     if (disableHooks) {
       dockerArgs.push('--disable-hooks');

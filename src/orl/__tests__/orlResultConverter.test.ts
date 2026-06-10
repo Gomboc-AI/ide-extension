@@ -143,7 +143,7 @@ describe('orlResultConverter helpers', () => {
     expect(second).toEqual(['a-rule', 'm-rule', 'z-rule']);
   });
 
-  it('preserves FAILSAFE string fields when casting into SDK report input', () => {
+  it('coerces FAILSAFE numeric fields when casting into SDK report input', () => {
     const report = [
       'type: Report',
       'spec:',
@@ -161,7 +161,8 @@ describe('orlResultConverter helpers', () => {
 
     const parsed = parseOrlReport(report);
     expect(parsed).not.toBeNull();
-    expect(typeof parsed?.spec?.rules?.[0]?.fixes).toBe('string');
+    expect(parsed?.spec?.rules?.[0]?.fixes).toBe(1);
+    expect(typeof parsed?.spec?.rules?.[0]?.fixes).toBe('number');
     expect(parsed?.spec?.rules?.[0]?.metadata?.display_name).toBe(
       'Test Rule Display',
     );
