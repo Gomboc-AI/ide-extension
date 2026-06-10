@@ -104,9 +104,3 @@ export type {
   ORLReportRule,
   CheckovEvidence,
 } from './schemas/orlReport';
-
-export type {
-  ReportPayload,
-  ReportPayloadWorkflowMetadata,
-  ReportPayloadWorkflowStatus,
-} from './schemas/reportPayload';
