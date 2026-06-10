@@ -402,10 +402,19 @@ export class ScanResultsProvider {
     handler?: ILanguage;
   }): vscode.Range {
     if (args.findingLocation) {
-      const startLine0 = Math.max(0, Math.floor(args.findingLocation.startLine));
-      const startCol = Math.max(0, Math.floor(args.findingLocation.startColumn));
+      const startLine0 = Math.max(
+        0,
+        Math.floor(args.findingLocation.startLine),
+      );
+      const startCol = Math.max(
+        0,
+        Math.floor(args.findingLocation.startColumn),
+      );
       const endLine0 = Number.isFinite(args.findingLocation.endLine)
-        ? Math.max(startLine0, Math.floor(args.findingLocation.endLine as number))
+        ? Math.max(
+            startLine0,
+            Math.floor(args.findingLocation.endLine as number),
+          )
         : startLine0;
       const endCol = Number.isFinite(args.findingLocation.endColumn)
         ? Math.max(

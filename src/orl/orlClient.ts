@@ -1557,7 +1557,6 @@ export class OrlClient {
 
     dockerArgs.push(containerImage, 'remediate', '/workspace');
 
-
     dockerArgs.push('--include-location-info');
     dockerArgs.push('--report-format', 'findings-only');
 

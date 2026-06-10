@@ -711,7 +711,8 @@ export class OrlResultConverter {
           let localId = groupedId;
           if (localSorted.length === 1) {
             localId = `orl-rule:${localSorted[0][0]}`;
-            localName = ruleDescriptions[localSorted[0][0]] || localSorted[0][0];
+            localName =
+              ruleDescriptions[localSorted[0][0]] || localSorted[0][0];
           }
           return {
             position: { line, column },
@@ -816,8 +817,7 @@ export class OrlResultConverter {
               name: path.basename(finding.actualFilePath),
               type: resolveCodeResourceType({
                 filePath: finding.actualFilePath,
-                content:
-                  originalFileContents[finding.actualFilePath] || '',
+                content: originalFileContents[finding.actualFilePath] || '',
                 filetype,
               }),
               filepath: finding.actualFilePath,

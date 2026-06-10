@@ -4,7 +4,7 @@ import { PathConverter } from '../utils/pathConverter';
 /** Coerces YAML FAILSAFE numeric scalars (often strings) into non-negative integers. */
 const zOrlCount = z
   .union([z.string(), z.number()])
-  .transform((value) => {
+  .transform(value => {
     if (typeof value === 'number' && Number.isFinite(value)) {
       return Math.max(0, Math.floor(value));
     }
@@ -16,7 +16,7 @@ const zOrlCount = z
 /** Coerces YAML FAILSAFE priority scalars (often strings) into integers. */
 const zOrlPriority = z
   .union([z.string(), z.number()])
-  .transform((value) => {
+  .transform(value => {
     if (typeof value === 'number' && Number.isFinite(value)) {
       return Math.floor(value);
     }
@@ -28,7 +28,7 @@ const zOrlPriority = z
 /** Coerces YAML FAILSAFE booleans (often "true"/"false" strings). */
 const zOrlBoolean = z
   .union([z.boolean(), z.string()])
-  .transform((value) => {
+  .transform(value => {
     if (typeof value === 'boolean') {
       return value;
     }
@@ -39,7 +39,7 @@ const zOrlBoolean = z
 
 const zOrlLineIndex = z
   .union([z.string(), z.number()])
-  .transform((value) => {
+  .transform(value => {
     if (typeof value === 'number' && Number.isFinite(value)) {
       return Math.max(0, Math.floor(value));
     }
@@ -143,9 +143,11 @@ export type OrlReportContent = z.infer<typeof zORLReportContent>;
 export const zOrlReportSpec = zOrlReportBody.passthrough();
 export type OrlReportSpec = z.infer<typeof zOrlReportSpec>;
 
-export const zOrlReport = zORLReportContent.extend({
-  spec: zOrlReportSpec.optional(),
-}).passthrough();
+export const zOrlReport = zORLReportContent
+  .extend({
+    spec: zOrlReportSpec.optional(),
+  })
+  .passthrough();
 export type OrlReport = z.infer<typeof zOrlReport>;
 
 export const zCheckovEvidence = z.object({

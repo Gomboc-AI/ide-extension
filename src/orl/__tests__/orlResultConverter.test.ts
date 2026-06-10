@@ -158,9 +158,9 @@ describe('orlResultConverter helpers', () => {
         startColumn: 2,
       }),
     );
-    expect(payload.individualFixes[0].codeObservation.codeResourceInstance.line).toBe(
-      5,
-    );
+    expect(
+      payload.individualFixes[0].codeObservation.codeResourceInstance.line,
+    ).toBe(5);
     expect(payload.individualFixes[0].rule.id).toBe(
       'orl-rule:gomboc-ai/ensure_encryption000',
     );
