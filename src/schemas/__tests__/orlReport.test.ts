@@ -84,13 +84,14 @@ describe('orlReport location helpers', () => {
     const parsed = parseOrlReportPayload(report);
     expect(parsed?.spec.rules).toHaveLength(1);
     expect(parsed?.spec.rules?.[0]?.metadata?.priority).toBeUndefined();
-    expect(parsed?.spec.rules?.[0]?.findingLocations?.[0]?.originalLocation)
-      .toEqual(
-        expect.objectContaining({
-          filePath: 'cfngoat.yaml',
-          startLine: 1078,
-        }),
-      );
+    expect(
+      parsed?.spec.rules?.[0]?.findingLocations?.[0]?.originalLocation,
+    ).toEqual(
+      expect.objectContaining({
+        filePath: 'cfngoat.yaml',
+        startLine: 1078,
+      }),
+    );
   });
 
   it('extractFindingLocationsFromReport reads snake_case finding_locations', () => {
