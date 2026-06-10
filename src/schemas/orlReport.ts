@@ -1,143 +1,89 @@
 import { z } from 'zod';
 import { PathConverter } from '../utils/pathConverter';
 
-/** Coerces YAML FAILSAFE numeric scalars (often strings) into non-negative integers. */
-const zOrlCount = z
-  .union([z.string(), z.number()])
-  .transform(value => {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return Math.max(0, Math.floor(value));
-    }
-    const parsed = parseInt(String(value), 10);
-    return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
-  })
-  .pipe(z.number().int().min(0));
+/** FAILSAFE YAML loads unquoted numbers as strings (e.g. fixes: "3"). */
+const zOrlCount = z.coerce.number().int().min(0);
+const zOrlLineIndex = z.coerce.number().int().min(0);
+const zOrlPriority = z.coerce.number().int();
 
-/** Coerces YAML FAILSAFE priority scalars (often strings) into integers. */
-const zOrlPriority = z
-  .union([z.string(), z.number()])
-  .transform(value => {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return Math.floor(value);
-    }
-    const parsed = parseInt(String(value), 10);
-    return Number.isFinite(parsed) ? parsed : 0;
-  })
-  .pipe(z.number().int());
+/**
+ * FAILSAFE YAML loads booleans as strings too (e.g. skip: "false").
+ * Do not use z.coerce.boolean() here — it treats any non-empty string as true.
+ */
+const zOrlBoolean = z.union([z.boolean(), z.string()]).transform(value => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  const normalized = value.trim().toLowerCase();
+  return normalized === 'true' || normalized === '1' || normalized === 'yes';
+});
 
-/** Coerces YAML FAILSAFE booleans (often "true"/"false" strings). */
-const zOrlBoolean = z
-  .union([z.boolean(), z.string()])
-  .transform(value => {
-    if (typeof value === 'boolean') {
-      return value;
-    }
-    const normalized = String(value).trim().toLowerCase();
-    return normalized === 'true' || normalized === '1' || normalized === 'yes';
-  })
-  .pipe(z.boolean());
+const zResolutionStatus = z.enum([
+  'unchanged',
+  'shifted',
+  'deleted',
+  'invalidated',
+]);
 
-const zOrlLineIndex = z
-  .union([z.string(), z.number()])
-  .transform(value => {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return Math.max(0, Math.floor(value));
-    }
-    const parsed = parseInt(String(value), 10);
-    return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
-  })
-  .pipe(z.number().int().min(0));
-
-export const zFindingLocation = z.object({
+const zFindingLocationShape = z.object({
   id: z.string(),
-  filePath: z.string(),
+  filePath: z.string().min(1),
   startLine: zOrlLineIndex,
   endLine: zOrlLineIndex.optional(),
   startColumn: zOrlLineIndex,
   endColumn: zOrlLineIndex.optional(),
 });
-export type FindingLocation = z.infer<typeof zFindingLocation>;
+export type FindingLocation = z.infer<typeof zFindingLocationShape>;
 
-export const zFindingLocationRow = z.object({
-  id: z.string(),
-  originalLocation: zFindingLocation.optional(),
-  resolvedLocation: zFindingLocation.optional(),
-  resolutionStatus: z
-    .enum(['unchanged', 'shifted', 'deleted', 'invalidated'])
-    .optional(),
-});
-export type FindingLocationRow = z.infer<typeof zFindingLocationRow>;
-
-/** Normalizes ORL report location objects that may use snake_case keys. */
-const normalizeFindingLocationFields = (
-  raw: unknown,
-): Record<string, unknown> | undefined => {
-  if (!raw || typeof raw !== 'object') {
-    return undefined;
-  }
-  const row = raw as Record<string, unknown>;
-  const id = row.id;
-  const filePath = row.filePath ?? row.file_path;
-  if (typeof id !== 'string' || typeof filePath !== 'string') {
-    return undefined;
-  }
-  return {
-    id,
-    filePath,
-    startLine: row.startLine ?? row.start_line,
-    endLine: row.endLine ?? row.end_line,
-    startColumn: row.startColumn ?? row.start_column,
-    endColumn: row.endColumn ?? row.end_column,
-  };
-};
-
-/** Normalizes ORL report finding location rows that may use snake_case keys. */
-const normalizeFindingLocationRowFields = (
-  raw: unknown,
-): Record<string, unknown> | undefined => {
-  if (!raw || typeof raw !== 'object') {
-    return undefined;
-  }
-  const row = raw as Record<string, unknown>;
-  if (typeof row.id !== 'string') {
-    return undefined;
-  }
-  const originalLocation = normalizeFindingLocationFields(
-    row.originalLocation ?? row.original_location,
-  );
-  const resolvedLocation = normalizeFindingLocationFields(
-    row.resolvedLocation ?? row.resolved_location,
-  );
-  const resolutionStatus = row.resolutionStatus ?? row.resolution_status;
-  return {
+/** ORL emits snake_case location fields; normalize to camelCase for extension code. */
+const zFindingLocationSnake = z
+  .object({
+    id: z.string(),
+    file_path: z.string(),
+    start_line: zOrlLineIndex.optional(),
+    end_line: zOrlLineIndex.optional(),
+    start_column: zOrlLineIndex.optional(),
+    end_column: zOrlLineIndex.optional(),
+  })
+  .transform(row => ({
     id: row.id,
-    ...(originalLocation ? { originalLocation } : {}),
-    ...(resolvedLocation ? { resolvedLocation } : {}),
-    ...(typeof resolutionStatus === 'string' ? { resolutionStatus } : {}),
-  };
-};
+    filePath: row.file_path,
+    startLine: row.start_line ?? 0,
+    startColumn: row.start_column ?? 0,
+    ...(row.end_line !== undefined ? { endLine: row.end_line } : {}),
+    ...(row.end_column !== undefined ? { endColumn: row.end_column } : {}),
+  }))
+  .pipe(zFindingLocationShape);
 
-/** Merges snake_case `finding_locations` into canonical `findingLocations`. */
-const normalizeOrlRuleFindingLocations = (rule: OrlRule): OrlRule => {
-  const extra = rule as OrlRule & { finding_locations?: unknown[] };
-  if (
-    Array.isArray(rule.findingLocations) &&
-    rule.findingLocations.length > 0
-  ) {
-    return rule;
-  }
-  if (!Array.isArray(extra.finding_locations)) {
-    return rule;
-  }
-  const rows = extra.finding_locations
-    .map(normalizeFindingLocationRowFields)
-    .filter((row): row is Record<string, unknown> => Boolean(row));
-  const parsed = z.array(zFindingLocationRow).safeParse(rows);
-  if (!parsed.success || parsed.data.length === 0) {
-    return rule;
-  }
-  return { ...rule, findingLocations: parsed.data };
-};
+const zFindingLocationRowShape = z.object({
+  id: z.string(),
+  originalLocation: zFindingLocationShape.optional(),
+  resolvedLocation: zFindingLocationShape.optional(),
+  resolutionStatus: zResolutionStatus.optional(),
+});
+export type FindingLocationRow = z.infer<typeof zFindingLocationRowShape>;
+
+/** ORL emits snake_case finding-location rows; normalize to camelCase for extension code. */
+export const zFindingLocationRow = z
+  .object({
+    id: z.string(),
+    original_location: zFindingLocationSnake.optional(),
+    resolved_location: zFindingLocationSnake.optional(),
+    resolution_status: zResolutionStatus.optional(),
+  })
+  .transform(row => ({
+    id: row.id,
+    ...(row.original_location
+      ? { originalLocation: row.original_location }
+      : {}),
+    ...(row.resolved_location
+      ? { resolvedLocation: row.resolved_location }
+      : {}),
+    ...(row.resolution_status
+      ? { resolutionStatus: row.resolution_status }
+      : {}),
+  }))
+  .pipe(zFindingLocationRowShape);
 
 export const zOrlRuleAnnotations = z.record(z.string(), z.string());
 export type OrlRuleAnnotations = z.infer<typeof zOrlRuleAnnotations>;
@@ -162,25 +108,35 @@ export const zOrlRuleMetadata = z.object({
 });
 export type OrlRuleMetadata = z.infer<typeof zOrlRuleMetadata>;
 
-const zOrlRuleBase = z
-  .object({
-    metadata: zOrlRuleMetadata.optional(),
-    name: z.string().optional(),
-    findings: zOrlCount.optional(),
-    fixes: zOrlCount.optional(),
-    changes: zOrlCount.optional(),
-    errors: z.array(z.unknown()).optional(),
-    files: z.array(zOrlRuleFile).optional(),
-    findingLocations: z.array(zFindingLocationRow).optional(),
-    // Legacy: full-format reports map changed files here instead of findingLocations.
-    files_changed: z.record(z.unknown()).optional(),
-  })
-  .passthrough();
+const zOrlRuleSnake = z.object({
+  metadata: zOrlRuleMetadata.optional(),
+  name: z.string().optional(),
+  findings: zOrlCount.optional(),
+  fixes: zOrlCount.optional(),
+  changes: zOrlCount.optional(),
+  errors: z.array(z.unknown()).optional(),
+  files: z.array(zOrlRuleFile).optional(),
+  finding_locations: z.array(zFindingLocationRow).optional(),
+  files_changed: z.record(z.unknown()).optional(),
+});
 
-export const zOrlRule = zOrlRuleBase.transform(
-  normalizeOrlRuleFindingLocations,
-);
-export type OrlRule = z.infer<typeof zOrlRuleBase>;
+export type OrlRule = Omit<
+  z.infer<typeof zOrlRuleSnake>,
+  'finding_locations'
+> & {
+  findingLocations?: FindingLocationRow[];
+};
+
+export const zOrlRule = zOrlRuleSnake
+  .passthrough()
+  .transform((rule): OrlRule => {
+    const { finding_locations, ...rest } = rule;
+    const output: OrlRule = rest;
+    if (finding_locations?.length) {
+      output.findingLocations = finding_locations;
+    }
+    return output;
+  });
 
 /** Canonical name aligned with ORL report producer schema. */
 export const zORLReportRule = zOrlRule;
@@ -223,7 +179,7 @@ export const zOrlReport = zORLReportContent
     spec: zOrlReportSpec.optional(),
   })
   .passthrough();
-export type OrlReport = z.infer<typeof zOrlReport>;
+export type OrlReport = z.output<typeof zOrlReport>;
 
 export const zCheckovEvidence = z.object({
   ruleName: z.string(),

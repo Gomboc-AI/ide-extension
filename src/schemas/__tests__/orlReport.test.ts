@@ -106,35 +106,35 @@ describe('orlReport location helpers', () => {
       rules: [
         {
           name: 'gomboc-ai/ensure_encryption000',
-          findingLocations: [
+          finding_locations: [
             {
               id: 'finding-1',
-              originalLocation: {
+              original_location: {
                 id: 'finding-1',
-                filePath: '/workspace/main.tf',
-                startLine: 4,
-                startColumn: 2,
-                endLine: 4,
-                endColumn: 18,
+                file_path: '/workspace/main.tf',
+                start_line: 4,
+                start_column: 2,
+                end_line: 4,
+                end_column: 18,
               },
             },
             {
               id: 'finding-deleted',
-              resolutionStatus: 'deleted',
-              originalLocation: {
+              resolution_status: 'deleted',
+              original_location: {
                 id: 'finding-deleted',
-                filePath: '/workspace/main.tf',
-                startLine: 9,
-                startColumn: 0,
+                file_path: '/workspace/main.tf',
+                start_line: 9,
+                start_column: 0,
               },
             },
           ],
         },
       ],
-    } as OrlReport;
+    };
 
     const rows = extractFindingLocationsFromReport({
-      report,
+      report: parseOrlReportPayload(report),
       currentFilePath: '/repo/main.tf',
     });
 

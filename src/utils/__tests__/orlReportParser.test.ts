@@ -85,19 +85,19 @@ describe('parseOrlReport', () => {
     expect(typeof parsed?.spec?.fixes).toBe('number');
   });
 
-  it('parses findingLocations on report rules', () => {
+  it('parses finding_locations on report rules', () => {
     const report = [
       'type: Report',
       'spec:',
       '  rules:',
       '    - name: gomboc-ai/test_rule000',
-      '      findingLocations:',
+      '      finding_locations:',
       '        - id: finding-1',
-      '          originalLocation:',
+      '          original_location:',
       '            id: finding-1',
-      '            filePath: /workspace/main.tf',
-      '            startLine: 4',
-      '            startColumn: 2',
+      '            file_path: /workspace/main.tf',
+      '            start_line: 4',
+      '            start_column: 2',
     ].join('\n');
 
     const parsed = parseOrlReport(report);

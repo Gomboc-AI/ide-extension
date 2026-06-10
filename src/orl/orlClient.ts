@@ -1571,17 +1571,11 @@ export class OrlClient {
       dockerArgs.push('--user', `${process.getuid()}:${process.getgid()}`);
     }
 
-    dockerArgs.push(
-      '-v',
-      `${workspacePath}:${preferences.workspaceMountPath}`,
-    );
+    dockerArgs.push('-v', `${workspacePath}:${preferences.workspaceMountPath}`);
 
     if (mountedRulesDir) {
       // Mount cached rules directly into the container so we don't have to pull/copy into the temp workspace.
-      dockerArgs.push(
-        '-v',
-        `${mountedRulesDir}:${preferences.rulesMountPath}`,
-      );
+      dockerArgs.push('-v', `${mountedRulesDir}:${preferences.rulesMountPath}`);
     }
 
     if (devRulesHostDir && devRulesHostDir.trim()) {
