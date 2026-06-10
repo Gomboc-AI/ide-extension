@@ -177,7 +177,9 @@ const zOrlRuleBase = z
   })
   .passthrough();
 
-export const zOrlRule = zOrlRuleBase.transform(normalizeOrlRuleFindingLocations);
+export const zOrlRule = zOrlRuleBase.transform(
+  normalizeOrlRuleFindingLocations,
+);
 export type OrlRule = z.infer<typeof zOrlRuleBase>;
 
 /** Canonical name aligned with ORL report producer schema. */

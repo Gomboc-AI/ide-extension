@@ -158,9 +158,7 @@ export class CodeActionProvider implements vscode.CodeActionProvider {
           {
             ruleName: diagnostic.ruleName,
             filePath: diagnostic.filePath,
-            line:
-              diagnostic.scopedApplyLine ??
-              diagnostic.range.start.line + 1,
+            line: diagnostic.scopedApplyLine ?? diagnostic.range.start.line + 1,
             findingId: diagnostic.findingId,
             resourceHeader: diagnostic.resourceHeader,
           },
