@@ -56,6 +56,7 @@ export type OrlIssuesSnapshot = {
     resourceHeader?: string;
     filePath: string;
     line?: number;
+    scopedApplyLine?: number;
     checkovIds?: string[];
     fixStrategy?: string;
   }>;
@@ -196,6 +197,34 @@ export class ScanResultsProvider {
       return this.individualRemediations.length;
     }
     return this.groupedRemediations.length;
+  }
+
+  /** Drops trailing blank lines and same-level comments from a scoped resource block. */
+  private trimScopedBlockEnd(args: {
+    lines: string[];
+    block: { startLine: number; endLine: number };
+  }): { startLine: number; endLine: number } {
+    const { lines, block } = args;
+    const startIdx = Math.max(0, block.startLine - 1);
+    const resourceIndent = (lines[startIdx]?.match(/^(\s*)/)?.[1] || '').length;
+    let endLine = block.endLine;
+    while (endLine > block.startLine) {
+      const text = lines[endLine - 1] ?? '';
+      const trimmed = text.trim();
+      if (!trimmed) {
+        endLine--;
+        continue;
+      }
+      if (trimmed.startsWith('#')) {
+        const indent = (text.match(/^(\s*)/)?.[1] || '').length;
+        if (indent <= resourceIndent) {
+          endLine--;
+          continue;
+        }
+      }
+      break;
+    }
+    return { startLine: block.startLine, endLine };
   }
 
   /**
@@ -404,7 +433,7 @@ export class ScanResultsProvider {
     if (args.findingLocation) {
       const startLine0 = Math.max(
         0,
-        Math.floor(args.findingLocation.startLine),
+        Math.floor(args.findingLocation.startLine) - 1,
       );
       const startCol = Math.max(
         0,
@@ -413,7 +442,7 @@ export class ScanResultsProvider {
       const endLine0 = Number.isFinite(args.findingLocation.endLine)
         ? Math.max(
             startLine0,
-            Math.floor(args.findingLocation.endLine as number),
+            Math.floor(args.findingLocation.endLine as number) - 1,
           )
         : startLine0;
       const endCol = Number.isFinite(args.findingLocation.endColumn)
@@ -721,6 +750,81 @@ export class ScanResultsProvider {
       report: args.report,
       scannedAt: new Date().toISOString(),
     };
+  }
+
+  /**
+   * Merges a single-rule ORL result into `beforeText`, scoped to one resource block when possible.
+   */
+  private mergeScopedOrlRemediation(args: {
+    filePath: string;
+    beforeText: string;
+    orlAfterText: string;
+    line?: number;
+  }):
+    | { kind: 'noop'; afterText: string }
+    | {
+        kind: 'scoped';
+        afterText: string;
+        startLine: number;
+        endLine: number;
+        replacement: string;
+      }
+    | { kind: 'full'; afterText: string } {
+    const { filePath, beforeText, orlAfterText, line } = args;
+    if (beforeText === orlAfterText) {
+      return { kind: 'noop', afterText: beforeText };
+    }
+
+    if (typeof line === 'number' && Number.isFinite(line) && line > 0) {
+      const beforeBlock = this.findScopedEditRange(filePath, beforeText, line);
+      const afterBlock = beforeBlock
+        ? this.findScopedEditRange(
+            filePath,
+            orlAfterText,
+            beforeBlock.startLine,
+          )
+        : undefined;
+
+      if (
+        beforeBlock &&
+        afterBlock &&
+        beforeBlock.startLine === afterBlock.startLine
+      ) {
+        const beforeLines = beforeText.split('\n');
+        const afterLines = orlAfterText.split('\n');
+        const trimmedBefore = this.trimScopedBlockEnd({
+          lines: beforeLines,
+          block: beforeBlock,
+        });
+        const trimmedAfter = this.trimScopedBlockEnd({
+          lines: afterLines,
+          block: afterBlock,
+        });
+        const replacement = afterLines
+          .slice(trimmedAfter.startLine - 1, trimmedAfter.endLine)
+          .join('\n');
+        const existing = beforeLines
+          .slice(trimmedBefore.startLine - 1, trimmedBefore.endLine)
+          .join('\n');
+        if (replacement !== existing) {
+          const out = beforeLines.slice();
+          out.splice(
+            trimmedBefore.startLine - 1,
+            trimmedBefore.endLine - trimmedBefore.startLine + 1,
+            ...replacement.split('\n'),
+          );
+          return {
+            kind: 'scoped',
+            afterText: out.join('\n'),
+            startLine: trimmedBefore.startLine,
+            endLine: trimmedBefore.endLine,
+            replacement,
+          };
+        }
+      }
+    }
+
+    return { kind: 'full', afterText: orlAfterText };
   }
 
   public getLastOrlScanContext():
@@ -1219,6 +1323,9 @@ export class ScanResultsProvider {
           const metaHit =
             metaIndex.get(ruleName) ||
             metaIndex.get(this.stripOrlInstanceSuffix(ruleName));
+          const scopedApplyLine = meta.findingLocation
+            ? meta.findingLocation.startLine
+            : undefined;
           issues.push({
             ruleName,
             ruleShortName: shortName,
@@ -1226,6 +1333,7 @@ export class ScanResultsProvider {
             resourceHeader: meta.resourceHeader,
             filePath: filepath,
             line,
+            scopedApplyLine,
             checkovIds: metaHit?.checkovIds?.length
               ? metaHit.checkovIds
               : undefined,
@@ -1250,6 +1358,8 @@ export class ScanResultsProvider {
           diagnostic.ruleDescription = description;
           diagnostic.fixStrategy = metaHit?.fixStrategy;
           diagnostic.fixTask = metaHit?.fixTask;
+          diagnostic.scopedApplyLine = scopedApplyLine;
+          diagnostic.findingId = meta.findingLocation?.id;
           curDiag.push(diagnostic);
           orlIdx++;
         }
@@ -1562,13 +1672,15 @@ export class ScanResultsProvider {
       ruleName: string;
       filePath: string;
       line?: number;
+      scopedApplyLine?: number;
+      findingId?: string;
       resourceHeader?: string;
     }>,
   ) {
     const first = Array.isArray(args) ? args[0] : undefined;
     const ruleName = first?.ruleName;
     const filePath = first?.filePath;
-    const line = first?.line;
+    const line = first?.scopedApplyLine ?? first?.line;
     if (!ruleName || !filePath) {
       vscode.window.showErrorMessage(
         'Unable to apply rule fix: missing rule or file path',
@@ -1655,33 +1767,25 @@ export class ScanResultsProvider {
       // runs, so this keeps "Apply fix" scoped to the selected resource instead of
       // applying all same-rule instances in the file.
       let appliedScopedEdit = false;
-      if (typeof line === 'number' && Number.isFinite(line) && line > 0) {
-        const beforeBlock = this.findScopedEditRange(absPath, before, line);
-        const afterBlock = this.findScopedEditRange(absPath, content, line);
-
-        if (beforeBlock && afterBlock) {
-          const beforeLines = before.split('\n');
-          const afterLines = content.split('\n');
-          const replacement = afterLines
-            .slice(afterBlock.startLine - 1, afterBlock.endLine)
-            .join('\n');
-          const existing = beforeLines
-            .slice(beforeBlock.startLine - 1, beforeBlock.endLine)
-            .join('\n');
-          if (replacement !== existing) {
-            changedAny = true;
-            updatedFiles.add(absPath);
-            const scopedRange = new vscode.Range(
-              new vscode.Position(beforeBlock.startLine - 1, 0),
-              new vscode.Position(
-                beforeBlock.endLine - 1,
-                beforeLines[beforeBlock.endLine - 1]?.length || 0,
-              ),
-            );
-            edit.replace(doc.uri, scopedRange, replacement);
-            appliedScopedEdit = true;
-          }
-        }
+      const merged = this.mergeScopedOrlRemediation({
+        filePath: absPath,
+        beforeText: before,
+        orlAfterText: content,
+        line,
+      });
+      if (merged.kind === 'scoped') {
+        changedAny = true;
+        updatedFiles.add(absPath);
+        const beforeLines = before.split('\n');
+        const scopedRange = new vscode.Range(
+          new vscode.Position(merged.startLine - 1, 0),
+          new vscode.Position(
+            merged.endLine - 1,
+            beforeLines[merged.endLine - 1]?.length || 0,
+          ),
+        );
+        edit.replace(doc.uri, scopedRange, merged.replacement);
+        appliedScopedEdit = true;
       }
 
       if (!appliedScopedEdit) {

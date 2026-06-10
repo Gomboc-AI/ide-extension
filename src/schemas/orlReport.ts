@@ -68,6 +68,77 @@ export const zFindingLocationRow = z.object({
 });
 export type FindingLocationRow = z.infer<typeof zFindingLocationRow>;
 
+/** Normalizes ORL report location objects that may use snake_case keys. */
+const normalizeFindingLocationFields = (
+  raw: unknown,
+): Record<string, unknown> | undefined => {
+  if (!raw || typeof raw !== 'object') {
+    return undefined;
+  }
+  const row = raw as Record<string, unknown>;
+  const id = row.id;
+  const filePath = row.filePath ?? row.file_path;
+  if (typeof id !== 'string' || typeof filePath !== 'string') {
+    return undefined;
+  }
+  return {
+    id,
+    filePath,
+    startLine: row.startLine ?? row.start_line,
+    endLine: row.endLine ?? row.end_line,
+    startColumn: row.startColumn ?? row.start_column,
+    endColumn: row.endColumn ?? row.end_column,
+  };
+};
+
+/** Normalizes ORL report finding location rows that may use snake_case keys. */
+const normalizeFindingLocationRowFields = (
+  raw: unknown,
+): Record<string, unknown> | undefined => {
+  if (!raw || typeof raw !== 'object') {
+    return undefined;
+  }
+  const row = raw as Record<string, unknown>;
+  if (typeof row.id !== 'string') {
+    return undefined;
+  }
+  const originalLocation = normalizeFindingLocationFields(
+    row.originalLocation ?? row.original_location,
+  );
+  const resolvedLocation = normalizeFindingLocationFields(
+    row.resolvedLocation ?? row.resolved_location,
+  );
+  const resolutionStatus = row.resolutionStatus ?? row.resolution_status;
+  return {
+    id: row.id,
+    ...(originalLocation ? { originalLocation } : {}),
+    ...(resolvedLocation ? { resolvedLocation } : {}),
+    ...(typeof resolutionStatus === 'string' ? { resolutionStatus } : {}),
+  };
+};
+
+/** Merges snake_case `finding_locations` into canonical `findingLocations`. */
+const normalizeOrlRuleFindingLocations = (rule: OrlRule): OrlRule => {
+  const extra = rule as OrlRule & { finding_locations?: unknown[] };
+  if (
+    Array.isArray(rule.findingLocations) &&
+    rule.findingLocations.length > 0
+  ) {
+    return rule;
+  }
+  if (!Array.isArray(extra.finding_locations)) {
+    return rule;
+  }
+  const rows = extra.finding_locations
+    .map(normalizeFindingLocationRowFields)
+    .filter((row): row is Record<string, unknown> => Boolean(row));
+  const parsed = z.array(zFindingLocationRow).safeParse(rows);
+  if (!parsed.success || parsed.data.length === 0) {
+    return rule;
+  }
+  return { ...rule, findingLocations: parsed.data };
+};
+
 export const zOrlRuleAnnotations = z.record(z.string(), z.string());
 export type OrlRuleAnnotations = z.infer<typeof zOrlRuleAnnotations>;
 
@@ -91,7 +162,7 @@ export const zOrlRuleMetadata = z.object({
 });
 export type OrlRuleMetadata = z.infer<typeof zOrlRuleMetadata>;
 
-export const zOrlRule = z
+const zOrlRuleBase = z
   .object({
     metadata: zOrlRuleMetadata.optional(),
     name: z.string().optional(),
@@ -105,7 +176,9 @@ export const zOrlRule = z
     files_changed: z.record(z.unknown()).optional(),
   })
   .passthrough();
-export type OrlRule = z.infer<typeof zOrlRule>;
+
+export const zOrlRule = zOrlRuleBase.transform(normalizeOrlRuleFindingLocations);
+export type OrlRule = z.infer<typeof zOrlRuleBase>;
 
 /** Canonical name aligned with ORL report producer schema. */
 export const zORLReportRule = zOrlRule;
@@ -191,12 +264,12 @@ export function selectScanDiagnosticLocation(
   return row.originalLocation;
 }
 
-/** Converts ORL 0-based line index to extension 1-based line numbers. */
-export function toExtensionLine(line0Based: number): number {
-  if (!Number.isFinite(line0Based)) {
+/** ORL report line numbers are already 1-based; clamp to a valid editor line. */
+export function toExtensionLine(line1Based: number): number {
+  if (!Number.isFinite(line1Based)) {
     return 1;
   }
-  return Math.max(1, Math.floor(line0Based) + 1);
+  return Math.max(1, Math.floor(line1Based));
 }
 
 /** Extracts scannable finding locations from a parsed ORL report. */

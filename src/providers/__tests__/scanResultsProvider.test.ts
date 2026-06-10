@@ -667,8 +667,9 @@ describe('ScanResultsProvider branch deltas', () => {
       diagnosticCollectionManager.updateDiagnosticCollection as jest.Mock
     ).mock.calls;
     const diagnostics = calls[0][1] as Array<{ range: vscode.Range }>;
-    expect(diagnostics[0].range.start.line).toBe(4);
+    expect(diagnostics[0].range.start.line).toBe(3);
     expect(diagnostics[0].range.start.character).toBe(2);
+    expect(diagnostics[0].range.end.line).toBe(3);
     expect(diagnostics[0].range.end.character).toBe(18);
   });
 
