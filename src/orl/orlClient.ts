@@ -203,7 +203,29 @@ export interface OrlConfig {
 // to ensure consistent behavior across environments and easier support/debugging.
 // For local dev with XML/Gradle support, switch to 'orl-dev:local'
 // (rebuild via: /path/to/orl/reload-dev-image.sh)
-const ORL_CONTAINER_IMAGE = 'gombocai/orl:v1.3.6';
+const ORL_CONTAINER_IMAGE = 'gombocai/orl:v1.3.9-latest';
+
+/** In-container paths and ORL CLI flags passed to `docker ... remediate`. */
+export type OrlDockerRemediatePreferences = {
+  includeLocationInfo: boolean;
+  reportFormat: string;
+  workspaceMountPath: string;
+  reportOutPath: string;
+  hooksDir: string;
+  rulesMountPath: string;
+  devRulesMountPath: string;
+};
+
+export const DEFAULT_ORL_DOCKER_REMEDIATE_PREFERENCES: OrlDockerRemediatePreferences =
+  {
+    includeLocationInfo: true,
+    reportFormat: 'findings-only',
+    workspaceMountPath: '/workspace',
+    reportOutPath: '/workspace/.orl/report.yaml',
+    hooksDir: '/workspace/.orl/hooks',
+    rulesMountPath: '/workspace/rules',
+    devRulesMountPath: '/dev-rules',
+  };
 
 export interface OrlResult {
   success: boolean;
@@ -713,6 +735,31 @@ export class OrlClient {
     };
   }
 
+  /** Writes the latest ORL report to `<workspace>/.orl/report.yaml`. */
+  private async persistReportYaml(args: {
+    workspacePath: string;
+    reportText?: string;
+  }): Promise<void> {
+    const { workspacePath, reportText } = args;
+    if (!reportText?.trim()) {
+      return;
+    }
+    try {
+      const outPath = path.join(workspacePath, '.orl', 'report.yaml');
+      await this.storageClient.mkdir({
+        path: path.dirname(outPath),
+        opts: { recursive: true },
+      });
+      await this.storageClient.writeText({
+        path: outPath,
+        content: reportText,
+      });
+      logger.info('Persisted ORL report', { outPath });
+    } catch (e) {
+      logger.warn('Failed to persist ORL report (ignored)', { e });
+    }
+  }
+
   private async persistDiagnosticsArtifacts(
     workspacePath: string,
     tempDir: string,
@@ -908,6 +955,7 @@ export class OrlClient {
                 mountedRulesDir,
                 disableHooks: true,
                 devRulesHostDir: injectedDevRulesHostDir,
+                preferences: DEFAULT_ORL_DOCKER_REMEDIATE_PREFERENCES,
               });
               logger.info(
                 'Executing ORL via Docker (two-pass discovery, hooks disabled)',
@@ -976,6 +1024,10 @@ export class OrlClient {
 
               if (changedRuleNames.length === 0) {
                 // No changes: return early (no need for pass 2).
+                await this.persistReportYaml({
+                  workspacePath,
+                  reportText: reportTextDiscovery,
+                });
                 prof.end({
                   success: true,
                   exitCode: execDiscovery.exitCode ?? 0,
@@ -1029,6 +1081,7 @@ export class OrlClient {
                 language,
                 rulesDir,
                 devRulesHostDir: injectedDevRulesHostDir,
+                preferences: DEFAULT_ORL_DOCKER_REMEDIATE_PREFERENCES,
               });
               logger.info(
                 'Executing ORL via Docker (two-pass, subset rules + hooks enabled)',
@@ -1082,6 +1135,10 @@ export class OrlClient {
                 modifiedFileCount: Object.keys(modifiedFiles).length,
               });
 
+              await this.persistReportYaml({
+                workspacePath,
+                reportText,
+              });
               await this.persistDiagnosticsArtifacts(
                 workspacePath,
                 tempDir,
@@ -1179,6 +1236,7 @@ export class OrlClient {
           rulesDir,
           mountedRulesDir,
           devRulesHostDir: injectedDevRulesHostDir,
+          preferences: DEFAULT_ORL_DOCKER_REMEDIATE_PREFERENCES,
         });
         logger.info('Executing ORL via Docker', {
           command: 'docker',
@@ -1224,6 +1282,10 @@ export class OrlClient {
           modifiedFileCount: Object.keys(modifiedFiles).length,
         });
 
+        await this.persistReportYaml({
+          workspacePath,
+          reportText,
+        });
         await this.persistDiagnosticsArtifacts(
           workspacePath,
           tempDir,
@@ -1517,9 +1579,10 @@ export class OrlClient {
     disableHooks?: boolean;
     /**
      * DEV ONLY: additional host directory containing ORL rules to inject into scans.
-     * If set, this directory is mounted read-only at `/dev-rules` and appended as an extra `--rulespace`.
+     * If set, this directory is mounted read-only and appended as an extra `--rulespace`.
      */
     devRulesHostDir?: string;
+    preferences: OrlDockerRemediatePreferences;
   }): string[] {
     const { containerImage } = this.config;
     const {
@@ -1529,6 +1592,7 @@ export class OrlClient {
       mountedRulesDir,
       disableHooks,
       devRulesHostDir,
+      preferences,
     } = opts;
 
     // Note: We don't force --platform to allow Docker to use native architecture
@@ -1544,38 +1608,50 @@ export class OrlClient {
       dockerArgs.push('--user', `${process.getuid()}:${process.getgid()}`);
     }
 
-    dockerArgs.push('-v', `${workspacePath}:/workspace`);
+    dockerArgs.push('-v', `${workspacePath}:${preferences.workspaceMountPath}`);
 
     if (mountedRulesDir) {
       // Mount cached rules directly into the container so we don't have to pull/copy into the temp workspace.
-      dockerArgs.push('-v', `${mountedRulesDir}:/workspace/rules`);
+      dockerArgs.push('-v', `${mountedRulesDir}:${preferences.rulesMountPath}`);
     }
 
     if (devRulesHostDir && devRulesHostDir.trim()) {
-      dockerArgs.push('-v', `${devRulesHostDir}:/dev-rules:ro`);
+      dockerArgs.push(
+        '-v',
+        `${devRulesHostDir}:${preferences.devRulesMountPath}:ro`,
+      );
     }
 
-    dockerArgs.push(containerImage, 'remediate', '/workspace');
+    dockerArgs.push(
+      containerImage,
+      'remediate',
+      preferences.workspaceMountPath,
+    );
+
+    if (preferences.includeLocationInfo) {
+      dockerArgs.push('--include-location-info');
+    }
+    dockerArgs.push('--report-format', preferences.reportFormat);
 
     if (disableHooks) {
       dockerArgs.push('--disable-hooks');
     } else {
-      dockerArgs.push('--hooks-dir', '/workspace/.orl/hooks');
+      dockerArgs.push('--hooks-dir', preferences.hooksDir);
     }
 
     if (mountedRulesDir || rulesDir) {
-      // rulesDir is within the mounted workspacePath, so we reference it at /workspace/rules in-container.
-      dockerArgs.push('--rulespace', '/workspace/rules');
+      // rulesDir is within the mounted workspacePath, so we reference it in-container via rulesMountPath.
+      dockerArgs.push('--rulespace', preferences.rulesMountPath);
     }
     if (devRulesHostDir && devRulesHostDir.trim()) {
-      dockerArgs.push('--rulespace', '/dev-rules');
+      dockerArgs.push('--rulespace', preferences.devRulesMountPath);
     }
     if (language) {
       dockerArgs.push('--language', language);
     }
 
     // Always write the report to a file so we can read/persist it reliably (stdout may be empty/truncated).
-    dockerArgs.push('--out', '/workspace/.orl/report.yaml');
+    dockerArgs.push('--out', preferences.reportOutPath);
     return dockerArgs;
   }
 
@@ -2287,6 +2363,7 @@ export class OrlClient {
         language,
         rulesDir,
         devRulesHostDir: injectedDevRulesHostDir,
+        preferences: DEFAULT_ORL_DOCKER_REMEDIATE_PREFERENCES,
       });
       logger.info('Executing ORL via Docker (single-rule)', {
         command: 'docker',

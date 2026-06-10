@@ -63,6 +63,48 @@ describe('CodeActionProvider', () => {
     expect(commandIds).toContain('gomboc-results.applyGroupedRemediation');
   });
 
+  it('prefers scopedApplyLine over diagnostic range for ORL command arguments', () => {
+    const provider = new CodeActionProvider();
+    const range = new vscode.Range(
+      new vscode.Position(103, 0),
+      new vscode.Position(103, 15),
+    );
+    const orlDiagnostic = new OrlRuleFixGombocDiagnostic(
+      range,
+      'Ebs encryption enabled',
+      'Apply fix (Ebs encryption enabled)',
+      {
+        ruleName:
+          'gomboc-ai/cloudformation/aws_ec2_volume/ebs-encryption-enabled000',
+        filePath: '/repo/cfngoat.yaml',
+      },
+      vscode.DiagnosticSeverity.Error,
+    );
+    orlDiagnostic.scopedApplyLine = 103;
+
+    const actions = provider.provideCodeActions(
+      makeDocument(vscode.Uri.file('/repo/cfngoat.yaml')),
+      range,
+      makeContext([orlDiagnostic]),
+      {} as vscode.CancellationToken,
+    );
+
+    const action = actions.find(
+      a => a.command?.command === 'gomboc-results.applyOrlRuleRemediation',
+    );
+    expect(action?.command?.arguments).toEqual([
+      [
+        {
+          ruleName:
+            'gomboc-ai/cloudformation/aws_ec2_volume/ebs-encryption-enabled000',
+          filePath: '/repo/cfngoat.yaml',
+          line: 103,
+          resourceHeader: undefined,
+        },
+      ],
+    ]);
+  });
+
   it('passes line and resource header in ORL command arguments', () => {
     const provider = new CodeActionProvider();
     const range = new vscode.Range(

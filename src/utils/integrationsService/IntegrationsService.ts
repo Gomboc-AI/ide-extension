@@ -453,15 +453,33 @@ export class IntegrationsService {
     const ensureArray = <T>(val: T[] | undefined, fallback: T[] = []): T[] =>
       Array.isArray(val) ? val : fallback;
 
-    // Support spec.* (preferred) and fall back to top-level
-    const spec = raw.spec || raw;
-    const metadata = spec.metadata || raw.metadata || {};
+    const spec = raw.spec;
+    if (!spec || typeof spec !== 'object') {
+      return {
+        type: 'Report',
+        version: 'v1',
+        metadata: {
+          name: 'unknown',
+          required_contexts: [],
+          annotations: {},
+        },
+        workspace: workspacePath || '',
+        language: language || '',
+        rules_applied: 0,
+        findings: 0,
+        fixes: 0,
+        changes: 0,
+        errors: [],
+        rules: [],
+      };
+    }
+    const metadata = raw.metadata || {};
 
     const filteredTopAnnotations = filterAnnotations(
       metadata.annotations as Record<string, string | undefined> | undefined,
     );
 
-    const rulesSource = ensureArray(spec.rules || raw.rules);
+    const rulesSource = ensureArray(spec.rules);
     const sumField = (field: 'findings' | 'fixes' | 'changes') =>
       rulesSource.reduce((acc: number, r) => acc + toNumber(r?.[field]), 0);
 
@@ -484,15 +502,13 @@ export class IntegrationsService {
         required_contexts: ensureArray(metadata.required_contexts as string[]),
         annotations: filteredTopAnnotations,
       },
-      workspace: spec.workspace || raw.workspace || workspacePath || '',
-      language: spec.language || raw.language || language || '',
-      rules_applied: toNumber(
-        spec.rules_applied ?? raw.rules_applied ?? rulesSource.length,
-      ),
-      findings: toNumber(spec.findings ?? raw.findings ?? sumField('findings')),
-      fixes: toNumber(spec.fixes ?? raw.fixes ?? sumField('fixes')),
-      changes: toNumber(spec.changes ?? raw.changes ?? sumField('changes')),
-      errors: ensureArray(spec.errors ?? raw.errors)
+      workspace: spec.workspace || workspacePath || '',
+      language: spec.language || language || '',
+      rules_applied: toNumber(spec.rules_applied ?? rulesSource.length),
+      findings: toNumber(spec.findings ?? sumField('findings')),
+      fixes: toNumber(spec.fixes ?? sumField('fixes')),
+      changes: toNumber(spec.changes ?? sumField('changes')),
+      errors: ensureArray(spec.errors)
         .map(e =>
           typeof e === 'string'
             ? e

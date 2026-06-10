@@ -42,6 +42,9 @@ export class GroupedFixGombocDiagnostic extends vscode.Diagnostic {
 export class OrlRuleFixGombocDiagnostic extends vscode.Diagnostic {
   ruleName: string;
   filePath: string;
+  /** 1-based line for language-handler scoped apply; ORL finding rows use the raw report index. */
+  scopedApplyLine?: number;
+  findingId?: string;
   resourceHeader?: string;
   ruleShortName?: string;
   ruleDescription?: string;

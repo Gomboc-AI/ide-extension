@@ -94,9 +94,12 @@ export type IIpCurl = {
 };
 
 export type {
+  FindingLocation,
+  FindingLocationRow,
   OrlReport,
   OrlReportSpec,
   OrlRule,
   OrlRuleAnnotations,
+  ORLReportRule,
   CheckovEvidence,
 } from './schemas/orlReport';

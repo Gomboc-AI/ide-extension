@@ -17,7 +17,7 @@ describe('parseOrlReport', () => {
   });
 
   it('parses valid YAML with type Report and no leading delimiter', () => {
-    const report = 'type: Report\nspec:\n  workspace: repo';
+    const report = 'type: Report\nversion: v1\nspec:\n  workspace: repo';
 
     const parsed = parseOrlReport(report);
 
@@ -29,7 +29,7 @@ describe('parseOrlReport', () => {
   });
 
   it('parses valid YAML with leading delimiter', () => {
-    const report = '---\ntype: Report\nspec:\n  workspace: repo';
+    const report = '---\ntype: Report\nversion: v1\nspec:\n  workspace: repo';
 
     const parsed = parseOrlReport(report);
 
@@ -50,6 +50,7 @@ describe('parseOrlReport', () => {
       '+bar',
       '---',
       'type: Report',
+      'version: v1',
       'spec:',
       '  workspace: repo',
     ].join('\n');
@@ -76,12 +77,39 @@ describe('parseOrlReport', () => {
     expect(parseOrlReport(report)).toBeNull();
   });
 
-  it('keeps numeric scalars as strings under FAILSAFE_SCHEMA', () => {
-    const report = 'type: Report\nspec:\n  fixes: 3';
+  it('coerces FAILSAFE numeric scalars to integers', () => {
+    const report = 'type: Report\nversion: v1\nspec:\n  fixes: 3';
 
     const parsed = parseOrlReport(report);
 
-    expect(parsed?.spec?.fixes).toBe('3');
-    expect(typeof parsed?.spec?.fixes).toBe('string');
+    expect(parsed?.spec?.fixes).toBe(3);
+    expect(typeof parsed?.spec?.fixes).toBe('number');
+  });
+
+  it('parses finding_locations on report rules', () => {
+    const report = [
+      'type: Report',
+      'version: v1',
+      'spec:',
+      '  rules:',
+      '    - name: gomboc-ai/test_rule000',
+      '      finding_locations:',
+      '        - id: finding-1',
+      '          original_location:',
+      '            id: finding-1',
+      '            file_path: /workspace/main.tf',
+      '            start_line: 4',
+      '            start_column: 2',
+    ].join('\n');
+
+    const parsed = parseOrlReport(report);
+
+    expect(parsed?.spec?.rules?.[0]?.findingLocations?.[0]?.id).toBe(
+      'finding-1',
+    );
+    expect(
+      parsed?.spec?.rules?.[0]?.findingLocations?.[0]?.originalLocation
+        ?.startLine,
+    ).toBe(4);
   });
 });
