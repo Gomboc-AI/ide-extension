@@ -177,6 +177,57 @@
             "default": "https://integrations.app.gomboc.ai",
             "description": "Integrations service URL for reporting ORL scan results"
           },
+          "gomboc-vscode-extension.telemetryEnabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable Gomboc OpenTelemetry export. VS Code's global telemetry setting is always respected.",
+            "tags": [
+              "telemetry",
+              "usesOnlineServices"
+            ]
+          },
+          "gomboc-vscode-extension.telemetryOtlpTracesEndpoint": {
+            "type": "string",
+            "default": "https://telemetry.gomboc.ai/v1/traces",
+            "description": "OTLP/HTTP traces endpoint for Gomboc telemetry. Used when telemetryOtlpTracesEndpoints is empty.",
+            "tags": [
+              "telemetry",
+              "usesOnlineServices"
+            ]
+          },
+          "gomboc-vscode-extension.telemetryOtlpTracesEndpoints": {
+            "type": "array",
+            "default": [],
+            "description": "OTLP/HTTP traces endpoints for Gomboc telemetry. When set, telemetry is exported to each collector in this list.",
+            "items": {
+              "type": "string"
+            },
+            "tags": [
+              "telemetry",
+              "usesOnlineServices"
+            ]
+          },
+          "gomboc-vscode-extension.telemetryHeaders": {
+            "type": "object",
+            "default": {},
+            "description": "Optional OTLP exporter headers for your telemetry collector.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "sensitive": true,
+            "tags": [
+              "telemetry",
+              "usesOnlineServices"
+            ]
+          },
+          "gomboc-vscode-extension.telemetryOutputChannelEnabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Mirror sanitized Gomboc telemetry events to the Gomboc Telemetry output channel for local inspection.",
+            "tags": [
+              "telemetry"
+            ]
+          },
           "gomboc-vscode-extension.logLevel": {
             "type": "string",
             "enum": [

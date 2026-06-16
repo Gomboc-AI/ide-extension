@@ -24,6 +24,49 @@ Once you have the API key go to `Settings > Extensions > Gomboc` and drop it in 
 
 That's all you need!
 
+## Telemetry
+Gomboc emits sanitized OpenTelemetry traces to help diagnose extension health and scan performance. Extension telemetry is enabled by default with `gomboc-vscode-extension.telemetryEnabled`, but network export always respects VS Code's global telemetry setting.
+
+To opt out, set either:
+
+```json
+{
+  "gomboc-vscode-extension.telemetryEnabled": false
+}
+```
+
+or disable telemetry globally in VS Code:
+
+```json
+{
+  "telemetry.telemetryLevel": "off"
+}
+```
+
+By default, traces are sent to our collector endpoint at `https://telemetry.gomboc.ai/v1/traces`. To send telemetry to your own OpenTelemetry Collector, configure:
+
+```json
+{
+  "gomboc-vscode-extension.telemetryOtlpTracesEndpoint": "http://localhost:4318/v1/traces",
+  "gomboc-vscode-extension.telemetryHeaders": {
+    "Authorization": "Bearer <token>"
+  }
+}
+```
+
+To export the same telemetry to multiple collectors, use the plural setting. When this list is not empty, it takes precedence over `gomboc-vscode-extension.telemetryOtlpTracesEndpoint`:
+
+```json
+{
+  "gomboc-vscode-extension.telemetryOtlpTracesEndpoints": [
+    "http://localhost:4318/v1/traces",
+    "https://collector.example.com/v1/traces"
+  ]
+}
+```
+
+Sanitized telemetry is also mirrored locally in the `Gomboc Telemetry` output channel when `gomboc-vscode-extension.telemetryOutputChannelEnabled` is true. Telemetry excludes API keys, collector headers, full local paths, file contents, raw ORL reports, remediation diffs, repository names, usernames, home directories, and tokens.
+
 ### Commands 
 * `Test API Key` - Test your API key connection and make sure that it can hit our server
 * `Show organization benchmarks` - Display the security policy that your organization has enabled
