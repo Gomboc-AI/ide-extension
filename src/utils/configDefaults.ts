@@ -16,6 +16,10 @@ export const DEFAULTS = {
   // DEV ONLY: allows setting a folder that contains ORL Rules that will run a remediation on just those rules
   orlCustomRulesOnly: false,
   orlCustomRulesPath: '',
+  telemetryEnabled: true,
+  telemetryOtlpTracesEndpoint: 'https://telemetry.gomboc.ai/v1/traces',
+  telemetryOtlpTracesEndpoints: [] as string[],
+  telemetryOutputChannelEnabled: true,
 };
 
 export function getStringSetting(

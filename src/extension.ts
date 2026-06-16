@@ -22,10 +22,20 @@ import {
   vsCodeIntegrationsService,
 } from './utils/integrationsService';
 import { initScanStatus } from './utils/scanStatus';
+import { telemetryService } from './utils/telemetry';
 
 const previousContentMap = new Map<string, string>();
 
 export async function activate(context: vscode.ExtensionContext) {
+  telemetryService.initialize({
+    extensionVersion:
+      typeof context.extension?.packageJSON?.version === 'string'
+        ? context.extension.packageJSON.version
+        : 'unknown',
+    vscodeVersion: vscode.version,
+  });
+  telemetryService.recordEvent('extension.activate');
+
   logger.info('VSCode extension activated .... ');
   // Configure logger verbosity (default: info).
   try {
@@ -92,7 +102,13 @@ export async function activate(context: vscode.ExtensionContext) {
   ];
 
   const disposables = commands.map(({ name, handler }) =>
-    vscode.commands.registerCommand(name, handler),
+    vscode.commands.registerCommand(name, () =>
+      telemetryService.withSpan(
+        'command.execute',
+        { 'command.id': name },
+        async () => handler(),
+      ),
+    ),
   );
 
   const onEdit = vscode.workspace.onDidChangeTextDocument(({ document }) => {
@@ -155,6 +171,7 @@ export async function activate(context: vscode.ExtensionContext) {
     onSave,
     onEdit,
     onConfigChange(disposables, commands),
+    vscode.env.onDidChangeTelemetryEnabled(() => telemetryService.configure()),
     vscode.languages.registerCodeActionsProvider(
       languageList,
       new CodeActionProvider(),
@@ -180,13 +197,23 @@ const onConfigChange = (
   commands: { name: string; handler: () => Promise<void> }[],
 ) => {
   return vscode.workspace.onDidChangeConfiguration(() => {
+    telemetryService.configure();
     for (const disposable of disposables) {
       disposable.dispose();
     }
     for (const command of commands) {
-      vscode.commands.registerCommand(command.name, command.handler);
+      vscode.commands.registerCommand(command.name, () =>
+        telemetryService.withSpan(
+          'command.execute',
+          { 'command.id': command.name },
+          async () => command.handler(),
+        ),
+      );
     }
   });
 };
 
-export function deactivate() {}
+export async function deactivate() {
+  telemetryService.recordEvent('extension.deactivate');
+  await telemetryService.shutdown();
+}
