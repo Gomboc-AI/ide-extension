@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import * as vscode from 'vscode';
 
 const mockSpan = {
@@ -50,6 +52,123 @@ function makeOutputChannel() {
     appendLine: jest.fn(),
     dispose: jest.fn(),
   };
+}
+
+const commonTelemetryProperties = [
+  'extension.name',
+  'extension.version',
+  'vscode.version',
+];
+
+const expectedTelemetryProperties: Record<string, string[]> = {
+  'extension.activate': commonTelemetryProperties,
+  'extension.deactivate': commonTelemetryProperties,
+  'telemetry.configured': [
+    ...commonTelemetryProperties,
+    'telemetry.extension.enabled',
+    'telemetry.vscode.enabled',
+    'telemetry.export.enabled',
+    'telemetry.export.collector_count',
+    'telemetry.output.enabled',
+  ],
+  'command.execute': [
+    ...commonTelemetryProperties,
+    'command.id',
+    'telemetry.duration_ms',
+    'telemetry.outcome',
+    'error.type',
+    'error.code',
+  ],
+  'orl.scan': [
+    ...commonTelemetryProperties,
+    'scan.language',
+    'scan.file_type',
+    'scan.scope',
+    'scan.outcome',
+    'scan.exit_code',
+    'scan.individual_fixes_count',
+    'scan.grouped_fixes_count',
+    'scan.modified_files_count',
+    'telemetry.duration_ms',
+    'telemetry.outcome',
+    'error.type',
+    'error.code',
+  ],
+  'orl.scan.started': [
+    ...commonTelemetryProperties,
+    'scan.language',
+    'scan.file_type',
+    'scan.scope',
+  ],
+  'orl.remediate.completed': [
+    ...commonTelemetryProperties,
+    'scan.language',
+    'scan.success',
+    'scan.exit_code',
+    'scan.modified_files_count',
+  ],
+  'orl.scan.validation_failed': [
+    ...commonTelemetryProperties,
+    'scan.error_context',
+    'scan.language',
+    'error.code',
+  ],
+  'orl.scan.skipped': [
+    ...commonTelemetryProperties,
+    'scan.skip_reason',
+    'scan.language',
+    'scan.file_type',
+  ],
+  'orl.scan.failed': [
+    ...commonTelemetryProperties,
+    'scan.error_context',
+    'scan.language',
+    'scan.exit_code',
+    'error.code',
+  ],
+  'orl.scan.conversion_failed': [
+    ...commonTelemetryProperties,
+    'scan.error_context',
+    'scan.language',
+    'scan.file_type',
+    'error.code',
+  ],
+  'orl.scan.converted': [
+    ...commonTelemetryProperties,
+    'scan.language',
+    'scan.file_type',
+    'scan.individual_fixes_count',
+    'scan.grouped_fixes_count',
+    'scan.modified_files_count',
+  ],
+  'orl.scan.diagnostics_created': [
+    ...commonTelemetryProperties,
+    'scan.language',
+    'scan.individual_fixes_count',
+    'scan.grouped_fixes_count',
+  ],
+  'orl.report_submission.scheduled': [
+    ...commonTelemetryProperties,
+    'scan.language',
+  ],
+  'orl_fix_applied.queued': [
+    ...commonTelemetryProperties,
+    'fix.kind',
+    'fix.rule_count',
+    'fix.file_count',
+    'queue.size',
+  ],
+  'orl_fix_applied.flush_completed': [
+    ...commonTelemetryProperties,
+    'queue.before_count',
+    'queue.after_count',
+    'queue.sent_count',
+    'queue.dropped_count',
+  ],
+};
+
+function sorted(values: string[]): string[] {
+  return [...values].sort();
 }
 
 describe('telemetry service', () => {
@@ -169,6 +288,54 @@ describe('telemetry service', () => {
     ).toHaveLength(2);
   });
 
+  it('rebuilds the exporter when telemetry header values change', async () => {
+    setConfig({
+      telemetryOtlpTracesEndpoint: 'http://collector.example/v1/traces',
+      telemetryHeaders: { Authorization: 'Bearer old' },
+    });
+    const service = new TelemetryService();
+    service.initialize({ extensionVersion: '1.2.3', vscodeVersion: '1.99.0' });
+
+    setConfig({
+      telemetryOtlpTracesEndpoint: 'http://collector.example/v1/traces',
+      telemetryHeaders: { Authorization: 'Bearer new' },
+    });
+    service.configure();
+
+    expect(mockProviderShutdown).toHaveBeenCalledTimes(1);
+    expect(NodeTracerProvider).toHaveBeenCalledTimes(2);
+    expect(OTLPTraceExporter).toHaveBeenCalledTimes(2);
+    expect(OTLPTraceExporter).toHaveBeenNthCalledWith(2, {
+      url: 'http://collector.example/v1/traces',
+      headers: { Authorization: 'Bearer new' },
+    });
+    await service.shutdown();
+  });
+
+  it('rebuilds the exporter when telemetry headers are removed', async () => {
+    setConfig({
+      telemetryOtlpTracesEndpoint: 'http://collector.example/v1/traces',
+      telemetryHeaders: { Authorization: 'Bearer old' },
+    });
+    const service = new TelemetryService();
+    service.initialize({ extensionVersion: '1.2.3', vscodeVersion: '1.99.0' });
+
+    setConfig({
+      telemetryOtlpTracesEndpoint: 'http://collector.example/v1/traces',
+      telemetryHeaders: {},
+    });
+    service.configure();
+
+    expect(mockProviderShutdown).toHaveBeenCalledTimes(1);
+    expect(NodeTracerProvider).toHaveBeenCalledTimes(2);
+    expect(OTLPTraceExporter).toHaveBeenCalledTimes(2);
+    expect(OTLPTraceExporter).toHaveBeenNthCalledWith(2, {
+      url: 'http://collector.example/v1/traces',
+      headers: {},
+    });
+    await service.shutdown();
+  });
+
   it('mirrors sanitized telemetry events to the output channel', async () => {
     (
       vscode.env as unknown as { isTelemetryEnabled: boolean }
@@ -234,6 +401,38 @@ describe('telemetry service', () => {
     await service.shutdown();
   });
 
+  it('does not export raw exception messages from spans', async () => {
+    (
+      vscode.env as unknown as { isTelemetryEnabled: boolean }
+    ).isTelemetryEnabled = false;
+    const outputChannel = makeOutputChannel();
+    (vscode.window.createOutputChannel as jest.Mock).mockReturnValue(
+      outputChannel,
+    );
+    const service = new TelemetryService();
+    service.initialize({ extensionVersion: '1.2.3', vscodeVersion: '1.99.0' });
+
+    await expect(
+      service.withSpan('test.span', undefined, async () => {
+        throw new Error(
+          'Failed for /Users/gary/private/repo/main.tf with token abc123',
+        );
+      }),
+    ).rejects.toThrow('Failed for');
+    await service.shutdown();
+
+    const line = outputChannel.appendLine.mock.calls.find(([value]) =>
+      String(value).includes('test.span.end'),
+    )?.[0] as string;
+    const payload = JSON.parse(line);
+    expect(payload.attributes['error.type']).toBe('Error');
+    expect(payload.attributes['error.code']).toBe('operation_failed');
+    expect(payload.attributes['error.message']).toBeUndefined();
+    expect(line).not.toContain('/Users/gary');
+    expect(line).not.toContain('abc123');
+    expect(line).not.toContain('main.tf');
+  });
+
   it('sanitizes path-like and sensitive primitive attributes', () => {
     expect(
       sanitizeTelemetryAttributes({
@@ -248,5 +447,23 @@ describe('telemetry service', () => {
       ok: true,
       n: 3,
     });
+  });
+
+  it('keeps telemetry.json aligned with emitted telemetry attributes', () => {
+    const telemetryJson = JSON.parse(
+      fs.readFileSync(path.join(process.cwd(), 'telemetry.json'), 'utf8'),
+    ) as { events: { name: string; properties: string[] }[] };
+
+    const actualByEvent = Object.fromEntries(
+      telemetryJson.events.map(event => [event.name, sorted(event.properties)]),
+    );
+    const expectedByEvent = Object.fromEntries(
+      Object.entries(expectedTelemetryProperties).map(([name, properties]) => [
+        name,
+        sorted(properties),
+      ]),
+    );
+
+    expect(actualByEvent).toEqual(expectedByEvent);
   });
 });

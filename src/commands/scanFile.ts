@@ -147,7 +147,7 @@ async function scanWithOrl(
         logger.error('Scan validation failed', { error: errorMessage });
         telemetryService.recordEvent('orl.scan.validation_failed', {
           'scan.error_context': 'Scan validation',
-          'error.message': errorMessage,
+          'error.code': 'validation_failed',
           'scan.language': language ?? 'unknown',
         });
         span?.setAttribute('scan.outcome', 'validation_failed');
@@ -285,7 +285,7 @@ async function scanWithOrl(
         logger.error('ORL remediation failed', { error: errorMessage });
         telemetryService.recordEvent('orl.scan.failed', {
           'scan.error_context': 'ORL execution',
-          'error.message': errorMessage,
+          'error.code': 'orl_execution_failed',
           'scan.language': language,
           'scan.exit_code': result.exitCode ?? -1,
         });
@@ -368,7 +368,7 @@ async function scanWithOrl(
         logger.error('ORL result conversion failed', { error: errorMessage });
         telemetryService.recordEvent('orl.scan.conversion_failed', {
           'scan.error_context': 'Result conversion',
-          'error.message': errorMessage,
+          'error.code': 'conversion_failed',
           'scan.language': language,
           'scan.file_type': filetype,
         });
@@ -442,7 +442,7 @@ async function scanWithOrl(
       logger.error('ORL scan failed', { error: errorMessage });
       telemetryService.recordEvent('orl.scan.failed', {
         'scan.error_context': 'Unexpected error',
-        'error.message': errorMessage,
+        'error.code': 'unexpected_error',
         'scan.language': language ?? 'unknown',
       });
       span?.setAttribute('scan.outcome', 'unexpected_error');

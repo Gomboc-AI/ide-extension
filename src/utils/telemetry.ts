@@ -1,4 +1,5 @@
 import * as path from 'path';
+import { createHash } from 'crypto';
 import * as vscode from 'vscode';
 import {
   Span,
@@ -199,6 +200,24 @@ export function sanitizeTelemetryAttributes(
   return sanitized;
 }
 
+function normalizeErrorType(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return 'UnknownError';
+  }
+
+  const name = error.name || 'Error';
+  return /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(name) ? name : 'Error';
+}
+
+function telemetryHeaderFingerprint(headers: Record<string, string>): string {
+  const sortedHeaders = Object.entries(headers).sort(([left], [right]) =>
+    left.localeCompare(right),
+  );
+  return createHash('sha256')
+    .update(JSON.stringify(sortedHeaders))
+    .digest('hex');
+}
+
 export class TelemetryService {
   private activeProvider: ActiveProvider | undefined;
   private outputChannel: vscode.OutputChannel | undefined;
@@ -299,7 +318,7 @@ export class TelemetryService {
       span?.setAttributes(failureAttributes);
       span?.setStatus({
         code: SpanStatusCode.ERROR,
-        message: failureAttributes['error.message'] as string | undefined,
+        message: failureAttributes['error.code'] as string | undefined,
       });
       this.writeOutput(`${name}.end`, failureAttributes, config);
       throw error;
@@ -340,7 +359,7 @@ export class TelemetryService {
 
     const cacheKey = JSON.stringify({
       endpoints: config.telemetryOtlpTracesEndpoints,
-      headers: Object.keys(config.telemetryHeaders).sort(),
+      headerFingerprint: telemetryHeaderFingerprint(config.telemetryHeaders),
       extensionVersion: this.extensionVersion,
       vscodeVersion: this.vscodeVersion,
     });
@@ -428,18 +447,9 @@ export class TelemetryService {
   }
 
   private errorAttributes(error: unknown): Record<string, string> {
-    if (error instanceof Error) {
-      return {
-        'error.type': error.name || 'Error',
-        'error.message': sanitizeStringAttribute(
-          'error.message',
-          error.message,
-        ),
-      };
-    }
     return {
-      'error.type': 'UnknownError',
-      'error.message': sanitizeStringAttribute('error.message', String(error)),
+      'error.type': normalizeErrorType(error),
+      'error.code': 'operation_failed',
     };
   }
 }
