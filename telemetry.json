@@ -19,9 +19,13 @@
       "classification": "SystemMetaData",
       "purpose": "FeatureInsight",
       "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
         "telemetry.extension.enabled",
         "telemetry.vscode.enabled",
         "telemetry.export.enabled",
+        "telemetry.export.collector_count",
         "telemetry.output.enabled"
       ]
     },
@@ -30,11 +34,14 @@
       "classification": "SystemMetaData",
       "purpose": "FeatureInsight",
       "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
         "command.id",
         "telemetry.duration_ms",
         "telemetry.outcome",
         "error.type",
-        "error.message"
+        "error.code"
       ]
     },
     {
@@ -42,6 +49,9 @@
       "classification": "SystemMetaData",
       "purpose": "PerformanceAndHealth",
       "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
         "scan.language",
         "scan.file_type",
         "scan.scope",
@@ -53,20 +63,30 @@
         "telemetry.duration_ms",
         "telemetry.outcome",
         "error.type",
-        "error.message"
+        "error.code"
       ]
     },
     {
       "name": "orl.scan.started",
       "classification": "SystemMetaData",
       "purpose": "FeatureInsight",
-      "properties": ["scan.language", "scan.file_type", "scan.scope"]
+      "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
+        "scan.language",
+        "scan.file_type",
+        "scan.scope"
+      ]
     },
     {
       "name": "orl.remediate.completed",
       "classification": "SystemMetaData",
       "purpose": "PerformanceAndHealth",
       "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
         "scan.language",
         "scan.success",
         "scan.exit_code",
@@ -77,23 +97,40 @@
       "name": "orl.scan.validation_failed",
       "classification": "SystemMetaData",
       "purpose": "PerformanceAndHealth",
-      "properties": ["scan.error_context", "scan.language", "error.message"]
+      "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
+        "scan.error_context",
+        "scan.language",
+        "error.code"
+      ]
     },
     {
       "name": "orl.scan.skipped",
       "classification": "SystemMetaData",
       "purpose": "FeatureInsight",
-      "properties": ["scan.skip_reason", "scan.language", "scan.file_type"]
+      "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
+        "scan.skip_reason",
+        "scan.language",
+        "scan.file_type"
+      ]
     },
     {
       "name": "orl.scan.failed",
       "classification": "SystemMetaData",
       "purpose": "PerformanceAndHealth",
       "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
         "scan.error_context",
         "scan.language",
         "scan.exit_code",
-        "error.message"
+        "error.code"
       ]
     },
     {
@@ -101,10 +138,13 @@
       "classification": "SystemMetaData",
       "purpose": "PerformanceAndHealth",
       "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
         "scan.error_context",
         "scan.language",
         "scan.file_type",
-        "error.message"
+        "error.code"
       ]
     },
     {
@@ -112,6 +152,9 @@
       "classification": "SystemMetaData",
       "purpose": "FeatureInsight",
       "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
         "scan.language",
         "scan.file_type",
         "scan.individual_fixes_count",
@@ -124,6 +167,9 @@
       "classification": "SystemMetaData",
       "purpose": "FeatureInsight",
       "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
         "scan.language",
         "scan.individual_fixes_count",
         "scan.grouped_fixes_count"
@@ -133,13 +179,21 @@
       "name": "orl.report_submission.scheduled",
       "classification": "SystemMetaData",
       "purpose": "FeatureInsight",
-      "properties": ["scan.language"]
+      "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
+        "scan.language"
+      ]
     },
     {
       "name": "orl_fix_applied.queued",
       "classification": "SystemMetaData",
       "purpose": "FeatureInsight",
       "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
         "fix.kind",
         "fix.rule_count",
         "fix.file_count",
@@ -151,6 +205,9 @@
       "classification": "SystemMetaData",
       "purpose": "PerformanceAndHealth",
       "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
         "queue.before_count",
         "queue.after_count",
         "queue.sent_count",
