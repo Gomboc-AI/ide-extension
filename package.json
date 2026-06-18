@@ -322,6 +322,7 @@
     "semantic-release-unsquash": "^0.3.0",
     "semantic-release-vsce": "^6.0.7",
     "ts-jest": "^29.4.0",
+    "ts-node": "^10.9.2",
     "typescript": "^5.7.3"
   },
   "dependencies": {
