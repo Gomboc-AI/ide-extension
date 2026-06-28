@@ -278,7 +278,7 @@
     "axios": "^1.12.2",
     "dotenv": "^16.4.7",
     "file-type": "^21.3.2",
-    "js-yaml": "^4.1.1",
+    "js-yaml": "^4.2.0",
     "neverthrow": "^8.1.1",
     "react": "^19.0.0",
     "winston": "^3.17.0",
