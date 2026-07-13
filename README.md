@@ -43,7 +43,7 @@ or disable telemetry globally in VS Code:
 }
 ```
 
-By default, traces are sent to the Gomboc integrations telemetry endpoint derived from `gomboc-vscode-extension.integrationsServiceUrl`: `https://integrations.app.gomboc.ai/telemetry/v1/traces`. This default endpoint uses your configured `gomboc-vscode-extension.apiKey` for authentication.
+By default, traces are sent to `https://integrations.app.gomboc.ai/telemetry/v1/traces` using your configured `gomboc-vscode-extension.apiKey` for authentication. If no API key is configured, the extension does not export to this endpoint.
 
 To send telemetry to your own OpenTelemetry Collector instead, configure:
 

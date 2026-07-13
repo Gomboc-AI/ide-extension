@@ -17,7 +17,7 @@ export const DEFAULTS = {
   orlCustomRulesOnly: false,
   orlCustomRulesPath: '',
   telemetryEnabled: true,
-  telemetryOtlpTracesEndpoint: 'https://telemetry.gomboc.ai/v1/traces',
+  telemetryOtlpTracesEndpoint: '',
   telemetryOtlpTracesEndpoints: [] as string[],
   telemetryOutputChannelEnabled: true,
 };

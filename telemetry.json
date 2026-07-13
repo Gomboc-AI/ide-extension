@@ -45,6 +45,21 @@
       ]
     },
     {
+      "name": "command.scan_file",
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
+        "command.id",
+        "telemetry.duration_ms",
+        "telemetry.outcome",
+        "error.type",
+        "error.code"
+      ]
+    },
+    {
       "name": "orl.scan",
       "classification": "SystemMetaData",
       "purpose": "PerformanceAndHealth",
