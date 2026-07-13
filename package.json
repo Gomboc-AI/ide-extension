@@ -175,7 +175,7 @@
           "gomboc-vscode-extension.integrationsServiceUrl": {
             "type": "string",
             "default": "https://integrations.app.gomboc.ai",
-            "description": "Integrations service URL for reporting ORL scan results"
+            "description": "Integrations service URL for ORL scan reporting and default telemetry ingestion."
           },
           "gomboc-vscode-extension.telemetryEnabled": {
             "type": "boolean",
@@ -188,8 +188,8 @@
           },
           "gomboc-vscode-extension.telemetryOtlpTracesEndpoint": {
             "type": "string",
-            "default": "https://telemetry.gomboc.ai/v1/traces",
-            "description": "OTLP/HTTP traces endpoint for Gomboc telemetry. Used when telemetryOtlpTracesEndpoints is empty.",
+            "default": "",
+            "description": "Optional OTLP/HTTP traces endpoint override for Gomboc telemetry. When empty, telemetry uses integrationsServiceUrl + /telemetry/v1/traces.",
             "tags": [
               "telemetry",
               "usesOnlineServices"
@@ -198,7 +198,7 @@
           "gomboc-vscode-extension.telemetryOtlpTracesEndpoints": {
             "type": "array",
             "default": [],
-            "description": "OTLP/HTTP traces endpoints for Gomboc telemetry. When set, telemetry is exported to each collector in this list.",
+            "description": "Optional OTLP/HTTP traces endpoint overrides for Gomboc telemetry. When set, telemetry is exported to each collector in this list.",
             "items": {
               "type": "string"
             },

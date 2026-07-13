@@ -196,11 +196,15 @@ describe('telemetry service', () => {
     const config = getTelemetryConfig();
 
     expect(config.telemetryEnabled).toBe(true);
+    expect(config.integrationsServiceUrl).toBe(
+      'https://integrations.app.gomboc.ai',
+    );
+    expect(config.apiKey).toBeUndefined();
     expect(config.telemetryOtlpTracesEndpoint).toBe(
-      'https://telemetry.gomboc.ai/v1/traces',
+      'https://integrations.app.gomboc.ai/telemetry/v1/traces',
     );
     expect(config.telemetryOtlpTracesEndpoints).toEqual([
-      'https://telemetry.gomboc.ai/v1/traces',
+      'https://integrations.app.gomboc.ai/telemetry/v1/traces',
     ]);
     expect(config.telemetryOutputChannelEnabled).toBe(true);
     expect(config.telemetryHeaders).toEqual({ Authorization: 'Bearer abc' });
@@ -232,6 +236,7 @@ describe('telemetry service', () => {
     (
       vscode.env as unknown as { isTelemetryEnabled: boolean }
     ).isTelemetryEnabled = false;
+    setConfig({ apiKey: 'frontegg-token' });
     const service = new TelemetryService();
 
     service.initialize({ extensionVersion: '1.2.3', vscodeVersion: '1.99.0' });
@@ -239,6 +244,55 @@ describe('telemetry service', () => {
 
     expect(NodeTracerProvider).not.toHaveBeenCalled();
     expect(OTLPTraceExporter).not.toHaveBeenCalled();
+  });
+
+  it('does not create an exporter for the default integrations endpoint without an API key', async () => {
+    const service = new TelemetryService();
+
+    service.initialize({ extensionVersion: '1.2.3', vscodeVersion: '1.99.0' });
+    await service.shutdown();
+
+    expect(NodeTracerProvider).not.toHaveBeenCalled();
+    expect(OTLPTraceExporter).not.toHaveBeenCalled();
+  });
+
+  it('exports to the default integrations telemetry endpoint with Gomboc auth headers', async () => {
+    setConfig({
+      apiKey: 'frontegg-token',
+    });
+    const service = new TelemetryService();
+
+    service.initialize({ extensionVersion: '1.2.3', vscodeVersion: '1.99.0' });
+    await service.shutdown();
+
+    expect(OTLPTraceExporter).toHaveBeenCalledWith({
+      url: 'https://integrations.app.gomboc.ai/telemetry/v1/traces',
+      headers: {
+        Authorization: 'Bearer frontegg-token',
+        'x-gomboc-telemetry-source': 'IDE_EXTENSION',
+        'x-gomboc-client-id': 'gomboc-vscode-extension',
+        'x-gomboc-client-version': '1.2.3',
+        'x-gomboc-session-id': expect.any(String),
+      },
+    });
+    expect(NodeTracerProvider).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses integrationsServiceUrl to derive the default telemetry endpoint', async () => {
+    setConfig({
+      apiKey: 'frontegg-token',
+      integrationsServiceUrl: 'http://localhost:3010/',
+    });
+    const service = new TelemetryService();
+
+    service.initialize({ extensionVersion: '1.2.3', vscodeVersion: '1.99.0' });
+    await service.shutdown();
+
+    expect(OTLPTraceExporter).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: 'http://localhost:3010/telemetry/v1/traces',
+      }),
+    );
   });
 
   it('creates an OTLP exporter when extension and VS Code telemetry are enabled', async () => {
@@ -256,6 +310,23 @@ describe('telemetry service', () => {
       headers: { Authorization: 'Bearer secret' },
     });
     expect(NodeTracerProvider).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not send the Gomboc API key to custom collector endpoints', async () => {
+    setConfig({
+      apiKey: 'frontegg-token',
+      telemetryOtlpTracesEndpoint: 'http://collector.example/v1/traces',
+      telemetryHeaders: { Authorization: 'Bearer collector-token' },
+    });
+    const service = new TelemetryService();
+
+    service.initialize({ extensionVersion: '1.2.3', vscodeVersion: '1.99.0' });
+    await service.shutdown();
+
+    expect(OTLPTraceExporter).toHaveBeenCalledWith({
+      url: 'http://collector.example/v1/traces',
+      headers: { Authorization: 'Bearer collector-token' },
+    });
   });
 
   it('creates one OTLP exporter per configured collector endpoint', async () => {
@@ -286,6 +357,44 @@ describe('telemetry service', () => {
       (NodeTracerProvider as unknown as jest.Mock).mock.calls[0][0]
         .spanProcessors,
     ).toHaveLength(2);
+  });
+
+  it('uses per-endpoint headers for integrations and custom telemetry endpoints', async () => {
+    setConfig({
+      apiKey: 'frontegg-token',
+      telemetryOtlpTracesEndpoints: [
+        'https://integrations.app.gomboc.ai/telemetry/v1/traces',
+        'http://collector.example/v1/traces',
+      ],
+      telemetryHeaders: {
+        Authorization: 'Bearer collector-token',
+        'x-custom-header': 'custom',
+      },
+    });
+    const service = new TelemetryService();
+
+    service.initialize({ extensionVersion: '1.2.3', vscodeVersion: '1.99.0' });
+    await service.shutdown();
+
+    expect(OTLPTraceExporter).toHaveBeenCalledTimes(2);
+    expect(OTLPTraceExporter).toHaveBeenNthCalledWith(1, {
+      url: 'https://integrations.app.gomboc.ai/telemetry/v1/traces',
+      headers: {
+        Authorization: 'Bearer frontegg-token',
+        'x-custom-header': 'custom',
+        'x-gomboc-telemetry-source': 'IDE_EXTENSION',
+        'x-gomboc-client-id': 'gomboc-vscode-extension',
+        'x-gomboc-client-version': '1.2.3',
+        'x-gomboc-session-id': expect.any(String),
+      },
+    });
+    expect(OTLPTraceExporter).toHaveBeenNthCalledWith(2, {
+      url: 'http://collector.example/v1/traces',
+      headers: {
+        Authorization: 'Bearer collector-token',
+        'x-custom-header': 'custom',
+      },
+    });
   });
 
   it('rebuilds the exporter when telemetry header values change', async () => {

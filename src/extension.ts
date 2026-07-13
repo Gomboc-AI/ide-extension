@@ -170,7 +170,7 @@ export async function activate(context: vscode.ExtensionContext) {
     sidebarWebview,
     onSave,
     onEdit,
-    onConfigChange(disposables, commands),
+    onConfigChange(),
     vscode.env.onDidChangeTelemetryEnabled(() => telemetryService.configure()),
     vscode.languages.registerCodeActionsProvider(
       languageList,
@@ -192,23 +192,16 @@ export const isRemediableFile = (filePath: string): boolean => {
   );
 };
 
-const onConfigChange = (
-  disposables: vscode.Disposable[],
-  commands: { name: string; handler: () => Promise<void> }[],
-) => {
+const onConfigChange = () => {
   return vscode.workspace.onDidChangeConfiguration(() => {
     telemetryService.configure();
-    for (const disposable of disposables) {
-      disposable.dispose();
-    }
-    for (const command of commands) {
-      vscode.commands.registerCommand(command.name, () =>
-        telemetryService.withSpan(
-          'command.execute',
-          { 'command.id': command.name },
-          async () => command.handler(),
-        ),
-      );
+
+    try {
+      const cfg = vscode.workspace.getConfiguration('gomboc-vscode-extension');
+      setLoggerLevel(cfg.get('logLevel'));
+    } catch {
+      // ignore and warn
+      console.warn('Failed to update logger level');
     }
   });
 };

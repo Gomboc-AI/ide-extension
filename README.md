@@ -43,7 +43,9 @@ or disable telemetry globally in VS Code:
 }
 ```
 
-By default, traces are sent to our collector endpoint at `https://telemetry.gomboc.ai/v1/traces`. To send telemetry to your own OpenTelemetry Collector, configure:
+By default, traces are sent to the Gomboc integrations telemetry endpoint derived from `gomboc-vscode-extension.integrationsServiceUrl`: `https://integrations.app.gomboc.ai/telemetry/v1/traces`. This default endpoint uses your configured `gomboc-vscode-extension.apiKey` for authentication.
+
+To send telemetry to your own OpenTelemetry Collector instead, configure:
 
 ```json
 {
@@ -64,6 +66,8 @@ To export the same telemetry to multiple collectors, use the plural setting. Whe
   ]
 }
 ```
+
+Gomboc authentication headers are added automatically only for the Gomboc integrations telemetry endpoint. Custom collectors receive only headers explicitly configured in `gomboc-vscode-extension.telemetryHeaders`.
 
 Sanitized telemetry is also mirrored locally in the `Gomboc Telemetry` output channel when `gomboc-vscode-extension.telemetryOutputChannelEnabled` is true. Telemetry excludes API keys, collector headers, full local paths, file contents, raw ORL reports, remediation diffs, repository names, usernames, home directories, and tokens.
 
