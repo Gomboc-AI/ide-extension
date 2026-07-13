@@ -5,6 +5,7 @@ import { promisify } from 'util';
 import { randomUUID } from 'crypto';
 import logger from '../logger';
 import { parseOrlReport } from '../orlReportParser';
+import { telemetryService } from '../telemetry';
 import {
   IntegrationsServiceConfig,
   IntegrationsRuntimeConfig,
@@ -260,6 +261,12 @@ export class IntegrationsService {
         sentCount,
         droppedCount,
       });
+      telemetryService.recordEvent('orl_fix_applied.flush_completed', {
+        'queue.before_count': queue.length,
+        'queue.after_count': capped.length,
+        'queue.sent_count': sentCount,
+        'queue.dropped_count': droppedCount,
+      });
     }
   }
 
@@ -345,6 +352,12 @@ export class IntegrationsService {
     queue.push({ event, attempts: 0, nextAttemptAt: 0 });
     const capped = queue.slice(-IntegrationsService.MAX_QUEUE_SIZE);
     await this.eventStore.saveQueue(capped);
+    telemetryService.recordEvent('orl_fix_applied.queued', {
+      'fix.kind': input.fixKind,
+      'fix.rule_count': sanitizedRuleNames.length,
+      'fix.file_count': sanitizedFilePaths.length,
+      'queue.size': capped.length,
+    });
 
     // Fire-and-forget flush
     this.flushOrlFixAppliedEvents().catch(() => {});

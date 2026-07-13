@@ -47,6 +47,9 @@ type FixProofCheckovTargetsCacheEntry = {
   >;
 };
 
+/**
+ * Snapshot of currently renderable ORL issues for the Fix Reviewer webview.
+ */
 export type OrlIssuesSnapshot = {
   scanScope?: { workspacePath: string; language?: string; scannedAt?: string };
   issues: Array<{
@@ -62,6 +65,9 @@ export type OrlIssuesSnapshot = {
   }>;
 };
 
+/**
+ * Owns scan remediation state, diagnostics, code-action commands, and issue snapshots.
+ */
 export class ScanResultsProvider {
   public static codeActionDisposable: vscode.Disposable | undefined;
   private static scanResultsProviderInstance: ScanResultsProvider | null = null;
@@ -99,6 +105,9 @@ export class ScanResultsProvider {
     'gomboc.fixproof.checkovTargets.v1';
   private static readonly FIXPROOF_CHECKOV_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
+  /**
+   * Creates or returns the shared scan results provider for the extension session.
+   */
   static init(
     context: vscode.ExtensionContext,
     diagnosticCollectionManager: DiagnosticCollectionManager,
@@ -115,38 +124,33 @@ export class ScanResultsProvider {
     return this.scanResultsProviderInstance;
   }
 
-  // registers the command so that it can be called
+  /**
+   * Registers VS Code commands that apply remediation payloads and open fix helpers.
+   */
   public registerApplyRemediation() {
-    this.context.subscriptions.push(
-      vscode.commands.registerCommand(
-        'gomboc-results.applyIndividualRemediation',
-        fixedResults => {
+    const commands = [
+      {
+        command: 'gomboc-results.applyIndividualRemediation',
+        callback: (fixedResults: IndividualFixesRemediation[]) => {
           this.applyIndividualRemediation(fixedResults);
         },
-      ),
-    );
-    this.context.subscriptions.push(
-      vscode.commands.registerCommand(
-        'gomboc-results.applyGroupedRemediation',
-        fixedResults => {
+      },
+      {
+        command: 'gomboc-results.applyGroupedRemediation',
+        callback: (fixedResults: GroupedFixesRemediation[]) => {
           this.applyGroupedRemediation(fixedResults);
         },
-      ),
-    );
-    this.context.subscriptions.push(
-      vscode.commands.registerCommand(
-        'gomboc-results.applyOrlRuleRemediation',
-        fixedResults => {
+      },
+      {
+        command: 'gomboc-results.applyOrlRuleRemediation',
+        callback: (fixedResults: OrlRuleFixGombocDiagnostic[]) => {
           this.applyOrlRuleRemediation(fixedResults);
         },
-      ),
-    );
-
-    // ORL-only: open a structured AI prompt (for Cursor) and guide FixProof revalidation.
-    this.context.subscriptions.push(
-      vscode.commands.registerCommand(
-        'gomboc-results.openAiFixPrompt',
-        (args: {
+      },
+      // ORL-only: open a structured AI prompt (for Cursor) and guide FixProof revalidation.
+      {
+        command: 'gomboc-results.openAiFixPrompt',
+        callback: (args: {
           ruleName: string;
           filePath: string;
           resourceHeader?: string;
@@ -162,8 +166,14 @@ export class ScanResultsProvider {
             );
           });
         },
-      ),
-    );
+      },
+    ];
+
+    commands.forEach(({ command, callback }) => {
+      this.context.subscriptions.push(
+        vscode.commands.registerCommand(command, callback),
+      );
+    });
   }
 
   private stripOrlInstanceSuffix(ruleName: string): string {
@@ -703,6 +713,9 @@ export class ScanResultsProvider {
     }
   }
 
+  /**
+   * Loads a scan remediation payload and stores it for diagnostic generation.
+   */
   public generateComments(remediations: unknown) {
     let parsedRemediations: ScanRemediationPayload;
     try {
@@ -827,6 +840,9 @@ export class ScanResultsProvider {
     return { kind: 'full', afterText: orlAfterText };
   }
 
+  /**
+   * Returns the last ORL scan scope and report metadata, if any.
+   */
   public getLastOrlScanContext():
     | {
         workspacePath: string;
@@ -838,6 +854,9 @@ export class ScanResultsProvider {
     return this.lastOrlScanContext;
   }
 
+  /**
+   * Returns a stable snapshot for the issues webview.
+   */
   public getCurrentIssuesSnapshot(): OrlIssuesSnapshot {
     // Always return a stable object shape for the webview.
     const last = this.getLastOrlScanContext();
@@ -1133,6 +1152,9 @@ export class ScanResultsProvider {
     );
   }
 
+  /**
+   * Reads cached Checkov targets for a workspace and reports remaining TTL.
+   */
   public getCachedFixProofCheckovTargets(args: {
     workspacePath: string;
   }): (FixProofCheckovTargetsCacheEntry & { remainingMs: number }) | undefined {
@@ -1171,7 +1193,9 @@ export class ScanResultsProvider {
     return { ...hit, remainingMs };
   }
 
-  // uses the scan response to generate a diagnostic for the diagnostic collection
+  /**
+   * Rebuilds VS Code diagnostics from the stored remediation payloads.
+   */
   public createDiagnostic() {
     this.diagnosticCollectionManager.getDiagnosticCollection().clear();
 

@@ -1,0 +1,279 @@
+{
+  "version": "1.0.0",
+  "description": "Gomboc VS Code extension OpenTelemetry spans and span events. The extension setting gomboc-vscode-extension.telemetryEnabled defaults to true, network export always respects VS Code's global telemetry setting, and telemetry can be exported to one or more OTLP collectors.",
+  "events": [
+    {
+      "name": "extension.activate",
+      "kind": "span",
+      "classification": "SystemMetaData",
+      "purpose": "FeatureInsight",
+      "properties": ["extension.name", "extension.version", "vscode.version"]
+    },
+    {
+      "name": "extension.deactivate",
+      "kind": "span",
+      "classification": "SystemMetaData",
+      "purpose": "FeatureInsight",
+      "properties": ["extension.name", "extension.version", "vscode.version"]
+    },
+    {
+      "name": "telemetry.configured",
+      "kind": "span",
+      "classification": "SystemMetaData",
+      "purpose": "FeatureInsight",
+      "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
+        "telemetry.extension.enabled",
+        "telemetry.vscode.enabled",
+        "telemetry.export.enabled",
+        "telemetry.export.collector_count",
+        "telemetry.output.enabled"
+      ]
+    },
+    {
+      "name": "command.execute",
+      "kind": "span",
+      "classification": "SystemMetaData",
+      "purpose": "FeatureInsight",
+      "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
+        "command.id",
+        "telemetry.duration_ms",
+        "telemetry.outcome",
+        "error.type",
+        "error.code"
+      ]
+    },
+    {
+      "name": "command.scan_file",
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
+        "command.id",
+        "telemetry.duration_ms",
+        "telemetry.outcome",
+        "error.type",
+        "error.code"
+      ]
+    },
+    {
+      "name": "command.scan_file",
+      "kind": "span",
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
+        "command.id",
+        "telemetry.duration_ms",
+        "telemetry.outcome",
+        "error.type",
+        "error.code"
+      ]
+    },
+    {
+      "name": "orl.scan",
+      "kind": "span",
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
+        "scan.language",
+        "scan.file_type",
+        "scan.scope",
+        "scan.outcome",
+        "scan.exit_code",
+        "scan.individual_fixes_count",
+        "scan.grouped_fixes_count",
+        "scan.modified_files_count",
+        "telemetry.duration_ms",
+        "telemetry.outcome",
+        "error.type",
+        "error.code"
+      ]
+    },
+    {
+      "name": "orl.scan.started",
+      "kind": "span_event",
+      "classification": "SystemMetaData",
+      "purpose": "FeatureInsight",
+      "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
+        "scan.language",
+        "scan.file_type",
+        "scan.scope"
+      ]
+    },
+    {
+      "name": "orl.remediate.completed",
+      "kind": "span_event",
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
+        "scan.language",
+        "scan.success",
+        "scan.exit_code",
+        "scan.modified_files_count"
+      ]
+    },
+    {
+      "name": "orl.scan.validation_failed",
+      "kind": "span_event",
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
+        "scan.error_context",
+        "scan.language",
+        "error.code"
+      ]
+    },
+    {
+      "name": "orl.scan.skipped",
+      "kind": "span_event",
+      "classification": "SystemMetaData",
+      "purpose": "FeatureInsight",
+      "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
+        "scan.skip_reason",
+        "scan.language",
+        "scan.file_type"
+      ]
+    },
+    {
+      "name": "orl.scan.failed",
+      "kind": "span_event",
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
+        "scan.error_context",
+        "scan.language",
+        "scan.exit_code",
+        "error.code"
+      ]
+    },
+    {
+      "name": "orl.scan.conversion_failed",
+      "kind": "span_event",
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
+        "scan.error_context",
+        "scan.language",
+        "scan.file_type",
+        "error.code"
+      ]
+    },
+    {
+      "name": "orl.scan.converted",
+      "kind": "span_event",
+      "classification": "SystemMetaData",
+      "purpose": "FeatureInsight",
+      "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
+        "scan.language",
+        "scan.file_type",
+        "scan.individual_fixes_count",
+        "scan.grouped_fixes_count",
+        "scan.modified_files_count"
+      ]
+    },
+    {
+      "name": "orl.scan.diagnostics_created",
+      "kind": "span_event",
+      "classification": "SystemMetaData",
+      "purpose": "FeatureInsight",
+      "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
+        "scan.language",
+        "scan.individual_fixes_count",
+        "scan.grouped_fixes_count"
+      ]
+    },
+    {
+      "name": "orl.report_submission.scheduled",
+      "kind": "span_event",
+      "classification": "SystemMetaData",
+      "purpose": "FeatureInsight",
+      "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
+        "scan.language"
+      ]
+    },
+    {
+      "name": "orl_fix_applied.queued",
+      "kind": "span",
+      "classification": "SystemMetaData",
+      "purpose": "FeatureInsight",
+      "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
+        "fix.kind",
+        "fix.rule_count",
+        "fix.file_count",
+        "queue.size"
+      ]
+    },
+    {
+      "name": "orl_fix_applied.flush_completed",
+      "kind": "span",
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
+        "queue.before_count",
+        "queue.after_count",
+        "queue.sent_count",
+        "queue.dropped_count"
+      ]
+    }
+  ],
+  "privacy": {
+    "excluded": [
+      "API keys",
+      "collector headers",
+      "full local paths",
+      "file contents",
+      "ORL raw reports",
+      "remediation diffs",
+      "repository names",
+      "usernames",
+      "home directories",
+      "tokens"
+    ]
+  }
+}

@@ -175,7 +175,58 @@
           "gomboc-vscode-extension.integrationsServiceUrl": {
             "type": "string",
             "default": "https://integrations.app.gomboc.ai",
-            "description": "Integrations service URL for reporting ORL scan results"
+            "description": "Integrations service URL for ORL scan reporting and default telemetry ingestion."
+          },
+          "gomboc-vscode-extension.telemetryEnabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable Gomboc OpenTelemetry export. VS Code's global telemetry setting is always respected.",
+            "tags": [
+              "telemetry",
+              "usesOnlineServices"
+            ]
+          },
+          "gomboc-vscode-extension.telemetryOtlpTracesEndpoint": {
+            "type": "string",
+            "default": "",
+            "description": "Optional OTLP/HTTP traces endpoint override for Gomboc telemetry. When empty, telemetry uses integrationsServiceUrl + /telemetry/v1/traces.",
+            "tags": [
+              "telemetry",
+              "usesOnlineServices"
+            ]
+          },
+          "gomboc-vscode-extension.telemetryOtlpTracesEndpoints": {
+            "type": "array",
+            "default": [],
+            "description": "Optional OTLP/HTTP traces endpoint overrides for Gomboc telemetry. When set, telemetry is exported to each collector in this list.",
+            "items": {
+              "type": "string"
+            },
+            "tags": [
+              "telemetry",
+              "usesOnlineServices"
+            ]
+          },
+          "gomboc-vscode-extension.telemetryHeaders": {
+            "type": "object",
+            "default": {},
+            "description": "Optional OTLP exporter headers for your telemetry collector.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "sensitive": true,
+            "tags": [
+              "telemetry",
+              "usesOnlineServices"
+            ]
+          },
+          "gomboc-vscode-extension.telemetryOutputChannelEnabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Mirror sanitized Gomboc telemetry events to the Gomboc Telemetry output channel for local inspection.",
+            "tags": [
+              "telemetry"
+            ]
           },
           "gomboc-vscode-extension.logLevel": {
             "type": "string",
@@ -271,10 +322,16 @@
     "semantic-release-unsquash": "^0.3.0",
     "semantic-release-vsce": "^6.0.7",
     "ts-jest": "^29.4.0",
+    "ts-node": "^10.9.2",
     "typescript": "^5.7.3"
   },
   "dependencies": {
     "@gomboc-ai/gomboc-node-sdk": "^2.0.2",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.219.0",
+    "@opentelemetry/resources": "^2.8.0",
+    "@opentelemetry/sdk-trace-node": "^2.8.0",
+    "@opentelemetry/semantic-conventions": "^1.41.1",
     "axios": "^1.12.2",
     "dotenv": "^16.4.7",
     "file-type": "^21.3.2",

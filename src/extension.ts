@@ -22,18 +22,45 @@ import {
   vsCodeIntegrationsService,
 } from './utils/integrationsService';
 import { initScanStatus } from './utils/scanStatus';
+import { TelemetryOperationContext, telemetryService } from './utils/telemetry';
 
 const previousContentMap = new Map<string, string>();
 
+/**
+ * Activates the VS Code extension, registers commands, providers, diagnostics, and telemetry.
+ */
 export async function activate(context: vscode.ExtensionContext) {
-  logger.info('VSCode extension activated .... ');
-  // Configure logger verbosity (default: info).
+  // Configure logging before telemetry initialization so startup diagnostics are visible.
   try {
     const cfg = vscode.workspace.getConfiguration('gomboc-vscode-extension');
     setLoggerLevel(cfg.get('logLevel'));
-  } catch {
+  } catch (error) {
+    logger.error(
+      'Failed to set logger level from configuration, using default.',
+      error,
+    );
     // ignore
   }
+
+  logger.debug('Activating Gomboc VSCode extension', {
+    extensionVersion:
+      typeof context.extension?.packageJSON?.version === 'string'
+        ? context.extension.packageJSON.version
+        : 'unknown',
+    vscodeVersion: vscode.version,
+  });
+
+  telemetryService.initialize({
+    extensionVersion:
+      typeof context.extension?.packageJSON?.version === 'string'
+        ? context.extension.packageJSON.version
+        : 'unknown',
+    vscodeVersion: vscode.version,
+  });
+  telemetryService.recordEvent('extension.activate');
+  logger.info('Telemetry service initialized.');
+
+  logger.info('VSCode extension activated .... ');
   initScanStatus(context);
   initializeIntegrationsService(context);
   // diagnostics initialization
@@ -51,14 +78,23 @@ export async function activate(context: vscode.ExtensionContext) {
   // Best-effort: flush any queued "fix applied" analytics events from prior sessions.
   vsCodeIntegrationsService.flushOrlFixAppliedEvents().catch(() => {});
 
-  const commands = [
+  const commands: Array<{
+    name: string;
+    handler: (telemetry: TelemetryOperationContext) => Promise<void>;
+  }> = [
     {
       name: 'gomboc-vscode-extension.testApiKey',
       handler: () => testApiKeyCommand(context),
     },
     {
       name: 'gomboc-vscode-extension.scanFile',
-      handler: () => scanFileCommand(context, scanResults),
+      handler: telemetry =>
+        telemetry.withChildSpan(
+          'command.scan_file',
+          { 'command.id': 'gomboc-vscode-extension.scanFile' },
+          scanFileTelemetry =>
+            scanFileCommand(context, scanResults, scanFileTelemetry),
+        ),
     },
     {
       name: 'gomboc-vscode-extension.testOrlConnection',
@@ -92,7 +128,13 @@ export async function activate(context: vscode.ExtensionContext) {
   ];
 
   const disposables = commands.map(({ name, handler }) =>
-    vscode.commands.registerCommand(name, handler),
+    vscode.commands.registerCommand(name, () =>
+      telemetryService.withSpan(
+        'command.execute',
+        { 'command.id': name },
+        async telemetry => handler(telemetry),
+      ),
+    ),
   );
 
   const onEdit = vscode.workspace.onDidChangeTextDocument(({ document }) => {
@@ -154,7 +196,8 @@ export async function activate(context: vscode.ExtensionContext) {
     sidebarWebview,
     onSave,
     onEdit,
-    onConfigChange(disposables, commands),
+    onConfigChange(),
+    vscode.env.onDidChangeTelemetryEnabled(() => telemetryService.configure()),
     vscode.languages.registerCodeActionsProvider(
       languageList,
       new CodeActionProvider(),
@@ -166,6 +209,9 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 }
 
+/**
+ * Returns whether a file path can be mapped to a supported remediation language.
+ */
 export const isRemediableFile = (filePath: string): boolean => {
   return (
     detectLanguageId({
@@ -175,18 +221,24 @@ export const isRemediableFile = (filePath: string): boolean => {
   );
 };
 
-const onConfigChange = (
-  disposables: vscode.Disposable[],
-  commands: { name: string; handler: () => Promise<void> }[],
-) => {
+const onConfigChange = () => {
   return vscode.workspace.onDidChangeConfiguration(() => {
-    for (const disposable of disposables) {
-      disposable.dispose();
-    }
-    for (const command of commands) {
-      vscode.commands.registerCommand(command.name, command.handler);
+    telemetryService.configure();
+
+    try {
+      const cfg = vscode.workspace.getConfiguration('gomboc-vscode-extension');
+      setLoggerLevel(cfg.get('logLevel'));
+    } catch {
+      // ignore and warn
+      console.warn('Failed to update logger level');
     }
   });
 };
 
-export function deactivate() {}
+/**
+ * Flushes telemetry and releases extension resources during VS Code shutdown.
+ */
+export async function deactivate() {
+  telemetryService.recordEvent('extension.deactivate');
+  await telemetryService.shutdown();
+}

@@ -100,8 +100,23 @@ class WorkspaceEdit {
   }
 }
 
+class OutputChannel {
+  constructor(name) {
+    this.name = name;
+    this.lines = [];
+    this.appendLine = createMockFn();
+    this.append = createMockFn();
+    this.clear = createMockFn();
+    this.show = createMockFn();
+    this.hide = createMockFn();
+    this.dispose = createMockFn();
+  }
+}
+
 const createMockFn = () =>
   typeof jest !== 'undefined' ? jest.fn() : () => undefined;
+
+const telemetryEnabledEmitter = new EventEmitter();
 
 module.exports = {
   Disposable,
@@ -113,6 +128,7 @@ module.exports = {
   Diagnostic,
   CodeAction,
   WorkspaceEdit,
+  OutputChannel,
   CodeActionKind: {
     QuickFix: 'quickfix',
   },
@@ -147,6 +163,9 @@ module.exports = {
     getExtension: createMockFn(),
   },
   env: {
+    isTelemetryEnabled: true,
+    onDidChangeTelemetryEnabled: telemetryEnabledEmitter.event,
+    __telemetryEnabledEmitter: telemetryEnabledEmitter,
     clipboard: {
       writeText: createMockFn(),
     },
@@ -162,5 +181,6 @@ module.exports = {
     showInformationMessage: createMockFn(),
     showErrorMessage: createMockFn(),
     createWebviewPanel: createMockFn(),
+    createOutputChannel: createMockFn(),
   },
 };
