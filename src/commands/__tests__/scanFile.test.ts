@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import {
   OrlScanSerializer,
   pickRepresentativeFileInDirectory,
+  scanFileCommand,
 } from '../scanFile';
 
 jest.mock('@gomboc-ai/gomboc-node-sdk', () => ({
@@ -9,14 +10,42 @@ jest.mock('@gomboc-ai/gomboc-node-sdk', () => ({
   mapLanguageIdToOrlLanguage: jest.fn(),
 }));
 
+jest.mock('../../utils/integrationsService', () => ({
+  vsCodeIntegrationsService: {
+    sendError: jest.fn().mockResolvedValue(undefined),
+    sendOrlReport: jest.fn().mockResolvedValue(undefined),
+  },
+}));
+
 import {
   detectLanguageId,
   mapLanguageIdToOrlLanguage,
 } from '@gomboc-ai/gomboc-node-sdk';
+import { ScanValidator } from '../../utils/scanValidator';
+import logger from '../../utils/logger';
 
 describe('scanFile helpers', () => {
+  beforeEach(() => {
+    (
+      globalThis as unknown as {
+        setImmediate?: (callback: () => void) => ReturnType<typeof setTimeout>;
+      }
+    ).setImmediate =
+      (
+        globalThis as unknown as {
+          setImmediate?: (
+            callback: () => void,
+          ) => ReturnType<typeof setTimeout>;
+        }
+      ).setImmediate ?? ((callback: () => void) => setTimeout(callback, 0));
+  });
+
   afterEach(() => {
     jest.clearAllMocks();
+    Object.defineProperty(vscode.window, 'activeTextEditor', {
+      configurable: true,
+      value: undefined,
+    });
   });
 
   it('OrlScanSerializer runs one queued rerun', async () => {
@@ -146,5 +175,64 @@ describe('scanFile helpers', () => {
       language: 'terraform',
     });
     expect(file).toBeUndefined();
+  });
+
+  it('records validation failures through the scan telemetry context', async () => {
+    jest
+      .spyOn(ScanValidator, 'validateAndPrepareScan')
+      .mockImplementationOnce(() => {
+        throw new Error('unsupported file');
+      });
+    (vscode.workspace.getConfiguration as jest.Mock).mockReturnValue({
+      get: jest.fn(),
+    });
+    Object.defineProperty(vscode.window, 'activeTextEditor', {
+      configurable: true,
+      get: () => ({
+        document: {
+          uri: vscode.Uri.file('/repo/unsupported.txt'),
+          getText: () => 'not supported',
+        },
+      }),
+    });
+    const scanTelemetry = {
+      recordEvent: jest.fn(),
+      setAttributes: jest.fn(),
+    };
+    const commandTelemetry = {
+      withChildSpan: jest.fn(
+        async (
+          _name: string,
+          _attributes: unknown,
+          fn: (telemetry: typeof scanTelemetry) => Promise<void>,
+        ) => fn(scanTelemetry),
+      ),
+    };
+    jest.spyOn(logger, 'error').mockReturnValue(logger);
+
+    await scanFileCommand(
+      {
+        extensionPath: '/extension',
+        globalStorageUri: vscode.Uri.file('/storage'),
+      } as vscode.ExtensionContext,
+      { getLastOrlScanContext: jest.fn() } as never,
+      commandTelemetry as never,
+    );
+
+    expect(commandTelemetry.withChildSpan).toHaveBeenCalledWith(
+      'orl.scan',
+      undefined,
+      expect.any(Function),
+    );
+    expect(scanTelemetry.recordEvent).toHaveBeenCalledWith(
+      'orl.scan.validation_failed',
+      expect.objectContaining({
+        'scan.error_context': 'Scan validation',
+        'error.code': 'validation_failed',
+      }),
+    );
+    expect(scanTelemetry.setAttributes).toHaveBeenCalledWith({
+      'scan.outcome': 'validation_failed',
+    });
   });
 });

@@ -1,14 +1,42 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { trace } from '@opentelemetry/api';
 
-const mockSpan = {
-  end: jest.fn(),
-  setAttributes: jest.fn(),
-  setStatus: jest.fn(),
+type MockSpan = {
+  name: string;
+  options: unknown;
+  parentSpanId: string | undefined;
+  end: jest.Mock;
+  setAttributes: jest.Mock;
+  setStatus: jest.Mock;
+  addEvent: jest.Mock;
+  spanContext: jest.Mock;
 };
+
+let mockSpanSeq = 0;
+const mockSpans: MockSpan[] = [];
 const mockTracer = {
-  startSpan: jest.fn(() => mockSpan),
+  startSpan: jest.fn((name: string, options: unknown, parentContext) => {
+    const parentSpan = parentContext ? trace.getSpan(parentContext) : undefined;
+    const spanId = `span${++mockSpanSeq}`.padEnd(16, '0').slice(0, 16);
+    const span: MockSpan = {
+      name,
+      options,
+      parentSpanId: parentSpan?.spanContext().spanId,
+      end: jest.fn(),
+      setAttributes: jest.fn(),
+      setStatus: jest.fn(),
+      addEvent: jest.fn(),
+      spanContext: jest.fn(() => ({
+        traceId: 'trace000000000000000000000000000',
+        spanId,
+        traceFlags: 1,
+      })),
+    };
+    mockSpans.push(span);
+    return span;
+  }),
 };
 const mockProviderShutdown = jest.fn().mockResolvedValue(undefined);
 
@@ -72,6 +100,14 @@ const expectedTelemetryProperties: Record<string, string[]> = {
     'telemetry.output.enabled',
   ],
   'command.execute': [
+    ...commonTelemetryProperties,
+    'command.id',
+    'telemetry.duration_ms',
+    'telemetry.outcome',
+    'error.type',
+    'error.code',
+  ],
+  'command.scan_file': [
     ...commonTelemetryProperties,
     'command.id',
     'telemetry.duration_ms',
@@ -174,6 +210,8 @@ function sorted(values: string[]): string[] {
 describe('telemetry service', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSpans.length = 0;
+    mockSpanSeq = 0;
     mockProviderShutdown.mockResolvedValue(undefined);
     (
       vscode.env as unknown as { isTelemetryEnabled: boolean }
@@ -196,15 +234,13 @@ describe('telemetry service', () => {
     const config = getTelemetryConfig();
 
     expect(config.telemetryEnabled).toBe(true);
-    expect(config.integrationsServiceUrl).toBe(
-      'https://integrations.app.gomboc.ai',
-    );
+    expect(config.integrationsServiceUrl).toBe('http://localhost:3010');
     expect(config.apiKey).toBeUndefined();
     expect(config.telemetryOtlpTracesEndpoint).toBe(
-      'https://integrations.app.gomboc.ai/telemetry/v1/traces',
+      'http://localhost:3010/telemetry/v1/traces',
     );
     expect(config.telemetryOtlpTracesEndpoints).toEqual([
-      'https://integrations.app.gomboc.ai/telemetry/v1/traces',
+      'http://localhost:3010/telemetry/v1/traces',
     ]);
     expect(config.telemetryOutputChannelEnabled).toBe(true);
     expect(config.telemetryHeaders).toEqual({ Authorization: 'Bearer abc' });
@@ -266,7 +302,7 @@ describe('telemetry service', () => {
     await service.shutdown();
 
     expect(OTLPTraceExporter).toHaveBeenCalledWith({
-      url: 'https://integrations.app.gomboc.ai/telemetry/v1/traces',
+      url: 'http://localhost:3010/telemetry/v1/traces',
       headers: {
         Authorization: 'Bearer frontegg-token',
         'x-gomboc-telemetry-source': 'IDE_EXTENSION',
@@ -362,6 +398,7 @@ describe('telemetry service', () => {
   it('uses per-endpoint headers for integrations and custom telemetry endpoints', async () => {
     setConfig({
       apiKey: 'frontegg-token',
+      integrationsServiceUrl: 'https://integrations.app.gomboc.ai',
       telemetryOtlpTracesEndpoints: [
         'https://integrations.app.gomboc.ai/telemetry/v1/traces',
         'http://collector.example/v1/traces',
@@ -540,6 +577,70 @@ describe('telemetry service', () => {
     expect(line).not.toContain('/Users/gary');
     expect(line).not.toContain('abc123');
     expect(line).not.toContain('main.tf');
+  });
+
+  it('correlates scan-file and ORL spans under the command root trace', async () => {
+    setConfig({
+      telemetryOtlpTracesEndpoint: 'http://collector.example/v1/traces',
+    });
+    const outputChannel = makeOutputChannel();
+    (vscode.window.createOutputChannel as jest.Mock).mockReturnValue(
+      outputChannel,
+    );
+    const service = new TelemetryService();
+    service.initialize({ extensionVersion: '1.2.3', vscodeVersion: '1.99.0' });
+    mockTracer.startSpan.mockClear();
+    mockSpans.length = 0;
+
+    await service.withSpan(
+      'command.execute',
+      { 'command.id': 'gomboc-vscode-extension.scanFile' },
+      async commandTelemetry => {
+        await commandTelemetry.withChildSpan(
+          'command.scan_file',
+          { 'command.id': 'gomboc-vscode-extension.scanFile' },
+          async scanFileTelemetry => {
+            await scanFileTelemetry.withChildSpan(
+              'orl.scan',
+              { 'scan.language': 'terraform' },
+              async scanTelemetry => {
+                scanTelemetry.recordEvent('orl.scan.started', {
+                  'scan.language': 'terraform',
+                });
+              },
+            );
+          },
+        );
+      },
+    );
+    await service.shutdown();
+
+    expect(mockTracer.startSpan).toHaveBeenCalledTimes(3);
+    expect(mockSpans.map(span => span.name)).toEqual([
+      'command.execute',
+      'command.scan_file',
+      'orl.scan',
+    ]);
+    expect(mockSpans[1].parentSpanId).toBe(mockSpans[0].spanContext().spanId);
+    expect(mockSpans[2].parentSpanId).toBe(mockSpans[1].spanContext().spanId);
+    expect(mockSpans[2].spanContext().traceId).toBe(
+      mockSpans[0].spanContext().traceId,
+    );
+    expect(mockSpans[2].addEvent).toHaveBeenCalledWith(
+      'orl.scan.started',
+      expect.objectContaining({
+        'extension.name': 'gomboc-vscode-extension',
+        'scan.language': 'terraform',
+      }),
+    );
+
+    const eventLine = outputChannel.appendLine.mock.calls.find(([value]) =>
+      String(value).includes('orl.scan.started'),
+    )?.[0] as string;
+    const payload = JSON.parse(eventLine);
+    expect(payload.trace_id).toBe(mockSpans[2].spanContext().traceId);
+    expect(payload.span_id).toBe(mockSpans[2].spanContext().spanId);
+    expect(payload.parent_span_id).toBe(mockSpans[1].spanContext().spanId);
   });
 
   it('sanitizes path-like and sensitive primitive attributes', () => {

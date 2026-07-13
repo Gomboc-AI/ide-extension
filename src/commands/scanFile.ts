@@ -11,7 +11,10 @@ import { setScanStatus } from '../utils/scanStatus';
 import { createProfiler } from '../utils/profiler';
 import { parseOrlReport } from '../utils/orlReportParser';
 import { CheckovIdExtractor } from '../fixproof/checkov/CheckovIdExtractor';
-import { telemetryService } from '../utils/telemetry';
+import {
+  TelemetryOperationContext,
+  telemetryService,
+} from '../utils/telemetry';
 import {
   detectLanguageId,
   mapLanguageIdToOrlLanguage,
@@ -66,12 +69,16 @@ function deriveFiletypeFromPath(filePath: string): string {
   return path.basename(filePath).toLowerCase();
 }
 
+/**
+ * Runs the active ORL scan command and updates scan results for diagnostics and UI.
+ */
 export async function scanFileCommand(
   context: vscode.ExtensionContext,
   scanResultsProvider: ScanResultsProvider,
+  commandTelemetry?: TelemetryOperationContext,
 ) {
   logger.info('Using ORL client');
-  await runOrlScanSerialized(context, scanResultsProvider);
+  await runOrlScanSerialized(context, scanResultsProvider, commandTelemetry);
 }
 
 /**
@@ -80,17 +87,20 @@ export async function scanFileCommand(
 async function runOrlScanSerialized(
   context: vscode.ExtensionContext,
   scanResultsProvider: ScanResultsProvider,
+  commandTelemetry?: TelemetryOperationContext,
 ) {
   await orlScanSerializer.run({
-    task: async () => scanWithOrl(context, scanResultsProvider),
+    task: async () =>
+      scanWithOrl(context, scanResultsProvider, commandTelemetry),
   });
 }
 
 async function scanWithOrl(
   context: vscode.ExtensionContext,
   scanResultsProvider: ScanResultsProvider,
+  commandTelemetry?: TelemetryOperationContext,
 ) {
-  return telemetryService.withSpan('orl.scan', undefined, async span => {
+  const runScan = async (scanTelemetry: TelemetryOperationContext) => {
     let workspacePath: string | undefined;
     let language: string | undefined;
 
@@ -145,12 +155,12 @@ async function scanWithOrl(
         const errorMessage =
           error instanceof Error ? error.message : 'Unknown validation error';
         logger.error('Scan validation failed', { error: errorMessage });
-        telemetryService.recordEvent('orl.scan.validation_failed', {
+        scanTelemetry.recordEvent('orl.scan.validation_failed', {
           'scan.error_context': 'Scan validation',
           'error.code': 'validation_failed',
           'scan.language': language ?? 'unknown',
         });
-        span?.setAttribute('scan.outcome', 'validation_failed');
+        scanTelemetry.setAttributes({ 'scan.outcome': 'validation_failed' });
         vscode.window.showErrorMessage(
           `Scan validation failed: ${errorMessage}`,
         );
@@ -185,12 +195,12 @@ async function scanWithOrl(
           workspacePath,
           language,
         });
-        telemetryService.recordEvent('orl.scan.skipped', {
+        scanTelemetry.recordEvent('orl.scan.skipped', {
           'scan.skip_reason': 'missing_required_parameters',
           'scan.language': language ?? 'unknown',
           'scan.file_type': filetype ?? 'unknown',
         });
-        span?.setAttribute('scan.outcome', 'skipped');
+        scanTelemetry.setAttributes({ 'scan.outcome': 'skipped' });
         return;
       }
 
@@ -199,12 +209,12 @@ async function scanWithOrl(
         workspacePath: workspacePath,
         scope: 'workspace-level (all supported files in directory)',
       });
-      telemetryService.recordEvent('orl.scan.started', {
+      scanTelemetry.recordEvent('orl.scan.started', {
         'scan.language': language,
         'scan.file_type': filetype,
         'scan.scope': 'workspace',
       });
-      span?.setAttributes({
+      scanTelemetry.setAttributes({
         'scan.language': language,
         'scan.file_type': filetype,
         'scan.scope': 'workspace',
@@ -217,7 +227,7 @@ async function scanWithOrl(
         storagePath: context.globalStorageUri.fsPath,
       });
       const result = await orlClient.remediate(workspacePath, language);
-      telemetryService.recordEvent('orl.remediate.completed', {
+      scanTelemetry.recordEvent('orl.remediate.completed', {
         'scan.language': language,
         'scan.success': result.success,
         'scan.exit_code': result.exitCode ?? -1,
@@ -283,13 +293,15 @@ async function scanWithOrl(
       if (!result.success) {
         const errorMessage = result.error || 'ORL remediation failed';
         logger.error('ORL remediation failed', { error: errorMessage });
-        telemetryService.recordEvent('orl.scan.failed', {
+        scanTelemetry.recordEvent('orl.scan.failed', {
           'scan.error_context': 'ORL execution',
           'error.code': 'orl_execution_failed',
           'scan.language': language,
           'scan.exit_code': result.exitCode ?? -1,
         });
-        span?.setAttribute('scan.outcome', 'orl_execution_failed');
+        scanTelemetry.setAttributes({
+          'scan.outcome': 'orl_execution_failed',
+        });
         vscode.window.showErrorMessage(
           `ORL remediation failed: ${errorMessage}`,
         );
@@ -366,13 +378,13 @@ async function scanWithOrl(
         const errorMessage =
           error instanceof Error ? error.message : 'Unknown conversion error';
         logger.error('ORL result conversion failed', { error: errorMessage });
-        telemetryService.recordEvent('orl.scan.conversion_failed', {
+        scanTelemetry.recordEvent('orl.scan.conversion_failed', {
           'scan.error_context': 'Result conversion',
           'error.code': 'conversion_failed',
           'scan.language': language,
           'scan.file_type': filetype,
         });
-        span?.setAttribute('scan.outcome', 'conversion_failed');
+        scanTelemetry.setAttributes({ 'scan.outcome': 'conversion_failed' });
         vscode.window.showErrorMessage(
           `Failed to process ORL results: ${errorMessage}`,
         );
@@ -397,7 +409,7 @@ async function scanWithOrl(
         groupedFixesCount: scanResponse.groupedFixes.length,
         modifiedFiles: Object.keys(result.modifiedFiles),
       });
-      telemetryService.recordEvent('orl.scan.converted', {
+      scanTelemetry.recordEvent('orl.scan.converted', {
         'scan.language': language,
         'scan.file_type': filetype,
         'scan.individual_fixes_count': scanResponse.individualFixes.length,
@@ -405,7 +417,7 @@ async function scanWithOrl(
         'scan.modified_files_count': Object.keys(result.modifiedFiles || {})
           .length,
       });
-      span?.setAttributes({
+      scanTelemetry.setAttributes({
         'scan.outcome': 'success',
         'scan.individual_fixes_count': scanResponse.individualFixes.length,
         'scan.grouped_fixes_count': scanResponse.groupedFixes.length,
@@ -416,7 +428,7 @@ async function scanWithOrl(
       prof.mark('scanResultsProvider.generateComments');
       scanResultsProvider.createDiagnostic();
       prof.mark('scanResultsProvider.createDiagnostic');
-      telemetryService.recordEvent('orl.scan.diagnostics_created', {
+      scanTelemetry.recordEvent('orl.scan.diagnostics_created', {
         'scan.language': language,
         'scan.individual_fixes_count': scanResponse.individualFixes.length,
         'scan.grouped_fixes_count': scanResponse.groupedFixes.length,
@@ -431,7 +443,7 @@ async function scanWithOrl(
           // Just ensure it doesn't propagate
           logger.debug('ORL report submission error handled', { error });
         });
-      telemetryService.recordEvent('orl.report_submission.scheduled', {
+      scanTelemetry.recordEvent('orl.report_submission.scheduled', {
         'scan.language': language,
       });
       prof.end({ success: true });
@@ -440,12 +452,12 @@ async function scanWithOrl(
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
       logger.error('ORL scan failed', { error: errorMessage });
-      telemetryService.recordEvent('orl.scan.failed', {
+      scanTelemetry.recordEvent('orl.scan.failed', {
         'scan.error_context': 'Unexpected error',
         'error.code': 'unexpected_error',
         'scan.language': language ?? 'unknown',
       });
-      span?.setAttribute('scan.outcome', 'unexpected_error');
+      scanTelemetry.setAttributes({ 'scan.outcome': 'unexpected_error' });
       vscode.window.showErrorMessage(`ORL scan failed: ${errorMessage}`);
 
       // Report unexpected error to integrations service (non-blocking)
@@ -470,7 +482,13 @@ async function scanWithOrl(
           });
       }
     }
-  });
+  };
+
+  if (commandTelemetry) {
+    return commandTelemetry.withChildSpan('orl.scan', undefined, runScan);
+  }
+
+  return telemetryService.withSpan('orl.scan', undefined, runScan);
 }
 
 /**

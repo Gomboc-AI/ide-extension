@@ -2,10 +2,11 @@ import * as path from 'path';
 import { createHash, randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import {
+  Context,
+  ROOT_CONTEXT,
   Span,
   SpanStatusCode,
   Tracer,
-  context as otelContext,
   trace,
 } from '@opentelemetry/api';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
@@ -80,6 +81,12 @@ type TraceEndpointDebugInfo = {
   effectiveHeaderKeys: string[];
   hasApiKey: boolean;
   skippedReason?: string;
+};
+
+type TelemetryOutputCorrelation = {
+  traceId?: string;
+  spanId?: string;
+  parentSpanId?: string;
 };
 
 function readHeaders(
@@ -313,6 +320,86 @@ function sortedHeaderKeys(headers: Record<string, string>): string[] {
 }
 
 /**
+ * Explicit scoped telemetry context for one operation span.
+ *
+ * This avoids relying on a global OpenTelemetry context manager in the shared VS Code
+ * extension host and makes parent/child relationships visible at call sites.
+ */
+export class TelemetryOperationContext {
+  public readonly spanName: string;
+  private readonly service: TelemetryService;
+  private readonly config: TelemetryRuntimeConfig;
+  private readonly span: Span | undefined;
+  private readonly parentSpanId: string | undefined;
+  private readonly spanContext: Context;
+
+  constructor(args: {
+    service: TelemetryService;
+    config: TelemetryRuntimeConfig;
+    spanName: string;
+    span?: Span;
+    parentSpanId?: string;
+    spanContext: Context;
+  }) {
+    this.service = args.service;
+    this.config = args.config;
+    this.spanName = args.spanName;
+    this.span = args.span;
+    this.parentSpanId = args.parentSpanId;
+    this.spanContext = args.spanContext;
+  }
+
+  /**
+   * Records a lifecycle point as a span event and mirrors it locally.
+   */
+  public recordEvent(name: string, attributes?: TelemetryAttributes): void {
+    this.service.recordSpanEvent(this, name, attributes);
+  }
+
+  /**
+   * Applies sanitized attributes to the current span.
+   */
+  public setAttributes(attributes: TelemetryAttributes): void {
+    const sanitized = this.service.withCommonAttributes(
+      sanitizeTelemetryAttributes(attributes),
+    );
+    this.span?.setAttributes(sanitized);
+  }
+
+  /**
+   * Runs a child operation with this context as its explicit parent.
+   */
+  public async withChildSpan<T>(
+    name: string,
+    attributes: TelemetryAttributes | undefined,
+    fn: (operation: TelemetryOperationContext) => Promise<T>,
+  ): Promise<T> {
+    return this.service.withSpan(name, attributes, fn, this);
+  }
+
+  public getSpan(): Span | undefined {
+    return this.span;
+  }
+
+  public getConfig(): TelemetryRuntimeConfig {
+    return this.config;
+  }
+
+  public getContext(): Context {
+    return this.spanContext;
+  }
+
+  public getCorrelation(): TelemetryOutputCorrelation {
+    const currentSpanContext = this.span?.spanContext();
+    return {
+      traceId: currentSpanContext?.traceId,
+      spanId: currentSpanContext?.spanId,
+      parentSpanId: this.parentSpanId,
+    };
+  }
+}
+
+/**
  * Manages telemetry output, trace exporters, event recording, and span lifecycle.
  */
 export class TelemetryService {
@@ -382,11 +469,10 @@ export class TelemetryService {
       const sanitized = this.withCommonAttributes(
         sanitizeTelemetryAttributes(attributes),
       );
-      this.writeOutput(name, sanitized, config);
-
       const span = this.activeProvider?.tracer.startSpan(name, {
         attributes: sanitized,
       });
+      this.writeOutput(name, sanitized, config, span?.spanContext());
       span?.end();
     } catch (error) {
       logger.debug('Failed to record telemetry event', {
@@ -401,11 +487,12 @@ export class TelemetryService {
   public async withSpan<T>(
     name: string,
     attributes: TelemetryAttributes | undefined,
-    fn: (span: Span | undefined) => Promise<T>,
+    fn: (operation: TelemetryOperationContext) => Promise<T>,
+    parent?: TelemetryOperationContext,
   ): Promise<T> {
     const config = this.lastConfig ?? getTelemetryConfig();
     if (!config.telemetryEnabled) {
-      return fn(undefined);
+      return fn(this.createOperationContext(name, config, undefined, parent));
     }
     logger.debug('Starting telemetry span', {
       span: name,
@@ -415,17 +502,25 @@ export class TelemetryService {
     const startAttributes = this.withCommonAttributes(
       sanitizeTelemetryAttributes(attributes),
     );
-    const span = this.activeProvider?.tracer.startSpan(name, {
-      attributes: startAttributes,
-    });
+    const span = this.activeProvider?.tracer.startSpan(
+      name,
+      {
+        attributes: startAttributes,
+      },
+      parent?.getContext() ?? ROOT_CONTEXT,
+    );
+    const operation = this.createOperationContext(name, config, span, parent);
     const startedAt = Date.now();
-    this.writeOutput(`${name}.start`, startAttributes, config);
+    this.writeOutput(
+      `${name}.start`,
+      startAttributes,
+      config,
+      span?.spanContext(),
+      parent?.getCorrelation().spanId,
+    );
 
     try {
-      const run = () => fn(span);
-      const result = span
-        ? await otelContext.with(trace.setSpan(otelContext.active(), span), run)
-        : await run();
+      const result = await fn(operation);
       const endAttributes = this.withCommonAttributes({
         ...startAttributes,
         'telemetry.duration_ms': Date.now() - startedAt,
@@ -433,7 +528,13 @@ export class TelemetryService {
       });
       span?.setAttributes(endAttributes);
       span?.setStatus({ code: SpanStatusCode.OK });
-      this.writeOutput(`${name}.end`, endAttributes, config);
+      this.writeOutput(
+        `${name}.end`,
+        endAttributes,
+        config,
+        span?.spanContext(),
+        parent?.getCorrelation().spanId,
+      );
       return result;
     } catch (error) {
       const failureAttributes = this.withCommonAttributes({
@@ -447,7 +548,13 @@ export class TelemetryService {
         code: SpanStatusCode.ERROR,
         message: failureAttributes['error.code'] as string | undefined,
       });
-      this.writeOutput(`${name}.end`, failureAttributes, config);
+      this.writeOutput(
+        `${name}.end`,
+        failureAttributes,
+        config,
+        span?.spanContext(),
+        parent?.getCorrelation().spanId,
+      );
       throw error;
     } finally {
       span?.end();
@@ -665,7 +772,42 @@ export class TelemetryService {
     }));
   }
 
-  private withCommonAttributes(
+  public recordSpanEvent(
+    operation: TelemetryOperationContext,
+    name: string,
+    attributes?: TelemetryAttributes,
+  ): void {
+    try {
+      const config = operation.getConfig();
+      if (!config.telemetryEnabled) {
+        return;
+      }
+
+      const sanitized = this.withCommonAttributes(
+        sanitizeTelemetryAttributes(attributes),
+      );
+      operation.getSpan()?.addEvent(name, sanitized);
+      const correlation = operation.getCorrelation();
+      this.writeOutput(
+        name,
+        sanitized,
+        config,
+        correlation.traceId && correlation.spanId
+          ? {
+              traceId: correlation.traceId,
+              spanId: correlation.spanId,
+            }
+          : undefined,
+        correlation.parentSpanId,
+      );
+    } catch (error) {
+      logger.debug('Failed to record telemetry span event', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  public withCommonAttributes(
     attributes: Record<string, TelemetryAttributeValue>,
   ): Record<string, TelemetryAttributeValue> {
     return {
@@ -676,22 +818,47 @@ export class TelemetryService {
     };
   }
 
+  private createOperationContext(
+    name: string,
+    config: TelemetryRuntimeConfig,
+    span: Span | undefined,
+    parent?: TelemetryOperationContext,
+  ): TelemetryOperationContext {
+    return new TelemetryOperationContext({
+      service: this,
+      config,
+      spanName: name,
+      span,
+      parentSpanId: parent?.getCorrelation().spanId,
+      spanContext: span ? trace.setSpan(ROOT_CONTEXT, span) : ROOT_CONTEXT,
+    });
+  }
+
   private writeOutput(
     name: string,
     attributes: Record<string, TelemetryAttributeValue>,
     config: TelemetryRuntimeConfig,
+    spanContext?: { traceId: string; spanId: string },
+    parentSpanId?: string,
   ): void {
     if (!config.telemetryOutputChannelEnabled || !this.outputChannel) {
       return;
     }
 
-    this.outputChannel.appendLine(
-      JSON.stringify({
-        timestamp: new Date().toISOString(),
-        event: name,
-        attributes,
-      }),
-    );
+    const payload: Record<string, unknown> = {
+      timestamp: new Date().toISOString(),
+      event: name,
+      attributes,
+    };
+    if (spanContext) {
+      payload.trace_id = spanContext.traceId;
+      payload.span_id = spanContext.spanId;
+    }
+    if (parentSpanId) {
+      payload.parent_span_id = parentSpanId;
+    }
+
+    this.outputChannel.appendLine(JSON.stringify(payload));
   }
 
   private errorAttributes(error: unknown): Record<string, string> {
