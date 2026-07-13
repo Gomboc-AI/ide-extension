@@ -1,5 +1,8 @@
 export { TelemetryOperationContext } from './telemetry/TelemetryOperationContext';
-export { TelemetryService, telemetryService } from './telemetry/TelemetryService';
+export {
+  TelemetryService,
+  telemetryService,
+} from './telemetry/TelemetryService';
 export type {
   TelemetryAttributes,
   TelemetryAttributeValue,

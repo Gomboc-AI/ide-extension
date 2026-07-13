@@ -243,8 +243,6 @@ export function telemetryHeaderFingerprint(
     .digest('hex');
 }
 
-export function sortedHeaderKeys(
-  headers: Record<string, string>,
-): string[] {
+export function sortedHeaderKeys(headers: Record<string, string>): string[] {
   return Object.keys(headers).sort();
 }
