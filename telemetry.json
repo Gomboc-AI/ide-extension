@@ -1,21 +1,24 @@
 {
   "version": "1.0.0",
-  "description": "Gomboc VS Code extension OpenTelemetry events. The extension setting gomboc-vscode-extension.telemetryEnabled defaults to true, network export always respects VS Code's global telemetry setting, and telemetry can be exported to one or more OTLP collectors.",
+  "description": "Gomboc VS Code extension OpenTelemetry spans and span events. The extension setting gomboc-vscode-extension.telemetryEnabled defaults to true, network export always respects VS Code's global telemetry setting, and telemetry can be exported to one or more OTLP collectors.",
   "events": [
     {
       "name": "extension.activate",
+      "kind": "span",
       "classification": "SystemMetaData",
       "purpose": "FeatureInsight",
       "properties": ["extension.name", "extension.version", "vscode.version"]
     },
     {
       "name": "extension.deactivate",
+      "kind": "span",
       "classification": "SystemMetaData",
       "purpose": "FeatureInsight",
       "properties": ["extension.name", "extension.version", "vscode.version"]
     },
     {
       "name": "telemetry.configured",
+      "kind": "span",
       "classification": "SystemMetaData",
       "purpose": "FeatureInsight",
       "properties": [
@@ -31,6 +34,7 @@
     },
     {
       "name": "command.execute",
+      "kind": "span",
       "classification": "SystemMetaData",
       "purpose": "FeatureInsight",
       "properties": [
@@ -60,7 +64,24 @@
       ]
     },
     {
+      "name": "command.scan_file",
+      "kind": "span",
+      "classification": "SystemMetaData",
+      "purpose": "PerformanceAndHealth",
+      "properties": [
+        "extension.name",
+        "extension.version",
+        "vscode.version",
+        "command.id",
+        "telemetry.duration_ms",
+        "telemetry.outcome",
+        "error.type",
+        "error.code"
+      ]
+    },
+    {
       "name": "orl.scan",
+      "kind": "span",
       "classification": "SystemMetaData",
       "purpose": "PerformanceAndHealth",
       "properties": [
@@ -83,6 +104,7 @@
     },
     {
       "name": "orl.scan.started",
+      "kind": "span_event",
       "classification": "SystemMetaData",
       "purpose": "FeatureInsight",
       "properties": [
@@ -96,6 +118,7 @@
     },
     {
       "name": "orl.remediate.completed",
+      "kind": "span_event",
       "classification": "SystemMetaData",
       "purpose": "PerformanceAndHealth",
       "properties": [
@@ -110,6 +133,7 @@
     },
     {
       "name": "orl.scan.validation_failed",
+      "kind": "span_event",
       "classification": "SystemMetaData",
       "purpose": "PerformanceAndHealth",
       "properties": [
@@ -123,6 +147,7 @@
     },
     {
       "name": "orl.scan.skipped",
+      "kind": "span_event",
       "classification": "SystemMetaData",
       "purpose": "FeatureInsight",
       "properties": [
@@ -136,6 +161,7 @@
     },
     {
       "name": "orl.scan.failed",
+      "kind": "span_event",
       "classification": "SystemMetaData",
       "purpose": "PerformanceAndHealth",
       "properties": [
@@ -150,6 +176,7 @@
     },
     {
       "name": "orl.scan.conversion_failed",
+      "kind": "span_event",
       "classification": "SystemMetaData",
       "purpose": "PerformanceAndHealth",
       "properties": [
@@ -164,6 +191,7 @@
     },
     {
       "name": "orl.scan.converted",
+      "kind": "span_event",
       "classification": "SystemMetaData",
       "purpose": "FeatureInsight",
       "properties": [
@@ -179,6 +207,7 @@
     },
     {
       "name": "orl.scan.diagnostics_created",
+      "kind": "span_event",
       "classification": "SystemMetaData",
       "purpose": "FeatureInsight",
       "properties": [
@@ -192,6 +221,7 @@
     },
     {
       "name": "orl.report_submission.scheduled",
+      "kind": "span_event",
       "classification": "SystemMetaData",
       "purpose": "FeatureInsight",
       "properties": [
@@ -203,6 +233,7 @@
     },
     {
       "name": "orl_fix_applied.queued",
+      "kind": "span",
       "classification": "SystemMetaData",
       "purpose": "FeatureInsight",
       "properties": [
@@ -217,6 +248,7 @@
     },
     {
       "name": "orl_fix_applied.flush_completed",
+      "kind": "span",
       "classification": "SystemMetaData",
       "purpose": "PerformanceAndHealth",
       "properties": [
